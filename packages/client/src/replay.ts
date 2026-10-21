@@ -58,6 +58,8 @@ export async function startReplay(
         slot,
         x: p.ghost ? p.ghostX : p.x,
         y: p.ghost ? p.ghostY : p.y,
+        vx: p.vx,
+        vy: p.vy,
         facing: p.facing,
         crouching: p.crouching,
         flags: (p.facing > 0 ? PlayerFlag.FACING_RIGHT : 0) | PlayerFlag.ALIVE,
@@ -72,6 +74,10 @@ export async function startReplay(
         name: '',
         color: slot,
         team: -1,
+        stroke: 0,
+        hat: 0,
+        victory: 0,
+        mannequin: false,
       });
     });
     let n = 0;
@@ -116,6 +122,7 @@ export async function startReplay(
       ghost: { x: 0, y: 0, visible: false },
       debug: false,
       teamColors: null,
+      winners: 0,
     };
     renderer.render(scene);
     onInfo(

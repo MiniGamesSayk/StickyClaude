@@ -4,22 +4,27 @@ import type { Plugin } from 'vite';
 const server = process.env.SERVER_URL ?? 'http://127.0.0.1:3000';
 
 /**
- * L'éditeur d'arènes n'existe qu'en développement : `/editor` est servi par le serveur de Vite et
- * la page n'est pas une entrée de la version construite (voir `docs/ARENES.md`).
+ * L'éditeur d'arènes (`/editor`) et la planche de référence du style (`/sheet`) n'existent qu'en
+ * développement : ils sont servis par Vite et ne sont pas des entrées de la version construite
+ * (voir `docs/ARENES.md` et `docs/DIRECTION_ARTISTIQUE.md`).
  */
-const editorRoute = (): Plugin => ({
-  name: 'stickyclaude-editor-route',
+const devPages = (): Plugin => ({
+  name: 'stickyclaude-dev-pages',
   apply: 'serve',
   configureServer(s) {
     s.middlewares.use((req, _res, next) => {
-      if (req.url === '/editor' || req.url?.startsWith('/editor?')) req.url = '/editor/index.html';
+      for (const page of ['editor', 'sheet']) {
+        if (req.url === `/${page}` || req.url?.startsWith(`/${page}?`)) {
+          req.url = `/${page}/index.html${req.url.slice(page.length + 1)}`;
+        }
+      }
       next();
     });
   },
 });
 
 export default defineConfig({
-  plugins: [editorRoute()],
+  plugins: [devPages()],
   server: {
     port: 5173,
     proxy: {

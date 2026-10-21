@@ -13,6 +13,7 @@ import { GameClient } from './net/client.ts';
 import type { GameEvent } from './net/client.ts';
 import { LagTransport, parseLagOptions, WebSocketTransport } from './net/transport.ts';
 import type { Transport } from './net/transport.ts';
+import { loadFonts } from './render/fonts.ts';
 import { Renderer } from './render/renderer.ts';
 import type { DrawPlayer } from './render/renderer.ts';
 import { startReplay } from './replay.ts';
@@ -50,6 +51,7 @@ function loadSession(): SavedSession | null {
 export async function startApp(): Promise<void> {
   const params = new URLSearchParams(location.search);
   const renderer = new Renderer();
+  await loadFonts();
   await renderer.init(byId('game'));
   const hudEl = byId('hud');
   const menuEl = byId('menu');
@@ -79,6 +81,8 @@ export async function startApp(): Promise<void> {
   let leaving = false;
   let reconnect: { until: number; attempt: number; token: string; code: string } | null = null;
   let teamsMode = false;
+  /** Emplacements gagnants de la manche (masque de bits) : ils font leur emote de victoire. */
+  let winnersMask = 0;
 
   // --- Interface --------------------------------------------------------------------------------
 
@@ -169,6 +173,7 @@ export async function startApp(): Promise<void> {
         if (arena) renderer.setArena(arena);
         renderer.reset();
         renderer.setColorSource((slot) => colorOfSlot(slot));
+        renderer.setSelf(m.slot);
         menu.hide();
         hud.show();
         hud.hidePodium();
@@ -197,11 +202,19 @@ export async function startApp(): Promise<void> {
         if (client !== c) return;
         renderer.setArena(arena);
         renderer.reset();
+        winnersMask = 0;
         hud.clearBanner();
         if (r.round > 0) hud.hidePodium();
       },
       onScores: (m) => {
         if (client !== c) return;
+        winnersMask = 0;
+        if (m.winner >= 0 && c.round) {
+          for (let sl = 0; sl < 8; sl++) {
+            const t = c.round.teams[sl];
+            if (t >= 0 && (teamsMode ? t === m.winner : sl === m.winner)) winnersMask |= 1 << sl;
+          }
+        }
         hud.roundEnd(m, teamsMode);
       },
       onResults: (m) => {
@@ -359,6 +372,8 @@ export async function startApp(): Promise<void> {
         slot: r.slot,
         x: r.x,
         y: r.y,
+        vx: r.vx,
+        vy: r.vy,
         facing: (r.flags & PlayerFlag.FACING_RIGHT) !== 0 ? 1 : -1,
         crouching: (r.flags & PlayerFlag.CROUCHING) !== 0,
         flags: r.flags,
@@ -373,6 +388,10 @@ export async function startApp(): Promise<void> {
         name: info?.name ?? '',
         color: info?.look.color ?? r.slot,
         team: teamsMode ? (info?.team ?? -1) : -1,
+        stroke: info?.look.stroke ?? 0,
+        hat: info?.look.hat ?? 0,
+        victory: info?.look.victory ?? 0,
+        mannequin: false,
       });
     }
     const o = v.own;
@@ -382,6 +401,8 @@ export async function startApp(): Promise<void> {
         slot: c.slot,
         x: o.ghost ? o.cursorX : o.x,
         y: o.ghost ? o.cursorY : o.y,
+        vx: o.vx,
+        vy: o.vy,
         facing: o.facing,
         crouching: o.crouching,
         flags: o.flags,
@@ -396,6 +417,10 @@ export async function startApp(): Promise<void> {
         name: info?.name ?? '',
         color: info?.look.color ?? c.slot,
         team: teamsMode ? (info?.team ?? -1) : -1,
+        stroke: info?.look.stroke ?? 0,
+        hat: info?.look.hat ?? 0,
+        victory: info?.look.victory ?? 0,
+        mannequin: false,
       });
     }
     ghost.x = v.ghostX;
@@ -415,6 +440,7 @@ export async function startApp(): Promise<void> {
       ghost,
       debug,
       teamColors: teamsMode ? TEAM_COLORS : null,
+      winners: winnersMask,
     });
 
     const now = performance.now();
