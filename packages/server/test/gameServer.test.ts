@@ -456,6 +456,8 @@ describe('enregistrement', () => {
     h.join(b, code);
     let label = 21;
     for (let round = 0; round < 40; round++) {
+      // Réglage de constante en cours de partie : doit être rejoué à l'identique.
+      if (round === 20) h.send(a, { t: 'tune', k: 'jumpSpeed', val: 450 });
       h.sendInput(a, label + 3, [
         round % 3 === 0 ? Input.JUMP : Input.RIGHT,
         Input.RIGHT,

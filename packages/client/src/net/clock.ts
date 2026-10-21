@@ -1,12 +1,16 @@
 import { TICK_MS } from '@stickyclaude/shared';
 
 const WINDOW = 8;
+/** Nombre d'échantillons avant de considérer l'horloge synchronisée (rejette un premier RTT aberrant). */
+const MIN_SAMPLES = 3;
 
 /**
  * Synchronisation d'horloge avec le serveur par ping/pong (style NTP).
  * `serverMs = localMs + offsetMs`, où serverMs = (tick + fraction) × durée d'un tick.
- * L'écart retenu vient de l'échantillon au RTT le plus faible de la fenêtre, et glisse
- * doucement vers sa cible pour ne jamais faire sauter l'affichage.
+ * - L'écart retenu vient de l'échantillon au RTT le plus faible de la fenêtre, et glisse
+ *   doucement vers sa cible pour ne jamais faire sauter l'affichage.
+ * - Le RTT est la médiane de la fenêtre : un pong très en retard (onglet gelé, blocage TCP)
+ *   ne fausse pas l'estimation.
  */
 export class ClockSync {
   rttMs = 0;
@@ -15,6 +19,7 @@ export class ClockSync {
   synced = false;
   private readonly rtts = new Float64Array(WINDOW);
   private readonly offsets = new Float64Array(WINDOW);
+  private readonly sorted = new Float64Array(WINDOW);
   private count = 0;
   private head = 0;
 
@@ -29,17 +34,18 @@ export class ClockSync {
    */
   onPong(localNow: number, rtt: number, serverTickFloat: number): void {
     if (!(rtt >= 0) || rtt > 10_000) return;
-    if (this.count === 0) {
-      this.rttMs = rtt;
-    } else {
-      this.jitterMs += (Math.abs(rtt - this.rttMs) - this.jitterMs) * 0.2;
-      this.rttMs += (rtt - this.rttMs) * 0.25;
-    }
     const sample = serverTickFloat * TICK_MS - (localNow - rtt / 2);
     this.rtts[this.head] = rtt;
     this.offsets[this.head] = sample;
     this.head = (this.head + 1) % WINDOW;
     if (this.count < WINDOW) this.count++;
+
+    // Médiane du RTT et gigue (écart moyen à la médiane).
+    for (let i = 0; i < this.count; i++) this.sorted[i] = this.rtts[i]!;
+    const view = this.sorted.subarray(0, this.count).sort();
+    const median = view[Math.floor((this.count - 1) / 2)];
+    this.jitterMs += (Math.abs(rtt - median) - this.jitterMs) * 0.2;
+    this.rttMs = median;
 
     let best = 0;
     let bestRtt = Infinity;
@@ -52,7 +58,7 @@ export class ClockSync {
     const target = this.offsets[best];
     if (!this.synced) {
       this.offsetMs = target;
-      this.synced = true;
+      if (this.count >= MIN_SAMPLES) this.synced = true;
       return;
     }
     const diff = target - this.offsetMs;

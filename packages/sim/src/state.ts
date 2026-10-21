@@ -1,4 +1,4 @@
-import { OwnFlag, PlayerFlag, PlayerState } from '@stickyclaude/shared';
+import { MOVER_MASK, MOVER_SHIFT, OwnFlag, PlayerFlag, PlayerState } from '@stickyclaude/shared';
 import type { OwnState, PlayerSnap } from '@stickyclaude/shared';
 import type { World } from './world.ts';
 
@@ -61,7 +61,8 @@ export function fillPlayerSnap(world: World, slot: number, out: PlayerSnap): voi
     (p.crouching ? PlayerFlag.CROUCHING : 0) |
     (p.state === PlayerState.WALL_SLIDE ? PlayerFlag.WALL_SLIDING : 0) |
     (p.doubleAvailable ? 0 : PlayerFlag.DOUBLE_JUMP_USED) |
-    (p.vy < 0 ? PlayerFlag.RISING : 0);
+    (p.vy < 0 ? PlayerFlag.RISING : 0) |
+    (p.groundMover >= 0 ? PlayerFlag.ON_MOVER | ((p.groundMover & MOVER_MASK) << MOVER_SHIFT) : 0);
   out.x = p.x;
   out.y = p.y;
   out.vx = p.vx;

@@ -9,6 +9,10 @@ export interface ServerConfig {
   maxRooms: number;
   maxConnections: number;
   maxConnPerIp: number;
+  /** Créations de salon par minute et par IP. */
+  createPerMin: number;
+  /** Essais de code de salon (échecs) par minute et par IP. */
+  codeTriesPerMin: number;
   roomIdleTtlSec: number;
   /** Outils de développement : réglage en direct des constantes, enregistrement exposé. */
   devTools: boolean;
@@ -44,6 +48,8 @@ export function loadConfig(
     maxRooms: int(env.MAX_ROOMS, 40, 1, 10_000),
     maxConnections: int(env.MAX_CONNECTIONS, 400, 1, 100_000),
     maxConnPerIp: int(env.MAX_CONN_PER_IP, 8, 1, 10_000),
+    createPerMin: int(env.CREATE_PER_MIN, 3, 1, 100_000),
+    codeTriesPerMin: int(env.CODE_TRIES_PER_MIN, 10, 1, 100_000),
     roomIdleTtlSec: int(env.ROOM_IDLE_TTL_SEC, 300, 0, 86_400),
     devTools: env.DEV_TOOLS === '1',
     publicOrigin: env.PUBLIC_ORIGIN ?? '',

@@ -8,6 +8,7 @@ export class RoomRecorder {
   private readonly joins: Recording['joins'] = [];
   private readonly leaves: Recording['leaves'] = [];
   private readonly inputs: Recording['inputs'] = [];
+  private readonly tunes: [number, string, number][] = [];
   private readonly last = new Uint16Array(MAX_PLAYERS);
 
   constructor(
@@ -31,6 +32,10 @@ export class RoomRecorder {
     this.inputs.push([tick, slot, mask]);
   }
 
+  tune(tick: number, key: string, value: number): void {
+    this.tunes.push([tick, key, value]);
+  }
+
   toRecording(ticks: number, finalHash?: number): Recording {
     return {
       version: 1,
@@ -41,6 +46,7 @@ export class RoomRecorder {
       joins: this.joins,
       leaves: this.leaves,
       inputs: this.inputs,
+      tunes: this.tunes,
       finalHash,
     };
   }

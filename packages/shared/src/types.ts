@@ -24,7 +24,12 @@ export const PlayerFlag = {
   WALL_SLIDING: 1 << 4,
   DOUBLE_JUMP_USED: 1 << 5,
   RISING: 1 << 6,
+  /** Posé sur une plateforme mobile ; son indice est dans les bits MOVER_SHIFT..+2. */
+  ON_MOVER: 1 << 7,
 } as const;
+
+export const MOVER_SHIFT = 8;
+export const MOVER_MASK = 7;
 
 /** Événements de simulation (rendu, son, stats). Non fiables : recalculables côté client. */
 export const SimEvent = {

@@ -7,6 +7,11 @@ class Samples {
   private n = 0;
   private i = 0;
 
+  reset(): void {
+    this.n = 0;
+    this.i = 0;
+  }
+
   constructor(size: number) {
     this.buf = new Float64Array(size);
   }
@@ -34,6 +39,10 @@ class Samples {
 
 const round = (v: number): number => Math.round(v * 1000) / 1000;
 
+/** Période de sondage de la boucle d'événements : l'histogramme la compte dans chaque mesure. */
+const LOOP_RESOLUTION_MS = 10;
+const loopLagMs = (ns: number): number => Math.max(0, ns / 1e6 - LOOP_RESOLUTION_MS);
+
 export class Metrics {
   /** Durée d'un tick complet du serveur (toutes les salles), en ms. */
   readonly tickMs = new Samples(4096);
@@ -50,7 +59,9 @@ export class Metrics {
   inputsLimited = 0;
   invalidMessages = 0;
   tickOverruns = 0;
-  private readonly loop: IntervalHistogram = monitorEventLoopDelay({ resolution: 10 });
+  private readonly loop: IntervalHistogram = monitorEventLoopDelay({
+    resolution: LOOP_RESOLUTION_MS,
+  });
 
   constructor() {
     this.loop.enable();
@@ -60,8 +71,21 @@ export class Metrics {
     this.loop.disable();
   }
 
+  /** Remet à zéro les fenêtres de mesure (début d'un test de charge). */
   resetWindow(): void {
     this.loop.reset();
+    this.tickMs.reset();
+    this.roomStepMs.reset();
+    this.bytesOut = 0;
+    this.bytesIn = 0;
+    this.snapshotsSent = 0;
+    this.snapshotsSkipped = 0;
+    this.inputPackets = 0;
+    this.inputsLate = 0;
+    this.inputsMissed = 0;
+    this.inputsLimited = 0;
+    this.invalidMessages = 0;
+    this.tickOverruns = 0;
   }
 
   snapshot(extra: Record<string, number>): Record<string, unknown> {
@@ -87,9 +111,9 @@ export class Metrics {
       heapUsedMB: round(mem.heapUsed / 1048576),
       rssMB: round(mem.rss / 1048576),
       eventLoopDelayMs: {
-        p50: round(this.loop.percentile(50) / 1e6),
-        p99: round(this.loop.percentile(99) / 1e6),
-        max: round(this.loop.max / 1e6),
+        p50: round(loopLagMs(this.loop.percentile(50))),
+        p99: round(loopLagMs(this.loop.percentile(99))),
+        max: round(loopLagMs(this.loop.max)),
       },
       cpuUserUs: cpu.user,
       cpuSystemUs: cpu.system,

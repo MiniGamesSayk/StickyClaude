@@ -159,7 +159,9 @@ export function startServer(
         res.writeHead(401).end();
         return;
       }
-      json(res, 200, game.metrics.snapshot(game.stats()));
+      const snapshot = game.metrics.snapshot(game.stats());
+      if (url.searchParams.get('reset') === '1') game.metrics.resetWindow();
+      json(res, 200, snapshot);
       return;
     }
     if (cfg.devTools && url.pathname.startsWith('/dev/recording/')) {

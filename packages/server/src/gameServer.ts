@@ -54,8 +54,8 @@ export class GameServer {
   readonly metrics = new Metrics();
   private readonly clients = new Map<Connection, ClientState>();
   private readonly ipCounts = new Map<string, number>();
-  private readonly createLimiter = new RateLimiter(3, 60_000);
-  private readonly codeLimiter = new RateLimiter(10, 60_000);
+  private readonly createLimiter: RateLimiter;
+  private readonly codeLimiter: RateLimiter;
   private readonly now: () => number;
   private readonly snapshotInterval: number;
   private readonly scratch = new Uint8Array(SNAPSHOT_MAX_BYTES);
@@ -69,6 +69,8 @@ export class GameServer {
     readonly config: ServerConfig,
     private readonly opts: GameServerOptions = {},
   ) {
+    this.createLimiter = new RateLimiter(config.createPerMin, 60_000);
+    this.codeLimiter = new RateLimiter(config.codeTriesPerMin, 60_000);
     this.now = opts.now ?? ((): number => performance.now());
     this.snapshotInterval = Math.max(1, Math.round(config.tickHz / config.snapshotHz));
     this.lastTickAt = this.now();
@@ -270,6 +272,7 @@ export class GameServer {
     const meta = MOVEMENT_TUNING[k];
     const val = Math.min(meta.max, Math.max(meta.min, msg.val));
     room.world.params[k] = val;
+    room.recording?.tune(room.world.tick, k, val);
     const text = JSON.stringify({ t: 'tune', k, val } satisfies ServerMessage);
     for (const other of room.slots) if (other) this.sendRaw(other.conn, text);
   }
@@ -341,7 +344,7 @@ export class GameServer {
     for (const room of this.rooms.values()) {
       if (room.playerCount === 0) continue;
       room.step(this.metrics);
-      if (room.world.tick % this.snapshotInterval === 0) this.sendSnapshots(room);
+      this.sendSnapshots(room);
     }
     if (this.tickCount % this.config.tickHz === 0) this.housekeeping(nowMs);
     this.metrics.tickMs.add(performance.now() - t0);
@@ -356,8 +359,23 @@ export class GameServer {
     }
   }
 
+  /**
+   * Envoie les snapshots dus. Les clients d'un même salon sont décalés d'un tick les uns par rapport
+   * aux autres (emplacement + tick modulo l'intervalle) : chacun reçoit toujours 30 snapshots/s,
+   * mais les envois (coûteux en appels système) sont répartis sur tous les ticks au lieu d'arriver
+   * en rafale, ce qui garde la boucle d'événements réactive.
+   */
   private sendSnapshots(room: Room): void {
     const w = room.world;
+    const interval = this.snapshotInterval;
+    let due = false;
+    for (let s = 0; s < MAX_PLAYERS; s++) {
+      if (room.slots[s] && (w.tick + s) % interval === 0) {
+        due = true;
+        break;
+      }
+    }
+    if (!due) return;
     const snap = room.snap;
     snap.tick = w.tick;
     let n = 0;
@@ -367,7 +385,7 @@ export class GameServer {
     snap.playerCount = n;
     for (let s = 0; s < MAX_PLAYERS; s++) {
       const c = room.slots[s];
-      if (!c) continue;
+      if (!c || (w.tick + s) % interval !== 0) continue;
       const buffered = c.conn.bufferedAmount;
       if (buffered > BACKPRESSURE_CLOSE) {
         c.conn.close(1013, 'backpressure');

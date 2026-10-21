@@ -253,7 +253,7 @@ describe('murs', () => {
     let wallJumps = 0;
     for (let i = 0; i < 160; i++) {
       const touching = wallContact(w, p, side) !== 0;
-      const jump = (touching && !prevJump) || (prevJump && p.wallLock > 0);
+      const jump: boolean = (touching && !prevJump) || (prevJump && p.wallLock > 0);
       prevJump = jump;
       inputs.fill(0);
       inputs[0] = (side < 0 ? LEFT : RIGHT) | (jump ? JUMP : 0);

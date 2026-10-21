@@ -28,6 +28,10 @@ import type { Transport } from './transport.ts';
 /** Au plus ce nombre de ticks simulés d'un coup ; au-delà, on saute (onglet resté en arrière-plan). */
 const MAX_CATCHUP_TICKS = 10;
 const MAX_INITIAL_CATCHUP_TICKS = 120;
+/** Paquets d'entrées envoyés au plus par image (rattrapage après une image très longue). */
+const MAX_PACKETS_PER_UPDATE = 3;
+/** Avance supplémentaire maximale due à des images rares (en ticks). */
+const MAX_FRAME_LEAD_TICKS = 8;
 /** Plage du retard d'interpolation adaptatif (ms). */
 const INTERP_MIN_MS = 100;
 const INTERP_MAX_MS = 300;
@@ -59,6 +63,10 @@ export interface RenderView {
   own: OwnView;
   remotes: RemoteView[];
   remoteCount: number;
+  /** Tick (flottant) auquel dessiner les plateformes : celui de notre prédiction. */
+  moverTick: number;
+  /** Tick (flottant) auquel les autres joueurs sont dessinés. */
+  remoteTick: number;
   /** Dernier état confirmé par le serveur pour soi (fantôme de débogage). */
   ghostX: number;
   ghostY: number;
@@ -94,6 +102,7 @@ export interface GameClientHooks {
   onRoster?: (players: RosterEntry[], host: number) => void;
   onError?: (code: ErrorCode, msg?: string) => void;
   onClosed?: (code: number) => void;
+  onLeft?: () => void;
   /** Événement fiable (livré une seule fois, dans l'ordre). */
   onReliable?: (type: number, slot: number, x: number, y: number) => void;
 }
@@ -141,6 +150,8 @@ export class GameClient {
     },
     remotes: Array.from({ length: MAX_PLAYERS }, createRemoteView),
     remoteCount: 0,
+    moverTick: 0,
+    remoteTick: 0,
     ghostX: 0,
     ghostY: 0,
     ghostVisible: false,
@@ -171,7 +182,9 @@ export class GameClient {
   private readonly shownY = new Float64Array(MAX_PLAYERS);
   private readonly keptValid = new Uint8Array(MAX_PLAYERS);
   private lastViewAt = Number.NaN;
+  private frameMs = 0;
   private caughtUp = false;
+  private readonly queued: string[] = [];
 
   constructor(
     private readonly transport: Transport,
@@ -180,6 +193,7 @@ export class GameClient {
   ) {
     transport.onOpen = (): void => {
       this.state = 'open';
+      for (const text of this.queued.splice(0)) this.transport.send(text);
     };
     transport.onMessage = (data): void => this.onMessage(data);
     transport.onClose = (code): void => {
@@ -213,7 +227,9 @@ export class GameClient {
   private sendJson(m: unknown): void {
     const text = JSON.stringify(m);
     this.stats.bytesOut += text.length;
-    this.transport.send(text);
+    // Messages demandés avant l'ouverture de la connexion : envoyés dès qu'elle s'ouvre.
+    if (this.state === 'connecting') this.queued.push(text);
+    else this.transport.send(text);
   }
 
   // --- Réception ------------------------------------------------------------------------------
@@ -279,6 +295,7 @@ export class GameClient {
         this.code = '';
         this.view.own.visible = false;
         this.view.remoteCount = 0;
+        this.hooks.onLeft?.();
         break;
     }
   }
@@ -372,6 +389,9 @@ export class GameClient {
   update(input: number): void {
     const now = this.now();
     const dtMs = Number.isNaN(this.lastUpdate) ? 0 : Math.min(100, now - this.lastUpdate);
+    if (!Number.isNaN(this.lastUpdate)) {
+      this.frameMs += (Math.min(250, now - this.lastUpdate) - this.frameMs) * 0.1;
+    }
     this.lastUpdate = now;
     if (this.state !== 'joined') return;
 
@@ -379,7 +399,11 @@ export class GameClient {
     const pred = this.predictor;
     if (pred?.started && this.clock.synced) {
       // Tick dont l'entrée, envoyée maintenant, arrivera au serveur juste avant son exécution.
-      const desired = this.clock.serverTick(now) + this.clock.owdMs / TICK_MS + this.leadTicks;
+      // Avec peu d'images par seconde, plusieurs ticks sont simulés d'un coup : le plus ancien
+      // doit lui aussi arriver à temps, d'où une avance de plus d'une durée d'image.
+      const frameLead = Math.min(MAX_FRAME_LEAD_TICKS, Math.max(0, this.frameMs / TICK_MS - 1));
+      const desired =
+        this.clock.serverTick(now) + this.clock.owdMs / TICK_MS + this.leadTicks + frameLead;
       this.lastDesired = desired;
       let target = Math.floor(desired);
       // Premier rattrapage : on simule tout l'écart. Ensuite, après une longue interruption
@@ -395,7 +419,7 @@ export class GameClient {
         stepped++;
       }
       if (stepped > 0) {
-        this.sendInput(pred);
+        this.sendInput(pred, stepped);
         this.caughtUp = true;
       }
       pred.decaySmoothing(dtMs);
@@ -417,30 +441,42 @@ export class GameClient {
     this.nextPing = now + (this.pingsSent < PING_FAST_COUNT ? PING_FAST_MS : PING_SLOW_MS);
   }
 
-  private sendInput(pred: Predictor): void {
-    let count = 0;
-    for (let k = 0; k < INPUT_REDUNDANCY; k++) {
-      const m = pred.maskAt(pred.tick - k);
-      if (m < 0) break;
-      this.masks[k] = m;
-      count++;
+  /**
+   * Envoie les entrées des `stepped` derniers ticks. Chaque paquet porte l'entrée la plus récente
+   * et ses 3 précédentes (redondance) ; si plusieurs ticks ont été simulés d'un coup (images
+   * rares), on envoie les paquets nécessaires pour qu'aucune étiquette ne manque au serveur.
+   */
+  private sendInput(pred: Predictor, stepped: number): void {
+    const oldest = pred.tick - stepped + 1;
+    let newest = pred.tick;
+    for (let packets = 0; packets < MAX_PACKETS_PER_UPDATE; packets++) {
+      let count = 0;
+      for (let k = 0; k < INPUT_REDUNDANCY; k++) {
+        const m = pred.maskAt(newest - k);
+        if (m < 0) break;
+        this.masks[k] = m;
+        count++;
+      }
+      if (count === 0) return;
+      const n = encodeInput(
+        this.sendBuf,
+        newest,
+        this.lastEventId,
+        Math.round(this.interpMs / 4),
+        this.masks,
+        count,
+      );
+      this.stats.bytesOut += n;
+      this.transport.send(this.sendBuf.slice(0, n));
+      newest -= INPUT_REDUNDANCY;
+      if (newest < oldest) return;
     }
-    if (count === 0) return;
-    const n = encodeInput(
-      this.sendBuf,
-      pred.tick,
-      this.lastEventId,
-      Math.round(this.interpMs / 4),
-      this.masks,
-      count,
-    );
-    this.stats.bytesOut += n;
-    this.transport.send(this.sendBuf.slice(0, n));
   }
 
   private computeView(now: number): void {
     const v = this.view;
     const pred = this.predictor;
+    v.moverTick = pred?.started ? this.lastDesired - 1 : this.clock.serverTick(now);
     if (pred?.started) {
       const p = pred.player;
       const alpha = Math.min(1, Math.max(0, this.lastDesired - pred.tick));
@@ -460,6 +496,7 @@ export class GameClient {
     let n = 0;
     if (this.clock.synced && this.buffer.size > 0) {
       const renderTick = this.clock.serverTick(now) - (this.clock.owdMs + this.interpMs) / TICK_MS;
+      v.remoteTick = renderTick;
       const count = this.buffer.presentSlots(this.presence);
       for (let i = 0; i < count; i++) {
         const slot = this.presence[i];

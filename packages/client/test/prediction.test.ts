@@ -27,6 +27,9 @@ describe('réseau parfait', () => {
   it('la prédiction concorde toujours avec le serveur', () => {
     const w = new TestWorld();
     const [a, b] = w.populate(2, { lag: 0, jitter: 0, loss: 0 }, ARENA);
+    w.run(3000); // les entrées simulées pendant le rattrapage initial sont inévitablement en retard
+    a.client.predictor!.corrections = 0;
+    b.client.predictor!.corrections = 0;
     w.run(20_000);
     expect(a.client.state).toBe('joined');
     expect(a.client.stats.snapshots).toBeGreaterThan(500);
@@ -97,7 +100,12 @@ describe('réseau dégradé : lag=150 jitter=30 loss=2', () => {
       for (let i = 0; i < v.remoteCount; i++) {
         const r = v.remotes[i];
         const sp = room.world.players[r.slot];
-        expect(Math.hypot(r.x - sp.x, r.y - sp.y), `${p.name} sees ${r.slot}`).toBeLessThan(1);
+        // Un joueur resté sur la plateforme mobile continue de bouger : on le voit avec le retard
+        // d'interpolation (latence + tampon), donc avec un écart de (vitesse de la plateforme × délai).
+        const riding = sp.groundMover >= 0;
+        expect(Math.hypot(r.x - sp.x, r.y - sp.y), `${p.name} sees ${r.slot}`).toBeLessThan(
+          riding ? 45 : 1,
+        );
       }
     }
   });
@@ -202,6 +210,21 @@ describe('horloges et fréquences d image', () => {
       expect(p.maxRemoteStep).toBeLessThan(bound(ms) + 2);
       expect(p.maxOwnStep).toBeLessThan(bound(ms) + 2);
     }
+  });
+
+  it('fonctionne avec très peu d images par seconde (plusieurs ticks par image)', () => {
+    const w = new TestWorld();
+    const base = { lag: 100, jitter: 10, loss: 0 };
+    const a = w.addClient('Aaaa', { ...base, frameMs: 100, frameJitterMs: 20 }, undefined, ARENA);
+    w.run(500);
+    const b = w.addClient('Bbbb', { ...base, frameMs: 1000 / 60 }, a.client.code, ARENA);
+    w.run(6000);
+    a.client.predictor!.corrections = 0;
+    b.client.predictor!.corrections = 0;
+    w.run(30_000);
+    // Chaque image simule 6 ticks d'un coup : tous doivent être transmis, sans trou.
+    expect(a.client.predictor!.corrections).toBeLessThanOrEqual(2);
+    expect(b.client.predictor!.corrections).toBeLessThanOrEqual(2);
   });
 
   it('reprend proprement après un onglet resté en arrière-plan', () => {
