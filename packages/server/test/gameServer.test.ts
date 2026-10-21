@@ -364,17 +364,20 @@ describe('événements fiables', () => {
     h.advance(10);
     h.join(b, code);
     h.advance(6);
-    const withSpawn = b.snapshots().filter((s) => s.eventCount > 0);
-    expect(withSpawn.length).toBeGreaterThanOrEqual(2); // répété tant que non acquitté
+    // Le joueur déjà présent apprend l'arrivée de l'autre, et l'événement est répété.
+    const withSpawn = a.snapshots().filter((s) => s.eventCount > 0);
+    expect(withSpawn.length).toBeGreaterThanOrEqual(2);
     const e = withSpawn[0].events[0];
     expect(e.type).toBe(ReliableType.SPAWN);
     expect(readSlotPosPayload(e.data, e.len).slot).toBe(1);
-    // Accusé de réception
-    h.sendInput(b, 30, [0], e.id);
-    h.advance(6);
-    b.clear();
-    h.advance(6);
+    // Le nouvel arrivant, lui, ne reçoit pas son propre SPAWN.
     expect(b.snapshots().every((s) => s.eventCount === 0)).toBe(true);
+    // Accusé de réception : plus de répétition
+    h.sendInput(a, 30, [0], e.id);
+    h.advance(6);
+    a.clear();
+    h.advance(6);
+    expect(a.snapshots().every((s) => s.eventCount === 0)).toBe(true);
   });
 
   it('livre aussi les événements quand des snapshots sont sautés (contre-pression)', () => {
@@ -382,17 +385,19 @@ describe('événements fiables', () => {
     const a = h.connect();
     const code = h.create(a);
     h.advance(4);
+    a.clear();
+    a.bufferedAmount = 200_000;
     const b = h.connect('10.0.0.2');
     h.join(b, code);
-    b.bufferedAmount = 200_000;
     h.advance(20);
-    expect(b.snapshots()).toHaveLength(0);
+    expect(a.snapshots()).toHaveLength(0);
     expect(h.server.metrics.snapshotsSkipped).toBeGreaterThan(0);
-    b.bufferedAmount = 0;
+    a.bufferedAmount = 0;
     h.advance(4);
-    const first = b.snapshots()[0];
+    const first = a.snapshots()[0];
     expect(first.eventCount).toBeGreaterThanOrEqual(1);
     expect(first.events[0].type).toBe(ReliableType.SPAWN);
+    expect(readSlotPosPayload(first.events[0].data, first.events[0].len).slot).toBe(1);
   });
 
   it('déconnecte un client dont le tampon dépasse 1 Mo', () => {
@@ -407,11 +412,13 @@ describe('événements fiables', () => {
   it('ignore un accusé de réception falsifié (avenir lointain)', () => {
     const h = harness();
     const a = h.connect();
-    h.create(a);
+    const code = h.create(a);
+    const b = h.connect('10.0.0.2');
+    h.join(b, code);
     h.advance(2);
     h.sendInput(a, 10, [0], 30000);
     h.advance(4);
-    // Les événements non acquittés continuent d'être envoyés
+    // L'événement SPAWN de l'autre joueur n'est pas considéré comme acquitté
     expect(a.snapshots().at(-1)!.eventCount).toBeGreaterThan(0);
   });
 

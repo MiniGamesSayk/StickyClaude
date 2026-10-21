@@ -122,7 +122,6 @@ export class Room {
     client.joinSeq = ++this.joinCounter;
     client.color = this.freeColor();
     client.resetInputs();
-    client.ackedEvent = this.reliable.lastId;
     this.slots[slot] = client;
     this.emptySince = null;
     if (this.host < 0) this.host = slot;
@@ -130,6 +129,8 @@ export class Room {
     addPlayer(this.world, slot);
     const p = this.world.players[slot];
     this.pushSlotPos(ReliableType.SPAWN, slot, p.x, p.y);
+    // Le nouvel arrivant naît dans l'état du snapshot : il ne reçoit pas son propre SPAWN.
+    client.ackedEvent = this.reliable.lastId;
   }
 
   removeClient(client: ClientState, now: number): void {
@@ -194,8 +195,7 @@ export class Room {
     const ev = w.events;
     for (let i = 0; i < ev.count; i++) {
       const t = ev.type[i];
-      if (t === SimEvent.SPAWN)
-        this.pushSlotPos(ReliableType.SPAWN, ev.slot[i], ev.a[i], ev.b[i]);
+      if (t === SimEvent.SPAWN) this.pushSlotPos(ReliableType.SPAWN, ev.slot[i], ev.a[i], ev.b[i]);
       else if (t === SimEvent.FELL)
         this.pushSlotPos(ReliableType.FELL, ev.slot[i], ev.a[i], ev.b[i]);
     }
