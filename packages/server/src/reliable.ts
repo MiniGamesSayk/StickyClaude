@@ -33,7 +33,7 @@ export class ReliableLog {
     for (let k = 0; k < n; k++) {
       const id = (acked + 1 + k) & 0xffff;
       const i = id & (RELIABLE_RING - 1);
-      const e = snap.events[k]!;
+      const e = snap.events[k];
       e.id = id;
       e.type = this.types[i]!;
       e.len = this.lens[i]!;

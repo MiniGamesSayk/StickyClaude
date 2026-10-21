@@ -1,4 +1,4 @@
-import { Input, MAX_PLAYERS, TICK_MS } from '@stickyclaude/shared';
+import { Input, MAX_PLAYERS, SimEvent, TICK_MS } from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import { TestWorld } from './harness.ts';
 import type { NetOptions, Probe } from './harness.ts';
@@ -269,26 +269,29 @@ describe('salon', () => {
     expect(late.client.state).toBe('joined');
     expect(late.client.view.remoteCount).toBe(3);
     expect(first[0].client.view.remoteCount).toBe(3);
+    // Connexion perdue : la place est gardée 20 s (reconnexion), puis le joueur disparaît.
     first[1].client.close();
     w.run(2000);
+    expect(late.client.view.remoteCount).toBe(3);
+    w.run(21_000);
     expect(late.client.view.remoteCount).toBe(2);
+    // Départ volontaire : immédiat.
+    first[2].client.leave();
+    w.run(1500);
+    expect(late.client.view.remoteCount).toBe(1);
     expect(MAX_PLAYERS).toBe(8);
     expect(TICK_MS).toBeCloseTo(16.667, 2);
   });
 
   it('les événements fiables sont livrés une fois et dans l ordre', () => {
     const w = new TestWorld();
-    const events: [number, number][] = [];
     const first = w.addClient('Aaaa', { lag: 100, jitter: 20, loss: 3 }, undefined, ARENA);
-    first.client['hooks'].onReliable = (type, slot): void => {
-      events.push([type, slot]);
-    };
     w.run(500);
     for (let i = 0; i < 3; i++)
       w.addClient(`Joueur${i}`, { lag: 100, jitter: 20, loss: 3 }, first.client.code, ARENA);
     w.run(10_000);
     // Un SPAWN par arrivant (pas pour soi), sans doublon malgré les pertes
-    const spawns = events.filter(([t]) => t === 1);
-    expect(spawns.map(([, s]) => s).sort()).toEqual([1, 2, 3]);
+    const spawns = first.events.filter((e) => e.type === SimEvent.SPAWN);
+    expect(spawns.map((e) => e.slot).sort()).toEqual([1, 2, 3]);
   });
 });

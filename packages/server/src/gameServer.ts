@@ -183,7 +183,7 @@ export class GameServer implements RoomIO {
       if (m.ringTick[i] !== label) {
         m.ringTick[i] = label;
         // Seuls les boutons sont acceptés : les bits hauts (compensation de latence) sont à nous.
-        m.ringMask[i] = pkt.masks[k]! & INPUT_MASK_USED;
+        m.ringMask[i] = pkt.masks[k] & INPUT_MASK_USED;
       }
     }
     m.rewindTicks = Room.rewindFromWire(pkt.rewind);

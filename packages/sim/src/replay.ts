@@ -62,23 +62,23 @@ export class ReplayCursor {
     if (this.done) return false;
     const { rec, world, inputs } = this;
     const t = world.tick + 1;
-    while (this.oi < rec.ops.length && rec.ops[this.oi]!.tick <= world.tick) {
-      const op = rec.ops[this.oi++]!;
+    while (this.oi < rec.ops.length && rec.ops[this.oi].tick <= world.tick) {
+      const op = rec.ops[this.oi++];
       applyOp(world, op, this.lobbyArena);
       if (op.op === 'join' || op.op === 'leave') {
         inputs[op.slot] = 0;
       }
     }
     const tunes = rec.tunes ?? [];
-    while (this.ti < tunes.length && tunes[this.ti]![0] <= world.tick) {
-      const [, key, value] = tunes[this.ti++]!;
+    while (this.ti < tunes.length && tunes[this.ti][0] <= world.tick) {
+      const [, key, value] = tunes[this.ti++];
       if (isMovementKey(key)) {
         world.baseParams[key] = value;
         world.params[key] = value;
       }
     }
-    while (this.ii < rec.inputs.length && rec.inputs[this.ii]![0] <= t) {
-      const c = rec.inputs[this.ii++]!;
+    while (this.ii < rec.inputs.length && rec.inputs[this.ii][0] <= t) {
+      const c = rec.inputs[this.ii++];
       inputs[c[1]] = c[2];
     }
     step(world, inputs);

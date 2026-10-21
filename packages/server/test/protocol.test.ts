@@ -20,7 +20,7 @@ function eventsOf(conn: FakeConn, type: number): number[][] {
   const ev = createDecodedEvent();
   for (const s of conn.snapshots()) {
     for (let i = 0; i < s.eventCount; i++) {
-      const e = s.events[i]!;
+      const e = s.events[i];
       if (e.type !== type || seen.has(e.id)) continue;
       seen.add(e.id);
       decodeEventPayload(e.type, e.data, e.len, ev);
@@ -38,7 +38,7 @@ describe('ticks, entrées et snapshots', () => {
     h.advance(60);
     const snaps = a.snapshots();
     expect(snaps).toHaveLength(30);
-    expect(snaps[0]!.hasOwn).toBe(true);
+    expect(snaps[0].hasOwn).toBe(true);
     expect(snaps.at(-1)!.tick).toBe(60);
     const last = snaps.at(-1)!;
     expect(last.own.y).toBeCloseTo(528, 1);
@@ -53,7 +53,7 @@ describe('ticks, entrées et snapshots', () => {
     h.create(a);
     h.advance(100); // se pose
     const x0 = a.snapshots().at(-1)!.own.x;
-    const start = h.room([...h.server.rooms.keys()][0]!).world.tick;
+    const start = h.room([...h.server.rooms.keys()][0]).world.tick;
     for (let t = start + 1; t <= start + 30; t += 4) {
       const hi = Math.min(start + 30, t + 3);
       h.sendInput(a, hi, [Input.RIGHT, Input.RIGHT, Input.RIGHT, Input.RIGHT]);
@@ -125,7 +125,7 @@ describe('ticks, entrées et snapshots', () => {
     h.advance(5);
     h.time += 8;
     h.sendPing(a, 123456);
-    const p = a.pongs()[0]!;
+    const p = a.pongs()[0];
     expect(p.clientTime).toBe(123456);
     expect(p.tick).toBe(5);
     expect(p.frac).toBeGreaterThan(0.3);
@@ -153,7 +153,7 @@ describe('ticks, entrées et snapshots', () => {
     // un client forge le retard de compensation (bits 12 à 15) et un bouton inexistant
     h.sendInput(a, t + 3, [0xf000 | 0x0f00 | Input.ATTACK]);
     h.advance(5);
-    const p = room.world.players[0]!;
+    const p = room.world.players[0];
     expect(rewindOf(p.prevInput)).toBe(0);
     expect(p.prevInput & 0x0f00).toBe(0);
   });
@@ -171,7 +171,7 @@ describe('ticks, entrées et snapshots', () => {
     h.server.onMessage(a, buf.slice(0, n), true);
     expect(room.recording).toBeNull();
     h.advance(3);
-    expect(room.world.players[0]!.rewind).toBeLessThanOrEqual(15);
+    expect(room.world.players[0].rewind).toBeLessThanOrEqual(15);
   });
 });
 
@@ -195,7 +195,7 @@ describe('événements fiables', () => {
       const ev = createDecodedEvent();
       for (const s of c.snapshots()) {
         for (let i = 0; i < s.eventCount; i++) {
-          const e = s.events[i]!;
+          const e = s.events[i];
           if (e.type !== SimEvent.SPAWN) continue;
           decodeEventPayload(e.type, e.data, e.len, ev);
           out.push({ id: e.id, slot: ev.slot });
@@ -208,7 +208,7 @@ describe('événements fiables', () => {
     expect(seen.every((e) => e.slot === 1)).toBe(true);
     // Le nouvel arrivant, lui, ne reçoit pas son propre SPAWN.
     expect(carrying(b)).toHaveLength(0);
-    h.sendInput(a, 30, [0], seen[0]!.id);
+    h.sendInput(a, 30, [0], seen[0].id);
     h.advance(6);
     a.clear();
     h.advance(6);
@@ -259,7 +259,7 @@ describe('événements fiables', () => {
     const code = h.create(a);
     h.advance(100);
     const room = h.room(code);
-    const p = room.world.players[0]!;
+    const p = room.world.players[0];
     p.x = 31 * 16;
     p.y = 34 * 16 + 40;
     p.vy = 400;
@@ -371,13 +371,12 @@ describe('contenu des snapshots de partie', () => {
       for (const b of bots) b.act(code);
       h.advance(1);
     }
-    let bytes = 0;
     let n = 0;
     for (const s of host.snapshots().slice(-300)) {
       void s;
       n++;
     }
-    bytes = h.server.metrics.bytesOut;
+    const bytes = h.server.metrics.bytesOut;
     expect(n).toBeGreaterThan(100);
     expect(bytes).toBeGreaterThan(0);
     // débit descendant par client sur les 1200 derniers ticks (20 s)

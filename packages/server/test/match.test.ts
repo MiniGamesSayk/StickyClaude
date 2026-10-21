@@ -1,8 +1,22 @@
-import { GamePhase, MAX_PLAYERS, ModeId, ROTATION_ARENA_IDS, getArena } from '@stickyclaude/shared';
+import {
+  CELL,
+  GamePhase,
+  MAX_PLAYERS,
+  ModeId,
+  ObjType,
+  ROTATION_ARENA_IDS,
+  getArena,
+} from '@stickyclaude/shared';
 import type { RoomSettings } from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import { Bot, harness } from './helpers.ts';
-import type { FakeConn } from './helpers.ts';
+import type { BotGoal, FakeConn } from './helpers.ts';
+
+/** Plafond de manches pour 3 manches à gagner : (2 × 3 − 1) × 3. */
+const ROUND_CAP = 15;
+
+/** Une partie complète dure au plus ce nombre de ticks (ici : 2000 s). */
+const MAX_TICKS = 120_000;
 
 interface Played {
   modes: number[];
@@ -12,12 +26,19 @@ interface Played {
   scores: number[];
   podium: number[];
   ticks: number;
+  maxTicks: number;
   errors: string[];
   closed: boolean;
 }
 
 /** Joue une partie complète, du salon au podium, avec des joueurs automatiques. */
-function playMatch(n: number, settings: Partial<RoomSettings>, seed = 1): Played {
+function playMatch(
+  n: number,
+  settings: Partial<RoomSettings>,
+  seed = 1,
+  goal: BotGoal | null = null,
+  maxTicks = MAX_TICKS,
+): Played {
   const h = harness({ MATCH_END_MS: '500' });
   const host = h.connect('10.0.0.1');
   const code = h.create(host, 'Hôte');
@@ -30,9 +51,9 @@ function playMatch(n: number, settings: Partial<RoomSettings>, seed = 1): Played
   h.settings(host, { roundsToWin: 3, suddenDeathSec: 20, bonusEvery: 0, ...settings });
   h.startMatch(host, conns.slice(1));
   const room = h.room(code);
-  const bots = conns.map((c, i) => new Bot(h, c, seed * 100 + i));
+  const bots = conns.map((c, i) => new Bot(h, c, seed * 100 + i, goal));
   let ticks = 0;
-  for (; ticks < 120_000; ticks++) {
+  for (; ticks < maxTicks; ticks++) {
     for (const b of bots) b.act(code);
     h.advance(1);
     if (room.phase === GamePhase.MATCH_END) break;
@@ -52,6 +73,7 @@ function playMatch(n: number, settings: Partial<RoomSettings>, seed = 1): Played
     scores: results?.scores ?? [],
     podium: results?.podium ?? [],
     ticks,
+    maxTicks,
     errors,
     closed: conns.some((c) => c.closed !== null),
   };
@@ -64,10 +86,11 @@ function expectClean(p: Played): void {
   expect(p.closed).toBe(false);
   expect(p.winner).toBeGreaterThanOrEqual(0);
   expect(p.podium.length).toBeGreaterThanOrEqual(2);
-  expect(Math.max(...p.scores)).toBeGreaterThanOrEqual(3);
+  // Le vainqueur a 3 manches, ou la partie a atteint le plafond de manches (tranchée au score).
+  expect(Math.max(...p.scores) >= 3 || p.rounds >= ROUND_CAP).toBe(true);
   expect(p.podium[0]).toBe(p.winner);
   expect(p.rounds).toBeGreaterThanOrEqual(3);
-  expect(p.ticks).toBeLessThan(120_000);
+  expect(p.ticks).toBeLessThan(p.maxTicks);
 }
 
 describe('parties complètes : du salon au podium', () => {
@@ -111,10 +134,31 @@ describe('parties complètes : du salon au podium', () => {
     ['gravité lunaire', ModeId.MOON],
     ['même arme pour tous', ModeId.SAME_WEAPON],
   ];
+  /** Les joueurs automatiques vont vers la colline, ou vers la boule (sans cela, aucun but). */
+  const GOALS: Partial<Record<number, BotGoal>> = {
+    [ModeId.KOTH]: (room) => {
+      const z = room.world.arena.modes?.koth?.zone;
+      return z ? { x: (z[0] + z[2] / 2) * CELL, y: (z[1] + z[3]) * CELL } : null;
+    },
+    [ModeId.BALL]: (room) => {
+      for (const o of room.world.objects) {
+        if (o.active && o.type === ObjType.BALL) return { x: o.x, y: o.y };
+      }
+      return null;
+    },
+  };
   for (const [label, mode] of BONUS) {
     for (const n of SIZES) {
       it(`mode bonus « ${label} » à ${n} joueurs`, () => {
-        const p = playMatch(n, { bonusEvery: 1, bonusModes: [mode], mode: 'ffa' }, mode + n);
+        // Un match de boulette-ball peut aller jusqu'au plafond de manches (matchs nuls à 150 s).
+        const maxTicks = mode === ModeId.BALL ? 260_000 : MAX_TICKS;
+        const p = playMatch(
+          n,
+          { bonusEvery: 1, bonusModes: [mode], mode: 'ffa' },
+          mode + n,
+          GOALS[mode] ?? null,
+          maxTicks,
+        );
         expectClean(p);
         expect(p.modes.every((m) => m === mode)).toBe(true);
       });

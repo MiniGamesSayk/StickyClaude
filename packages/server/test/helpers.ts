@@ -157,15 +157,21 @@ export function harness(env: Record<string, string> = {}): Harness {
   return h;
 }
 
+/** Où un joueur automatique doit aller (roi de la colline, boulette-ball) ; null : au hasard. */
+export type BotGoal = (room: Room) => { x: number; y: number } | null;
+
 /** Joueur automatique : envoie à chaque tick des entrées étiquetées juste devant le serveur. */
 export class Bot {
   private hold = 0;
   private mask = 0;
+  private slot = -2;
   private readonly rng: Rng;
   constructor(
     private readonly h: Harness,
     readonly conn: FakeConn,
     seed: number,
+    /** Objectif poursuivi (3 fois sur 4) à la place d'entrées au hasard. */
+    private readonly goal: BotGoal | null = null,
   ) {
     this.rng = new Rng(seed);
   }
@@ -177,6 +183,17 @@ export class Bot {
     if (--this.hold <= 0) {
       this.hold = 3 + this.rng.int(25);
       this.mask = this.rng.nextU32() & 0xff;
+      if (this.goal) {
+        if (this.slot === -2) this.slot = this.h.slotOf(this.conn);
+        const p = room.world.players[this.slot];
+        const g = p ? this.goal(room) : null;
+        if (p && g && this.rng.float() < 0.75) {
+          let m = g.x < p.x - 8 ? Input.LEFT : g.x > p.x + 8 ? Input.RIGHT : 0;
+          if (g.y < p.y - 24 || this.rng.float() < 0.15) m |= Input.JUMP;
+          if (this.rng.float() < 0.3) m |= Input.ATTACK;
+          this.mask = m;
+        }
+      }
     }
     const tick = room.world.tick + 3;
     const ack = this.conn.lastSnapshot()?.events.at(-1)?.id ?? 0;

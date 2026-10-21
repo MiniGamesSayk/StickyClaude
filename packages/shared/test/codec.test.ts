@@ -19,7 +19,6 @@ import {
   createDecodedEvent,
   decodeEventPayload,
   encodeEventPayload,
-  EVENT_SPECS,
   GamePhase,
   INPUT_PACKET_MAX,
   INPUT_PACKET_MIN,

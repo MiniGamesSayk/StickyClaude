@@ -125,7 +125,7 @@ export class Room {
     createdAt: number,
     isPublic = false,
   ) {
-    this.lobbyArena = getArena(lobbyArenaId) ?? ARENAS[LOBBY_ARENA_ID]!;
+    this.lobbyArena = getArena(lobbyArenaId) ?? ARENAS[LOBBY_ARENA_ID];
     this.settings = cloneSettings(DEFAULT_SETTINGS);
     this.settings.isPublic = isPublic;
     this.world = createWorld(this.lobbyArena, seed);
@@ -205,7 +205,7 @@ export class Room {
     const g = w.game;
     const teams: number[] = [];
     for (let s = 0; s < MAX_PLAYERS; s++) {
-      teams.push(this.slots[s] ? w.team[s]! : -1);
+      teams.push(this.slots[s] ? w.team[s] : -1);
     }
     return {
       arena: w.arena.id,
@@ -447,7 +447,7 @@ export class Room {
     if (shuffle) this.assignTeams(true);
     if (assign) {
       for (let s = 0; s < Math.min(assign.length, MAX_PLAYERS); s++) {
-        const t = assign[s]!;
+        const t = assign[s];
         const mem = this.slots[s];
         if (mem && t >= 0 && t < this.settings.teams) mem.team = t;
       }
@@ -469,7 +469,7 @@ export class Room {
       const order = players.slice();
       for (let i = order.length - 1; i > 0; i--) {
         const j = randomInt(i + 1);
-        const t = order[i]!;
+        const t = order[i];
         order[i] = order[j]!;
         order[j] = t;
       }
@@ -478,15 +478,15 @@ export class Room {
     }
     const counts = new Array<number>(n).fill(0);
     for (const m of players) {
-      if (m.team >= 0 && m.team < n) counts[m.team]!++;
+      if (m.team >= 0 && m.team < n) counts[m.team]++;
       else m.team = -1;
     }
     for (const m of players) {
       if (m.team >= 0) continue;
       let best = 0;
-      for (let t = 1; t < n; t++) if (counts[t]! < counts[best]!) best = t;
+      for (let t = 1; t < n; t++) if (counts[t] < counts[best]) best = t;
       m.team = best;
-      counts[best]!++;
+      counts[best]++;
     }
   }
 
@@ -592,18 +592,18 @@ export class Room {
     const g = w.game;
     const present = new Set<number>();
     for (let s = 0; s < MAX_PLAYERS; s++)
-      if (this.matchTeams[s]! >= 0) present.add(this.matchTeams[s]!);
-    const podium = [...present].sort((a, b) => g.scores[b]! - g.scores[a]! || a - b);
+      if (this.matchTeams[s] >= 0) present.add(this.matchTeams[s]);
+    const podium = [...present].sort((a, b) => g.scores[b] - g.scores[a] || a - b);
     const stats: PlayerStats[] = [];
     for (let s = 0; s < MAX_PLAYERS; s++) {
-      if (this.matchTeams[s]! < 0) continue;
+      if (this.matchTeams[s] < 0) continue;
       stats.push({
         slot: s,
-        kos: w.stats.kos[s]!,
-        deaths: w.stats.deaths[s]!,
-        damage: w.stats.damage[s]!,
-        bestCombo: w.stats.bestCombo[s]!,
-        silly: w.stats.silly[s]!,
+        kos: w.stats.kos[s],
+        deaths: w.stats.deaths[s],
+        damage: w.stats.damage[s],
+        bestCombo: w.stats.bestCombo[s],
+        silly: w.stats.silly[s],
       });
     }
     this.sendAll({
@@ -651,7 +651,7 @@ export class Room {
         this.matchTeams[slot] = this.settings.mode === 'teams' ? this.smallestTeam() : slot;
         this.matchNames[slot] = m.name;
         this.world.team[slot] = this.matchTeams[slot]!;
-        m.team = this.settings.mode === 'teams' ? this.matchTeams[slot]! : -1;
+        m.team = this.settings.mode === 'teams' ? this.matchTeams[slot] : -1;
       }
       m.lastActiveAt = now;
       this.sendJoined(m, now);
@@ -661,11 +661,11 @@ export class Room {
   private smallestTeam(): number {
     const counts = new Array<number>(this.settings.teams).fill(0);
     for (let s = 0; s < MAX_PLAYERS; s++) {
-      const t = this.matchTeams[s]!;
-      if (this.slots[s] && t >= 0 && t < counts.length) counts[t]!++;
+      const t = this.matchTeams[s];
+      if (this.slots[s] && t >= 0 && t < counts.length) counts[t]++;
     }
     let best = 0;
-    for (let t = 1; t < counts.length; t++) if (counts[t]! < counts[best]!) best = t;
+    for (let t = 1; t < counts.length; t++) if (counts[t] < counts[best]) best = t;
     return best;
   }
 
@@ -707,10 +707,10 @@ export class Room {
     let endRound = 0;
     let endMatchWinner = -1;
     for (let i = 0; i < n; i++) {
-      const type = ev.type[i]!;
+      const type = ev.type[i];
       const o = i * 6;
       if (isNetworkEvent(type)) {
-        this.pushNet(type, ev.slot[i]!, ev.v.subarray(o, o + 6));
+        this.pushNet(type, ev.slot[i], ev.v.subarray(o, o + 6));
       } else if (type === SimEvent.ROUND_START) {
         roundStart = true;
       } else if (type === SimEvent.ROUND_END) {
@@ -781,7 +781,7 @@ export class Room {
       return;
     }
     m.leaving = true;
-    const p = this.world.players[m.slot]!;
+    const p = this.world.players[m.slot];
     if (phase === GamePhase.PLAYING && !p.dead && !p.ghost) {
       this.recorder?.op({ tick: this.world.tick, op: 'kill', slot: m.slot });
       killPlayer(this.world, m.slot, -1, Cause.NONE);
@@ -862,7 +862,7 @@ export class Room {
       if (m?.client && (w.tick + s) % interval === 0) due = true;
     }
     for (let k = 0; k < this.spectators.length && !due; k++) {
-      const m = this.spectators[k]!;
+      const m = this.spectators[k];
       if (m.client && (w.tick + MAX_PLAYERS + k) % interval === 0) due = true;
     }
     if (!due) return;
@@ -870,8 +870,8 @@ export class Room {
     snap.tick = w.tick;
     let n = 0;
     for (let s = 0; s < MAX_PLAYERS; s++) {
-      const p = w.players[s]!;
-      if (p.active) fillPlayerSnap(w, s, snap.players[n++]!);
+      const p = w.players[s];
+      if (p.active) fillPlayerSnap(w, s, snap.players[n++]);
     }
     snap.playerCount = n;
     fillGameSnap(w, snap.game);
@@ -884,7 +884,7 @@ export class Room {
       if (m?.client && (w.tick + s) % interval === 0) this.sendTo(m, hidden);
     }
     for (let k = 0; k < this.spectators.length; k++) {
-      const m = this.spectators[k]!;
+      const m = this.spectators[k];
       if (m.client && (w.tick + MAX_PLAYERS + k) % interval === 0) this.sendTo(m, false);
     }
   }

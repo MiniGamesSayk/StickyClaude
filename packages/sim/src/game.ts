@@ -56,7 +56,7 @@ export function applyStart(world: World, cfg: StartConfig): void {
   world.rules = { ...cfg.rules, bonusModes: [...cfg.rules.bonusModes] };
   world.arenaPool = cfg.arenas;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    world.inMatch[s] = cfg.inMatch[s]! ? 1 : 0;
+    world.inMatch[s] = cfg.inMatch[s] ? 1 : 0;
     world.team[s] = cfg.teams[s]!;
   }
   startMatch(world);
@@ -265,6 +265,9 @@ export function returnToLobby(world: World, lobbyArena: ArenaData): void {
   loadArena(world, lobbyArena);
   g.phase = GamePhase.LOBBY;
   g.phaseTick = 0;
+  g.round = 0;
+  g.scores.fill(0);
+  g.matchWinner = -1;
   g.mode = ModeId.FFA;
   g.suddenStarted = false;
   g.inkY = WORLD_H;
@@ -650,6 +653,24 @@ export function stepGameClient(world: World): void {
       g.suddenStarted = true;
       updateSuddenGeometry(world);
     }
+  }
+}
+
+/**
+ * Replace le niveau d'encre et la déchirure d'après le tick de manche (monde de rendu et de
+ * prédiction du client, après une restauration depuis un snapshot).
+ */
+export function syncSuddenGeometry(world: World): void {
+  const g = world.game;
+  if (g.phase === GamePhase.PLAYING) {
+    if (usesSudden(g.mode) && g.roundTick >= suddenAt(world)) {
+      g.suddenStarted = true;
+      updateSuddenGeometry(world);
+    }
+  } else if (g.phase === GamePhase.COUNTDOWN || g.phase === GamePhase.LOBBY) {
+    g.suddenStarted = false;
+    g.inkY = WORLD_H;
+    g.tear = 0;
   }
 }
 

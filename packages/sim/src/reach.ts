@@ -35,7 +35,7 @@ const key = (cx: number, cy: number): number => cy * GRID_W + cx;
 function cellType(cells: Uint8Array, cx: number, cy: number): number {
   if (cx < 0 || cx >= GRID_W) return Cell.SOLID;
   if (cy < 0 || cy >= GRID_H) return Cell.EMPTY;
-  return cells[cy * GRID_W + cx]!;
+  return cells[cy * GRID_W + cx];
 }
 
 function isSupport(t: number): boolean {
@@ -94,7 +94,7 @@ const inputs = new Uint16Array(MAX_PLAYERS);
 
 /** Rejoue un macro depuis (cx, cy) ; retourne la cellule d'atterrissage, ou null. */
 function simulate(world: World, from: Node, m: Macro): Node | null {
-  const p = world.players[0]!;
+  const p = world.players[0];
   spawnPlayerAt(world, 0, (from.cx + 0.5) * CELL, (from.cy + 1) * CELL, 0);
   p.invuln = 0;
   p.grounded = true;
@@ -106,7 +106,7 @@ function simulate(world: World, from: Node, m: Macro): Node | null {
   let pressedJump = false;
   let dblDone = false;
   for (let t = 0; t < 240; t++) {
-    let mask = dirBit;
+    let mask: number;
     if (m.drop) {
       mask = dirBit | Input.DOWN | (t === 0 ? Input.JUMP : 0);
     } else if (m.hold === 0) {
@@ -238,7 +238,8 @@ export function analyzeArena(arena: ArenaData): ArenaReport {
   if (ball) {
     const [g0, g1] = ball.goals;
     for (const g of [g0, g1]) {
-      if (g[0] + g[2] > GRID_W || g[1] + g[3] > GRID_H) errors.push('cage de boulette-ball hors de la grille');
+      if (g[0] + g[2] > GRID_W || g[1] + g[3] > GRID_H)
+        errors.push('cage de boulette-ball hors de la grille');
     }
     const cx = ball.spawn
       ? ball.spawn[0]
@@ -264,23 +265,27 @@ export function analyzeArena(arena: ArenaData): ArenaReport {
     world.auth = false;
     world.game.phase = 0;
     const cache = new Map<number, Node[]>();
-    const first = reachableFrom(world, cells, spawns[0]!, cache);
+    const first = reachableFrom(world, cells, spawns[0], cache);
     reachable = first.size;
     for (const s of spawns) {
-      if (!first.has(key(s.cx, s.cy))) errors.push(`apparition (${s.cx},${s.cy}) inaccessible depuis la première`);
+      if (!first.has(key(s.cx, s.cy)))
+        errors.push(`apparition (${s.cx},${s.cy}) inaccessible depuis la première`);
     }
     for (const t of targets) {
-      if (!first.has(key(t.node.cx, t.node.cy))) errors.push(`${t.label} inaccessible depuis les points d'apparition`);
+      if (!first.has(key(t.node.cx, t.node.cy)))
+        errors.push(`${t.label} inaccessible depuis les points d'apparition`);
     }
     // Depuis chaque apparition, on doit pouvoir rejoindre toutes les autres (aucune impasse).
     for (let i = 1; i < spawns.length; i++) {
-      const r = reachableFrom(world, cells, spawns[i]!, cache);
-      if (!r.has(key(spawns[0]!.cx, spawns[0]!.cy))) {
-        errors.push(`impasse : depuis (${spawns[i]!.cx},${spawns[i]!.cy}) on ne peut pas rejoindre la première apparition`);
+      const r = reachableFrom(world, cells, spawns[i], cache);
+      if (!r.has(key(spawns[0].cx, spawns[0].cy))) {
+        errors.push(
+          `impasse : depuis (${spawns[i].cx},${spawns[i].cy}) on ne peut pas rejoindre la première apparition`,
+        );
       }
       for (const t of targets) {
         if (!r.has(key(t.node.cx, t.node.cy))) {
-          errors.push(`${t.label} inaccessible depuis (${spawns[i]!.cx},${spawns[i]!.cy})`);
+          errors.push(`${t.label} inaccessible depuis (${spawns[i].cx},${spawns[i].cy})`);
         }
       }
     }

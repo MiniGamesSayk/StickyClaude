@@ -4,6 +4,7 @@
   --ink-soft: #4a5688;
   --accent: #1f4fd1;
   --danger: #d6322e;
+  --ok: #1f9d55;
   font-family: 'Patrick Hand', 'Comic Sans MS', 'Segoe Print', cursive, sans-serif;
   color: var(--ink);
 }
@@ -29,14 +30,22 @@ body {
 #game canvas {
   display: block;
 }
-#menu {
+
+/* --- Cartes (accueil, messages, podium) ---------------------------------------------------- */
+#menu,
+#overlay {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
   pointer-events: none;
+  overflow: auto;
 }
-#menu .card {
+#overlay {
+  background: rgba(231, 223, 200, 0.7);
+  z-index: 20;
+}
+.card {
   pointer-events: auto;
   background: var(--paper);
   border: 3px solid var(--ink);
@@ -46,123 +55,451 @@ body {
   width: min(92vw, 380px);
   display: grid;
   gap: 12px;
+  max-height: 96vh;
+  overflow: auto;
 }
-#menu h1 {
+.card.wide {
+  width: min(94vw, 460px);
+}
+.card > * {
+  min-width: 0;
+}
+.card h1 {
   margin: 0;
   font-size: 34px;
   letter-spacing: 1px;
   text-align: center;
 }
-#menu p.sub {
+.card h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+.card p.sub {
   margin: -6px 0 4px;
   text-align: center;
   color: var(--ink-soft);
 }
-#menu .card > * {
-  min-width: 0;
-}
-#menu label {
+.card label,
+.panel label {
   display: grid;
   gap: 4px;
   font-size: 15px;
 }
-#menu input {
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+input,
+select {
   font: inherit;
-  font-size: 18px;
-  padding: 8px 10px;
+  font-size: 16px;
+  padding: 6px 8px;
   border: 2px solid var(--ink);
   border-radius: 4px 8px 5px 7px;
   background: #fffdf6;
   color: var(--ink);
+  min-width: 0;
 }
-#menu input:focus-visible,
-#menu button:focus-visible {
+input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+input:disabled,
+select:disabled {
+  opacity: 0.6;
+}
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-#menu .row {
+.row {
   display: flex;
   gap: 8px;
+  align-items: center;
   min-width: 0;
 }
-#menu .row input {
+.row input[placeholder='CODE'] {
   flex: 1;
-  min-width: 0;
   text-transform: uppercase;
   letter-spacing: 3px;
 }
-#menu button {
+button {
   font: inherit;
-  font-size: 18px;
+  font-size: 17px;
   cursor: pointer;
-  padding: 9px 14px;
+  padding: 8px 14px;
   border: 2px solid var(--ink);
   border-radius: 6px 10px 7px 11px;
   background: var(--accent);
   color: #fff;
 }
-#menu button.secondary {
+button.secondary {
   background: #fffdf6;
   color: var(--ink);
 }
-#menu button:disabled {
+button:disabled {
   opacity: 0.5;
   cursor: wait;
 }
-#menu .error {
+.error {
   min-height: 1.3em;
   color: var(--danger);
   text-align: center;
 }
-#hud {
+.hint {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* --- Apparence ------------------------------------------------------------------------------ */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+}
+.swatch.on {
+  outline: 3px solid var(--ink);
+  outline-offset: 1px;
+}
+.look-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+.look-grid select {
+  width: 100%;
+  font-size: 13px;
+}
+
+/* --- Salons publics ------------------------------------------------------------------------- */
+.rooms {
+  display: grid;
+  gap: 6px;
+}
+.room {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border: 2px dashed var(--ink-soft);
+  border-radius: 4px 8px 5px 7px;
+}
+.room .meta {
+  grid-column: 1;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.room button {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  font-size: 14px;
+  padding: 4px 10px;
+}
+
+/* --- Salon ---------------------------------------------------------------------------------- */
+#lobby {
   position: fixed;
   top: 8px;
   left: 8px;
-  padding: 8px 10px;
-  background: rgba(246, 241, 227, 0.92);
+  bottom: 8px;
+  width: min(340px, 94vw);
+  z-index: 10;
+}
+.panel {
+  height: 100%;
+  overflow: auto;
+  padding: 10px 12px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  background: rgba(246, 241, 227, 0.95);
   border: 2px solid var(--ink);
-  border-radius: 6px 10px 7px 9px;
+  border-radius: 6px 12px 8px 10px;
+  font-size: 15px;
+}
+.panel .lobby-title {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.panel .code {
+  font-size: 26px;
+  letter-spacing: 4px;
+  flex: 1;
+}
+.panel button {
   font-size: 14px;
-  line-height: 1.35;
-  max-width: 260px;
-  user-select: none;
+  padding: 4px 10px;
 }
-#hud .code {
-  font-size: 22px;
-  letter-spacing: 3px;
+.panel .row button {
+  font-size: 16px;
+  padding: 7px 12px;
 }
-#hud button {
-  font: inherit;
-  font-size: 13px;
-  padding: 2px 8px;
-  margin-left: 6px;
-  border: 2px solid var(--ink);
-  border-radius: 4px;
-  background: #fffdf6;
-  color: var(--ink);
+.panel .status {
+  color: var(--ink-soft);
+}
+.panel summary {
   cursor: pointer;
+  font-weight: bold;
+  margin-bottom: 4px;
 }
-#hud ul {
+.panel details > label,
+.panel details > .row,
+.panel details > .checks {
+  margin: 4px 0;
+}
+.panel .checks {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+}
+.players {
   list-style: none;
-  margin: 6px 0 0;
+  margin: 0;
   padding: 0;
+  display: grid;
+  gap: 4px;
 }
-#hud li {
+.players li {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-#hud .dot {
-  width: 10px;
-  height: 10px;
+.players li.me .pname {
+  font-weight: bold;
+}
+.players .pname {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.players .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  flex: none;
+}
+.players .tag.ok {
+  color: var(--ok);
+}
+.players .tag.warn {
+  color: var(--danger);
+}
+.players .ping {
+  font-size: 12px;
+  color: var(--ink-soft);
+  min-width: 42px;
+  text-align: right;
+}
+.players select {
+  font-size: 13px;
+  padding: 2px 4px;
+}
+.players li button {
+  padding: 0 6px;
+}
+.emotes {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.emotes button {
+  min-width: 30px;
+  padding: 3px 6px;
+}
+
+/* --- En jeu --------------------------------------------------------------------------------- */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  z-index: 5;
+}
+.hud-top {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 14px;
+  background: rgba(246, 241, 227, 0.92);
+  border: 2px solid var(--ink);
+  border-radius: 6px 12px 8px 10px;
+  font-size: 17px;
+  white-space: nowrap;
+}
+.hud-top .big {
+  font-size: 22px;
+}
+.hud-mode {
+  position: absolute;
+  top: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 15px;
+  color: var(--ink);
+  background: rgba(246, 241, 227, 0.8);
+  padding: 1px 10px;
+  border-radius: 8px;
+}
+.hud-mode:empty {
+  display: none;
+}
+.hud-scores {
+  position: absolute;
+  left: 0;
+  top: 60px;
+  width: 150px;
+  padding: 6px 8px;
+  background: rgba(246, 241, 227, 0.9);
+  border: 2px solid var(--ink);
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  display: grid;
+  gap: 4px;
+}
+.srow {
+  display: grid;
+  gap: 1px;
+  font-size: 14px;
+}
+.srow .sname {
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pips {
+  display: flex;
+  gap: 3px;
+}
+.pips i {
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   border: 1.5px solid var(--ink);
 }
-#hud .hint {
-  margin-top: 6px;
-  color: var(--ink-soft);
-  font-size: 12px;
+.pips i.on {
+  background: var(--ink);
 }
+.hud-self {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 4px 10px;
+  background: rgba(246, 241, 227, 0.92);
+  border: 2px solid var(--ink);
+  border-radius: 6px 10px 7px 9px;
+  font-size: 15px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.hpbar {
+  display: inline-block;
+  width: 90px;
+  height: 10px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #fffdf6;
+}
+.hpbar i {
+  display: block;
+  height: 100%;
+}
+.hud-banner {
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  text-shadow: 2px 2px 0 var(--paper);
+}
+.hud-banner .bt {
+  font-size: 64px;
+  line-height: 1;
+}
+.hud-banner .bs {
+  font-size: 22px;
+  color: var(--ink-soft);
+}
+.hud-feed {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  max-width: 300px;
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+  margin-top: 250px;
+}
+.feed-line {
+  padding: 2px 8px;
+  background: rgba(246, 241, 227, 0.92);
+  border-left: 4px solid var(--ink);
+  border-radius: 4px;
+  font-size: 13px;
+}
+.hud-stat {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.podium {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(231, 223, 200, 0.6);
+  pointer-events: auto;
+  overflow: auto;
+}
+.prow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  font-size: 18px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--ink-soft);
+}
+.prow.first {
+  font-size: 24px;
+}
+.prow .hint {
+  grid-column: 1 / 3;
+}
+.stats {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+}
+.stats th,
+.stats td {
+  text-align: left;
+  padding: 2px 4px;
+  border-bottom: 1px solid rgba(27, 42, 94, 0.2);
+}
+
+/* --- Outils de développement ---------------------------------------------------------------- */
 #netgraph {
   position: fixed;
   right: 8px;
@@ -170,6 +507,7 @@ body {
   background: rgba(10, 14, 30, 0.82);
   border-radius: 6px;
   pointer-events: none;
+  z-index: 30;
 }
 #tuning {
   position: fixed;
@@ -185,6 +523,7 @@ body {
     monospace;
   border-radius: 6px;
   padding: 8px;
+  z-index: 30;
 }
 #tuning label {
   display: grid;
@@ -199,4 +538,17 @@ body {
 #tuning button {
   font: inherit;
   margin: 0 4px 6px 0;
+  padding: 1px 6px;
+}
+
+@media (max-width: 700px) {
+  #lobby {
+    width: min(300px, 92vw);
+  }
+  .hud-scores {
+    width: 120px;
+  }
+  .hud-banner .bt {
+    font-size: 44px;
+  }
 }

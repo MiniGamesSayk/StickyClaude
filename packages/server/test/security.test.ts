@@ -91,7 +91,7 @@ describe('tentatives de triche : aucun message ne fixe un état', () => {
     // hors messages valides sans effet (ex. ready/emote d'un spectateur ne touchent pas le monde)
     h.send(b, { t: 'emote', id: 99 });
     expect(JSON.parse(worldState(h, code))[1]).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
-    expect(h.room(code).world.players[0]!.hp).toBe(100);
+    expect(h.room(code).world.players[0].hp).toBe(100);
     void before;
   });
 
@@ -134,7 +134,7 @@ describe('tentatives de triche : aucun message ne fixe un état', () => {
       h.sendInput(a, room.world.tick + 3, [0xff00 | Input.ATTACK]);
       h.advance(1);
     }
-    const p = room.world.players[slot]!;
+    const p = room.world.players[slot];
     expect(p.prevInput & 0xff00).toBe(0);
   });
 
@@ -152,7 +152,7 @@ describe('tentatives de triche : aucun message ne fixe un état', () => {
     buf[6] = 1;
     h.server.onMessage(a, buf.slice(0, 9), true);
     h.advance(3);
-    expect(room.world.players[slot]!.rewind).toBeLessThanOrEqual(15);
+    expect(room.world.players[slot].rewind).toBeLessThanOrEqual(15);
   });
 });
 
@@ -222,7 +222,7 @@ describe('abus et inondation', () => {
     const h = harness();
     const c = h.connect();
     h.send(c, { t: 'create', v: PROTOCOL_VERSION, name: '<b>x</b>&amp;' });
-    expect(c.lastOf('joined')!.lobby.players[0]!.name).toBe('<b>x</b>&amp;');
+    expect(c.lastOf('joined')!.lobby.players[0].name).toBe('<b>x</b>&amp;');
   });
 
   it('un joueur ne peut pas agir sur un autre salon', () => {

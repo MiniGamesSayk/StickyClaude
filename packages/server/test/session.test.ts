@@ -35,10 +35,10 @@ describe('reconnexion par jeton', () => {
     h.advance(100);
     const room = h.room(code);
     const slot = h.slotOf(b);
-    const x = room.world.players[slot]!.x;
+    const x = room.world.players[slot].x;
     h.server.onClose(b);
     h.advance(120);
-    expect(room.world.players[slot]!.x).toBe(x);
+    expect(room.world.players[slot].x).toBe(x);
     const lobby = a.lastOf('lobby')!.lobby;
     expect(lobby.players.find((p) => p.slot === slot)!.connected).toBe(false);
 
@@ -55,7 +55,7 @@ describe('reconnexion par jeton', () => {
 
   it('après le délai, la place est perdue et le jeton ne marche plus', () => {
     const { h, code, conns } = setup({ RECONNECT_GRACE_MS: '2000' });
-    const b = conns[1]!;
+    const b = conns[1];
     const token = b.lastOf('joined')!.token;
     h.server.onClose(b);
     h.advance(60 * 3);
@@ -68,7 +68,7 @@ describe('reconnexion par jeton', () => {
 
   it('un jeton falsifié, inconnu ou déjà utilisé est refusé', () => {
     const { h, code, conns } = setup({ RECONNECT_GRACE_MS: '5000' });
-    const b = conns[1]!;
+    const b = conns[1];
     const token = b.lastOf('joined')!.token;
     const x = h.connect('10.0.0.9');
     h.send(x, { t: 'resume', v: PROTOCOL_VERSION, token: 'ab'.repeat(16), code });
@@ -91,7 +91,7 @@ describe('reconnexion par jeton', () => {
     expect(room.phase).toBe(GamePhase.PLAYING);
     h.server.onClose(b);
     h.advance(60 * 3);
-    const p = room.world.players[slot]!;
+    const p = room.world.players[slot];
     expect(p.dead || p.ghost).toBe(true);
     expect(room.slots[slot]).not.toBeNull();
     // fin de manche : retiré du salon, son emplacement reste condamné jusqu'à la fin de la partie
@@ -138,7 +138,7 @@ describe('spectateurs', () => {
     expect(room.world.game.round).toBeGreaterThanOrEqual(round1);
     const slot = s.lastOf('joined')!.slot;
     expect(room.world.inMatch[slot]).toBe(1);
-    expect(room.world.players[slot]!.active).toBe(true);
+    expect(room.world.players[slot].active).toBe(true);
     // il apparaît au début de la manche suivante, avec les autres
     h.advance(200);
     expect(s.snapshots().at(-1)!.hasOwn).toBe(true);
@@ -182,7 +182,7 @@ describe('inactivité', () => {
     expect(room.slots[slot]).toBeNull();
     expect(c.lastOf('joined')!.slot).toBe(-1);
     expect(a.lastOf('lobby')!.lobby.spectators.map((x) => x.name)).toContain('Joueur2');
-    expect(room.world.players[slot]!.active).toBe(false);
+    expect(room.world.players[slot].active).toBe(false);
   });
 
   it('10 min d inactivité dans le salon : déconnexion', () => {

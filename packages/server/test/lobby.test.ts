@@ -39,7 +39,7 @@ describe('créer et rejoindre', () => {
     expect(j.round.round).toBe(0);
     expect(j.round.rows).toHaveLength(36);
     expect(j.lobby.players).toHaveLength(1);
-    expect(j.lobby.players[0]!.name).toBe('Alice');
+    expect(j.lobby.players[0].name).toBe('Alice');
     expect(h.server.stats()).toEqual({ rooms: 1, players: 1, connections: 1 });
   });
 
@@ -73,7 +73,7 @@ describe('créer et rejoindre', () => {
     const h = harness();
     const a = h.connect();
     h.send(a, { t: 'create', v: PROTOCOL_VERSION, name: '  Ａlice​‮  ' });
-    expect(a.lastOf('joined')!.lobby.players[0]!.name).toBe('Alice');
+    expect(a.lastOf('joined')!.lobby.players[0].name).toBe('Alice');
     for (const [i, bad] of ['connard', 'Fu(k fuck', 'xXmerdeXx', 'p.u.t.a.i.n', 'n4zi'].entries()) {
       const c = h.connect(`10.9.0.${i}`);
       h.send(c, { t: 'create', v: PROTOCOL_VERSION, name: bad });
@@ -132,8 +132,8 @@ describe('créer et rejoindre', () => {
     const b = h.connect('10.0.0.2');
     h.send(b, { t: 'join', v: PROTOCOL_VERSION, name: 'Bob', code, look: { color: 3 } });
     const players = b.lastOf('joined')!.lobby.players;
-    expect(players[0]!.look.color).toBe(3);
-    const bobColor = players[1]!.look.color;
+    expect(players[0].look.color).toBe(3);
+    const bobColor = players[1].look.color;
     expect(bobColor).not.toBe(3);
     // le noir (3) est proche du bleu nuit (11) et du gris (9) : un des deux doit être choisi
     expect([9, 11]).toContain(bobColor);
@@ -151,10 +151,10 @@ describe('créer et rejoindre', () => {
       name: 'Alice',
       look: { color: 99, stroke: 2, hat: 11, victory: -1, extra: 'x' },
     });
-    const look = a.lastOf('joined')!.lobby.players[0]!.look;
+    const look = a.lastOf('joined')!.lobby.players[0].look;
     expect(look).toEqual({ color: 0, stroke: 2, hat: 11, victory: 0 });
     h.send(a, { t: 'look', look: { hat: 99, stroke: 1 } });
-    expect(a.lastOf('lobby')!.lobby.players[0]!.look).toEqual({
+    expect(a.lastOf('lobby')!.lobby.players[0].look).toEqual({
       color: 0,
       stroke: 1,
       hat: 11,
@@ -171,9 +171,9 @@ describe('hôte, départs, expulsion', () => {
     const [b, c] = fill(h, code, 2);
     h.send(a, { t: 'leave' });
     expect(a.lastOf('left')?.reason).toBe('left');
-    expect(b!.lastOf('lobby')!.lobby.host).toBe(1);
-    h.send(b!, { t: 'leave' });
-    expect(c!.lastOf('lobby')!.lobby.host).toBe(2);
+    expect(b.lastOf('lobby')!.lobby.host).toBe(1);
+    h.send(b, { t: 'leave' });
+    expect(c.lastOf('lobby')!.lobby.host).toBe(2);
   });
 
   it('libère l emplacement et supprime le salon vide après le délai d inactivité', () => {
@@ -193,10 +193,10 @@ describe('hôte, départs, expulsion', () => {
     const code = h.create(a);
     const [b] = fill(h, code, 1);
     h.send(a, { t: 'kick', slot: 1 });
-    expect(b!.lastOf('left')?.reason).toBe('kicked');
+    expect(b.lastOf('left')?.reason).toBe('kicked');
     expect(a.lastOf('lobby')!.lobby.players).toHaveLength(1);
-    h.join(b!, code);
-    expect(b!.lastOf('joined')!.slot).toBe(1);
+    h.join(b, code);
+    expect(b.lastOf('joined')!.slot).toBe(1);
   });
 
   it('seul l hôte expulse, et pas lui-même', () => {
@@ -204,11 +204,11 @@ describe('hôte, départs, expulsion', () => {
     const a = h.connect();
     const code = h.create(a);
     const [b, c] = fill(h, code, 2);
-    h.send(b!, { t: 'kick', slot: 2 });
-    expect(b!.lastOf('error')?.code).toBe('not_host');
+    h.send(b, { t: 'kick', slot: 2 });
+    expect(b.lastOf('error')?.code).toBe('not_host');
     h.send(a, { t: 'kick', slot: 0 });
     expect(a.lastOf('error')?.code).toBe('bad_request');
-    expect(c!.lastOf('left')).toBeUndefined();
+    expect(c.lastOf('left')).toBeUndefined();
   });
 });
 
@@ -220,15 +220,15 @@ describe('prêt, réglages, équipes', () => {
     h.send(a, { t: 'start' });
     expect(a.lastOf('error')?.code).toBe('not_enough_players');
     const [b] = fill(h, code, 1);
-    h.send(b!, { t: 'start' });
-    expect(b!.lastOf('error')?.code).toBe('not_host');
+    h.send(b, { t: 'start' });
+    expect(b.lastOf('error')?.code).toBe('not_host');
     h.send(a, { t: 'start' });
     expect(a.lastOf('error')?.code).toBe('not_ready');
-    h.send(b!, { t: 'ready', ready: true });
-    expect(a.lastOf('lobby')!.lobby.players[1]!.ready).toBe(true);
+    h.send(b, { t: 'ready', ready: true });
+    expect(a.lastOf('lobby')!.lobby.players[1].ready).toBe(true);
     h.send(a, { t: 'start' });
     expect(h.room(code).phase).toBe(GamePhase.COUNTDOWN);
-    const round = b!.lastOf('round')!;
+    const round = b.lastOf('round')!;
     expect(round.round.round).toBe(1);
     expect(round.round.rows).toBeNull();
     expect(a.lastOf('lobby')!.lobby.players.every((p) => !p.ready)).toBe(true);
@@ -241,8 +241,8 @@ describe('prêt, réglages, équipes', () => {
     const a = h.connect();
     const code = h.create(a);
     const [b] = fill(h, code, 1);
-    h.settings(b!, { roundsToWin: 3 });
-    expect(b!.lastOf('error')?.code).toBe('not_host');
+    h.settings(b, { roundsToWin: 3 });
+    expect(b.lastOf('error')?.code).toBe('not_host');
     h.settings(a, {
       roundsToWin: 7,
       suddenDeathSec: 120,
@@ -267,7 +267,7 @@ describe('prêt, réglages, équipes', () => {
     // des arènes inconnues sont ignorées
     h.settings(a, { arenas: ['partition', 'nope'] });
     expect(a.lastOf('lobby')!.lobby.settings.arenas).toEqual(['partition']);
-    h.startMatch(a, [b!]);
+    h.startMatch(a, [b]);
     h.settings(a, { roundsToWin: 3 });
     expect(a.lastOf('error')?.code).toBe('in_game');
   });
@@ -280,7 +280,7 @@ describe('prêt, réglages, équipes', () => {
     h.settings(a, { mode: 'teams', teams: 3 });
     let players = a.lastOf('lobby')!.lobby.players;
     const counts = [0, 0, 0];
-    for (const p of players) counts[p.team]!++;
+    for (const p of players) counts[p.team]++;
     expect(counts).toEqual([2, 2, 2]);
     h.send(a, { t: 'teams', assign: [2, 2, 2, 0, 0, 1] });
     players = a.lastOf('lobby')!.lobby.players;
@@ -288,7 +288,7 @@ describe('prêt, réglages, équipes', () => {
     h.send(a, { t: 'teams', shuffle: true });
     players = a.lastOf('lobby')!.lobby.players;
     const c2 = [0, 0, 0];
-    for (const p of players) c2[p.team]!++;
+    for (const p of players) c2[p.team]++;
     expect(c2).toEqual([2, 2, 2]);
     h.settings(a, { mode: 'ffa' });
     expect(a.lastOf('lobby')!.lobby.players.every((p) => p.team === -1)).toBe(true);
@@ -354,7 +354,7 @@ describe('salons publics et partie rapide', () => {
     const a = h.connect('10.0.0.1');
     const code = h.create(a, 'Alice', { isPublic: true });
     const [b] = fill(h, code, 1);
-    h.startMatch(a, [b!]);
+    h.startMatch(a, [b]);
     const z = h.connect('10.0.5.5');
     h.send(z, { t: 'quick', v: PROTOCOL_VERSION, name: 'Zoé' });
     expect(z.lastOf('joined')!.code).toBe(code);
@@ -369,18 +369,18 @@ describe('salons publics et partie rapide', () => {
     h.send(a, { t: 'ready', ready: true });
     h.advance(300);
     expect(h.room(code).phase).toBe(GamePhase.LOBBY);
-    h.send(b!, { t: 'ready', ready: true });
+    h.send(b, { t: 'ready', ready: true });
     h.advance(60);
     expect(a.lastOf('lobby')!.lobby.autostartMs).toBeGreaterThan(0);
     // si l'un se rétracte, le compte à rebours s'arrête
-    h.send(b!, { t: 'ready', ready: false });
+    h.send(b, { t: 'ready', ready: false });
     h.advance(60);
     expect(a.lastOf('lobby')!.lobby.autostartMs).toBe(-1);
-    h.send(b!, { t: 'ready', ready: true });
+    h.send(b, { t: 'ready', ready: true });
     h.advance(60 * 3);
     expect(h.room(code).phase).toBe(GamePhase.COUNTDOWN);
     // même celui qui n'était pas prêt joue
-    expect(h.room(code).world.inMatch[c!.lastOf('joined')!.slot]).toBe(1);
+    expect(h.room(code).world.inMatch[c.lastOf('joined')!.slot]).toBe(1);
   });
 
   it('un salon privé ne se lance jamais seul', () => {
@@ -389,7 +389,7 @@ describe('salons publics et partie rapide', () => {
     const code = h.create(a);
     const [b] = fill(h, code, 1);
     h.send(a, { t: 'ready', ready: true });
-    h.send(b!, { t: 'ready', ready: true });
+    h.send(b, { t: 'ready', ready: true });
     h.advance(60 * 5);
     expect(h.room(code).phase).toBe(GamePhase.LOBBY);
   });

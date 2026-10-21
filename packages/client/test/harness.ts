@@ -1,8 +1,9 @@
 import { Input, Rng, TICK_MS } from '@stickyclaude/shared';
-import type { ServerMessage } from '@stickyclaude/shared';
+import type { ErrorCode, RoundInfo, ServerMessage } from '@stickyclaude/shared';
 import { GameServer, loadConfig } from '../../server/src/index.ts';
 import type { Connection } from '../../server/src/index.ts';
 import { GameClient } from '../src/net/client.ts';
+import type { GameEvent, ResultsMessage, ScoresMessage } from '../src/net/client.ts';
 import { LagTransport } from '../src/net/transport.ts';
 import type { LagOptions, Scheduler, Transport } from '../src/net/transport.ts';
 
@@ -97,6 +98,8 @@ export class InputBot {
   idle = false;
   /** Si défini, remplace les entrées aléatoires (scénarios précis). */
   forced: number | null = null;
+  /** Ajoute des coups, des parades et des ramassages aléatoires. */
+  fight = false;
   constructor(private readonly rng: Rng) {}
   next(): number {
     if (this.forced !== null) return (this.mask = this.forced);
@@ -109,6 +112,11 @@ export class InputBot {
       else if (r < 0.8) m |= Input.LEFT;
       if (this.rng.float() < 0.35) m |= Input.JUMP;
       if (this.rng.float() < 0.1) m |= Input.DOWN;
+      if (this.fight) {
+        if (this.rng.float() < 0.6) m |= Input.ATTACK;
+        else if (this.rng.float() < 0.15) m |= Input.BLOCK;
+        if (this.rng.float() < 0.2) m |= Input.PICKUP;
+      }
       this.mask = m;
     }
     return this.mask;
@@ -128,6 +136,14 @@ export interface Probe {
   lastRemote: Map<number, [number, number]>;
   frames: number;
   recording: boolean;
+  /** Ce que le client a reçu (événements, manches, scores, résultats, erreurs…). */
+  events: GameEvent[];
+  rounds: RoundInfo[];
+  scores: ScoresMessage[];
+  results: ResultsMessage[];
+  errors: ErrorCode[];
+  left: string[];
+  closes: number;
 }
 
 export interface NetOptions extends LagOptions {
@@ -152,7 +168,13 @@ export class TestWorld {
     this.net.every(TICK_MS, () => this.server.tick(this.net.nowMs));
   }
 
-  addClient(name: string, opts: NetOptions, joinCode?: string, arena?: string): Probe {
+  addClient(
+    name: string,
+    opts: NetOptions,
+    joinCode?: string,
+    arena?: string,
+    entry?: (c: GameClient) => void,
+  ): Probe {
     const id = this.nextId++;
     const conn = new ServerSide(id, `10.1.${id >> 8}.${id & 255}`);
     this.server.onConnect(conn);
@@ -174,13 +196,33 @@ export class TestWorld {
       lastRemote: new Map(),
       frames: 0,
       recording: false,
+      events: [],
+      rounds: [],
+      scores: [],
+      results: [],
+      errors: [],
+      left: [],
+      closes: 0,
     };
     const off = opts.clockOffset ?? 0;
     const drift = opts.clockDrift ?? 0;
-    probe.client = new GameClient(transport, {}, () => this.net.nowMs * (1 + drift) + off);
+    probe.client = new GameClient(
+      transport,
+      {
+        onEvent: (e) => probe.events.push(e),
+        onRound: (r) => probe.rounds.push(r),
+        onScores: (m) => probe.scores.push(m),
+        onResults: (m) => probe.results.push(m),
+        onError: (code) => probe.errors.push(code),
+        onLeft: (reason) => probe.left.push(reason),
+        onClosed: () => probe.closes++,
+      },
+      () => this.net.nowMs * (1 + drift) + off,
+    );
     transport.onOpen?.();
-    if (joinCode) probe.client.join(name, joinCode);
-    else probe.client.create(name, arena);
+    if (entry) entry(probe.client);
+    else if (joinCode) probe.client.join(name, joinCode);
+    else probe.client.create(name, { arena });
     this.probes.push(probe);
 
     const frameMs = opts.frameMs ?? 1000 / 60;
