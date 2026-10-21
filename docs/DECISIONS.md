@@ -262,3 +262,82 @@ Aucune dépendance nouvelle en phase 2 (client, serveur, `shared`, `sim`).
 - **Compensation au-delà de 250 ms** : un joueur à plus de ≈ 100 ms de RTT n'est plus compensé en entier. Allonger l'historique coûte 12 octets par joueur et par tick ; à décider avec des mesures réelles.
 - **Salles d'attente** à 60 Hz : toujours le pire cas (D13).
 - **Traits des fantômes pour un arrivant** : non transmis (D30).
+
+## Phase 3 : rendu, thème « encre et carnet » et sensations (21/10/2026)
+
+### D48. Base de la phase et outillage
+
+- **Base.** La phase 2 avait été fusionnée dans `main` en avance rapide (vérifié : `origin/main` et `origin/phase-2-gameplay` pointaient sur le même commit) ; `phase-3-rendu` part donc de `main`, comme l'indique le prompt.
+- **`.gitattributes` (`* text=auto eol=lf`).** Sous Windows Git convertissait les fichiers en CRLF et Prettier (`endOfLine: lf`) échouait sur tout le dépôt. Les fins de ligne sont en LF partout, y compris dans la copie de travail. _Alternative :_ `endOfLine: auto`, qui accepte un dépôt mélangé.
+- **`npm run dev -w @stickyclaude/server`** utilise `tsx watch --env-file=dev.env` (fichier `packages/server/dev.env` : `DEV_TOOLS=1`) au lieu de `DEV_TOOLS=1 tsx watch …`, une syntaxe que `cmd` et PowerShell ne comprennent pas. _Alternative :_ `cross-env`, une dépendance de plus pour une variable.
+- **`npm run check`** exécute aussi `npm run audio:check` : les sons committés doivent être exactement ceux que le générateur produit (3 s).
+
+### D49. Dépendances de la phase 3
+
+| Dépendance                                              | Où                  | Pourquoi                                                                                                                                                                                                                              | Poids                             |
+| ------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `preact` 11 et `@preact/signals`                        | client              | L'interface complète (accueil, salon, HUD, podium, options, i18n réactive, focus, transitions) n'est pas tenable en DOM brut. Preact est l'équivalent compatible de React le plus léger ; les signaux évitent un gestionnaire d'état. | ≈ 8 Ko gzip (mesuré avec esbuild) |
+| Polices **Patrick Hand** et **Bangers** (OFL), en woff2 | `src/assets/fonts/` | Le style (analyse §1.9) demande une écriture à la main et une police d'affiche. Réduites au latin, hébergées dans le dépôt (jamais chargées depuis un serveur tiers), licences à côté.                                                | 24 Ko chacune                     |
+| `opusscript` (MIT, **devDependency** de la racine)      | `scripts/gen-audio` | Encodeur Opus en WebAssembly, pour fabriquer les `.opus` sans `ffmpeg` installé. Hors du bundle et du serveur.                                                                                                                        | 0 (génération seulement)          |
+
+Aucune bibliothèque audio (Howler, Tone) : l'API Web Audio suffit (D54). Aucun `@playwright/test` : `playwright-core` est déjà là depuis la phase 2 et le script E2E n'a besoin que de `node:assert` (D57). Pas de `cross-env` (D48).
+
+### D50. Les traits : un atlas, un `ParticleContainer`, aucune allocation par image
+
+- **Choix.** Tout ce qui se dessine à chaque image (stickmen, armes, objets, effets) passe par `render/pen.ts` : une particule Pixi par segment ou par bout arrondi, toutes prises dans **un seul atlas** généré sur un canvas au démarrage (aucun fichier image : corps et bouts des 4 styles, anneaux de tête, anneau, disque, éclat, taches, lueur). Un `ParticleContainer` = un appel de dessin ; les particules sont réutilisées (pool `used`/`prevUsed`) et la teinte est écrite directement dans `Particle.color` (BGR + alpha dans l'octet haut), sans objet `Color`.
+- **Pourquoi pas des `Sprite`/`Graphics`.** Mesuré : `sprite.tint` alloue un `Color` à chaque affectation et `Graphics` reconstruit sa géométrie ; la version à base de `Sprite` n'atteignait que ≈ 44 FPS en qualité auto à CPU ×4 (D56). Mettre `length = 0` au tableau des particules libère son stockage (il est réalloué à chaque image) : on ne le raccourcit jamais, les particules en trop deviennent transparentes.
+- **Ce qui reste.** Voir D56 : ≈ 15 Ko par image de nombres flottants que V8 « boîte » quand un calcul est passé en argument à une fonction non inlinée (cinématique inverse, appels vers Pixi). `poly`, `segAt` et `capAt` lisent leurs coordonnées dans des tableaux au lieu de les recevoir en arguments (de ≈ 24 à ≈ 15 Ko/image).
+
+### D51. Le terrain : morceaux en Canvas2D, pas de `RenderTexture`
+
+- **Choix.** La grille (64 × 36 cellules) est découpée en 4 × 3 morceaux de 16 × 12 cellules, chacun dessiné dans un canvas 2D (contour par _marching squares_ sur une grille ×2, sommets déformés à main levée par un bruit de valeur, hachures croisées, blocs de papier) et posé comme texture Pixi. Chaque morceau a de 1 à 3 **variantes de tremblé** précalculées (le terrain « bout » à 12 Hz en alternant A B C B). Une destruction de terrain ne redessine que les morceaux touchés. Les encres sont opaques (pas de couture visible entre deux morceaux) et la résolution est un multiple de 0,25 pixel par unité, selon le niveau de qualité (D52).
+- **Alternative.** Des `RenderTexture` Pixi : on redessinerait avec `Graphics`, plus lent à construire et sans le contrôle du bruit pixel par pixel dont les hachures ont besoin. Un seul grand canvas : tout serait redessiné à chaque destruction.
+
+### D52. Qualité adaptative, mouvement réduit et flashs
+
+- **Qualité.** Trois profils (`render/quality.ts`) : 0 (DPR ≤ 1, pas de tremblé, particules ×0,5), 1 (DPR ≤ 1,5, traits qui tremblent, terrain à une variante, particules ×0,75), 2 (DPR ≤ 2, tout). En « auto », le jeu démarre au niveau 2 (au niveau 1 sur un appareil tactile), mesure les images par seconde sur des fenêtres de 5 puis de 6 s et baisse d'un niveau sous 50 FPS ; il **ne remonte jamais** (éviter les oscillations visibles). L'option force un niveau.
+- **Mouvement réduit** (option « selon le système », « oui » ou « non », sur `prefers-reduced-motion`) : ni tremblement d'écran, ni line boiling, ni hit-stop ; page qui se tourne et arène qui se dessine remplacées par un fondu de 150 ms ; transitions et animations CSS coupées. Vérifié en navigateur (`renderer.stats.boil === 0` avec `reducedMotion: 'reduce'`, contre 0,55 sans) ; le tremblement de caméra coupé est couvert par `camera.test.ts`.
+- **Flashs.** Un limiteur global (`render/limiter.ts`) espace deux flashs d'au moins 340 ms (≤ 3 par seconde, analyse §1.11), quel que soit le nombre d'événements.
+- **Hit-stop visuel.** Les deux protagonistes d'un gros coup figent la pose et la position _affichées_ 50 à 90 ms, puis rattrapent en ≈ 60 ms ; la simulation et le réseau ne s'arrêtent pas (la prédiction reste intacte).
+
+### D53. L'entraînement solo : la vraie simulation, dans le navigateur, sans serveur
+
+- **Choix.** `SoloSource` fait tourner le même `step` de `sim` que le serveur (pas fixe de 60 Hz, rattrapage borné à 6 pas) sur l'arène d'entraînement (D36), avec `world.auth = true` : le joueur est en slot 0, trois mannequins (immobile, patrouilleur, boxeur) sont de vrais joueurs pilotés par `mannequinInput` ; les dégâts n'y comptent pas (salle d'attente), donc ils « ne meurent pas ». 16 objectifs (courir, double saut, saut mural, descente de plateforme, coups, coup chargé, coup de pied plongeant, parade, parade parfaite, ramasser, tirer, lancer, emote…) sont cochés par un `TrainingTracker` pur et testé, enregistrés dans `localStorage`.
+- **Pourquoi.** Apprendre sans serveur ni adversaires, et faire de l'entraînement le banc de mesure de performance (même rendu, aucun réseau). La boucle de rendu ne connaît qu'une `RenderSource` : `OnlineSource` (réseau), `SoloSource` et `PreviewSource` (accueil et personnalisation) se remplacent sans toucher au rendu.
+- **Sur téléphone** le carnet est replié en une ligne (le prochain objectif) et se déplie d'un toucher ; le bouton « Quitter » passe dans le menu pause.
+
+### D54. Audio : synthétisé par script, Ogg Opus, moteur Web Audio maison
+
+- **Choix.** `npm run gen-audio` fabrique **36 effets et 4 musiques** par synthèse (cordes pincées de Karplus-Strong pour l'ukulélé, sifflet, percussions de table, bruit filtré pour les souffles et les chocs de papier) : aucun son repris, rien de téléchargé. Les sons sont encodés en **Ogg Opus mono 48 kHz** (28 kbit/s les effets, 40 kbit/s les musiques) avec `opusscript` et un multiplexeur Ogg écrit à la main (CRC32, en-tête `OpusHead` avec _pre-skip_ 312) ; les boucles musicales sont rendues en mélange circulaire pour boucler sans clic. Total : **374 Ko** pour un budget de 1,5 Mo, chargé _après_ le premier écran (hors budget du bundle), à la première interaction (une `AudioContext` n'est créée qu'après un geste, sinon Chrome l'avertit). `npm run audio:check` vérifie que les fichiers sont à jour octet pour octet ; un test décode les 40 fichiers (granule et durée du manifeste) et Chrome les décode tous.
+- **Moteur** (`audio/engine.ts`) : 16 voix au plus avec priorités, hauteur variée de ±5 %, spatialisation stéréo selon la position horizontale, volume réduit pour les actions des autres joueurs, trois curseurs (général, effets, musique), ambiance musicale selon l'écran et la tension (menu, entraînement, combat 1 ou 2, mort subite) avec fondu enchaîné, atténuation (_ducking_) de la musique en fin de manche. Il reçoit ses dépendances (`createContext`, `fetchBytes`, `random`) : testé sans navigateur.
+- **Limite connue.** L'Ogg Opus n'est lu par Safari qu'à partir de la version 18.4 ; avant, le décodage échoue, le moteur l'ignore et **le jeu reste jouable en silence**. _Alternative :_ doubler les fichiers en AAC (poids ×2, un encodeur propriétaire à installer). À décider en phase 4 si le public visé a de vieux iPhone.
+
+### D55. Interface : Preact et signaux, i18n typée, entrées
+
+- **i18n.** `i18n/fr.ts` fixe la liste des clés (`MessageKey`) ; `en.ts` est un `Record<MessageKey, string>` : une clé oubliée en anglais ne compile pas. `t(clé, { paramètres })`, pluriels évités par la formulation (« manche(s) »). La langue est celle du navigateur au premier lancement (`navigator.language`), puis l'option du joueur.
+- **Entrées.** Touches reliées par `event.code` (pas par caractère : AZERTY et QWERTY partagent les emplacements), disposition détectée par `navigator.keyboard.getLayoutMap()` quand elle existe ; deux touches par action, rebattables et validées ; manette (stick, croix, A X B Y, navigation dans les menus au plus proche voisin, vibration) ; tactile (joystick à 8 directions, boutons dans les `safe-area-inset`, taille et côté réglables, vibration).
+- **Accessibilité.** Contraste WCAG AA testé pour toutes les paires texte/fond de l'interface, motif de poitrine par encre et par équipe pour les daltoniens, focus visible, navigation complète au clavier et à la manette, région `aria-live` pour la manche et la bannière, texte réglable de 90 à 130 %, lien « Aller au contenu ». Les contrôles tactiles et le mode paysage sont vérifiés en émulation mobile.
+- **Prise de test.** `window.__stickyclaude` expose le rendu, la connexion, les actions et quelques signaux pour les tests E2E et les mesures ; elle ne sert pas au jeu.
+- **Bug trouvé par l'E2E :** le champ « Rejoindre » ne reprenait pas le code d'un lien `?salon=CODE`, parce que le paramètre était lu après le premier rendu. Corrigé et couvert par l'E2E (le 2ᵉ onglet rejoint par ce lien).
+
+### D56. Mesures de performance, et ce qu'elles prouvent
+
+- **Protocole** (`scripts/perf-check.mjs`) : Chrome 155 sur Windows 11 (Core i5-12450H, 16 Go), rendu logiciel SwiftShader (pas de GPU), émulation d'un téléphone 851 × 393 à DPR 2,75 (écran tactile, agent utilisateur Android), **CPU ralenti ×4** par le protocole DevTools, build de production servi par le vrai serveur, entraînement solo avec des appuis de touches (courir, sauter, frapper, parer) pendant 20 s après 8 s d'échauffement.
+- **Résultats** (`--cpu 4`, 20 s, 1 200 images) : qualité **auto** (démarre au niveau 1 sur mobile) **59,7 et 59,8 FPS**, 95ᵉ centile d'image 16,8 ms (une image de vsync), 4 à 5 images > 20 ms ; qualité haute (DPR 2) 59,9 FPS, 3 images > 20 ms ; qualité basse 59,9 FPS. Avant l'atlas de particules et la réduction des allocations de `poly`/`segAt` : ≈ 44 FPS en auto (le contrôleur descendait au niveau 0 ou 1). Aucune erreur dans la console.
+- **Allocations** (profil d'échantillonnage du tas de V8, objets ramassés compris) : aucun tableau, objet ni fermeture créé par image dans le code de rendu (relecture et profil) ; reste **≈ 15 Ko par image** (≈ 900 Ko/s), attribués aux fonctions de calcul (squelette, cinématique inverse, ragdoll, Pixi) et cohérents avec des nombres flottants boxés par V8 (`HeapNumber`) ; ≈ 0,7 ramasse-miettes mineur par seconde, tas de 12 Mo au plus, aucune image perdue à cause d'eux. Tendre vers zéro demanderait de passer tous les calculs par des `Float64Array` ; le gain ne se voit pas dans les mesures, nous ne l'avons pas fait.
+- **Ce que cela ne prouve pas.** Un vrai téléphone a un autre rapport entre CPU et GPU : le rendu logiciel mesure surtout notre code JavaScript et la bande passante de remplissage, pas le GPU mobile. À refaire sur un appareil réel (phase 4) avant de promettre « 60 FPS sur téléphone ». Le budget du bundle est tenu : **325,7 Ko gzip** pour 400 Ko (JS, CSS, polices, HTML ; hors audio), vérifié par `scripts/check-bundle.mjs` à chaque `npm run build` et donc en CI.
+
+### D57. Tests E2E sans `@playwright/test`
+
+- **Choix.** `npm run e2e` (`e2e/e2e.mjs`) lance le serveur construit sur un port libre, pilote Chromium avec `playwright-core` et vérifie avec `node:assert` : le parcours des écrans de l'accueil (FR et EN), l'entraînement au clavier, **la manette** (simulée : `navigator.getGamepads` est remplacé par une manette que le test pilote ; menus à la croix, stick, A, X, Start pour la pause, main rendue au panneau du salon), **une partie complète à 2 onglets** (création du salon, lien rejoint, « Prêt », réglages, décompte, combat piloté, fin de manche, podium et statistiques, retour au salon), l'entraînement au toucher (joystick et bouton en même temps, via le protocole tactile de DevTools), la maintenance (état d'interface) puis la coupure du serveur (écran « Connexion perdue »). Il échoue à la moindre erreur ou alerte de console. Les captures (JPEG, `docs/screenshots/`) en sont des sous-produits. Navigateur : `CHROME`, `--chrome` ou le chemin par défaut du système ; à défaut, celui que Playwright installe.
+- **Alternative.** `@playwright/test` : une dépendance lourde pour un seul scénario, et un autre exécuteur à côté de Vitest.
+- **Durée.** 4 à 6 min, dont 2,5 à 4,5 min pour la partie (deux pilotes qui se cherchent au hasard des arènes, rendu logiciel) ; la partie a un délai de 7 min. `--only motif` n'exécute qu'une étape, `--sheet` capture aussi la planche de référence (démarre Vite).
+
+### D58. Questions ouvertes pour la phase 4
+
+- **Performance sur appareil réel** : voir D56. Le budget de FPS mobile n'est vérifié qu'en rendu logiciel.
+- **Safari ancien** : sons muets avant 18.4 (D54) ; à trancher.
+- **Onomatopées et textes de l'arène** sont en français dans les données d'arène (`decor`) ; seule l'interface est traduite. Les arènes ont des noms FR/EN, pas leur décor écrit.
+- **Manette** : testée avec une manette simulée (tests) et la navigation de menus ; pas avec du matériel réel ni de vibration vérifiée.
+- **Équilibre** et **compensation de latence au-delà de 250 ms** : inchangés (D47).
+- **Photosensibilité** : au plus 3 flashs par seconde et mouvement réduit, mais pas d'avis d'un spécialiste.

@@ -86,25 +86,25 @@ Le texte d'interface est en bleu nuit sur crème. La taille de base est réglabl
 
 Unités de **monde** (la page fait 1 024 × 576 ; 1 cellule = 16) pour le rendu Pixi, **pixels CSS** pour l'interface.
 
-| Élément                                       | Épaisseur            |
-| --------------------------------------------- | -------------------- |
-| Contour du terrain (plein)                    | 2,6                  |
-| Hachures du terrain                           | 1,1 (pas 5, 45°)     |
-| Contour d'un bloc de papier                   | 1,8 (crayon)         |
-| Plateforme à sens unique                      | 2,2 (double trait)   |
-| Décor de la page                              | 1,4                  |
-| Stickman, **stylo bille**                     | 2,4                  |
-| Stickman, **feutre**                          | 4,2                  |
-| Stickman, **crayon**                          | 2,9 (grain)          |
-| Stickman, **pinceau**                         | 1,8 à 4,6 (variable) |
-| Contour blanc de son propre stickman          | + 2,6 de chaque côté |
-| Armes et objets                               | 2,0                  |
-| Effets (anneaux, lignes de vitesse)           | 1,6 à 2,4            |
-| Rature de mort                                | 2,4                  |
-| Interface : contour des cartes et des boutons | 2,5 px               |
-| Interface : champs, séparateurs               | 2 px, 1 px           |
+| Élément                                       | Épaisseur                                                            |
+| --------------------------------------------- | -------------------------------------------------------------------- |
+| Contour du terrain (plein)                    | 2,6                                                                  |
+| Hachures du terrain                           | 1,0 (pas 7) et 1,1 (pas 4,6), croisées                               |
+| Contour d'un bloc de papier                   | 1,8 (crayon)                                                         |
+| Plateforme à sens unique                      | 2,2 (double trait)                                                   |
+| Décor de la page                              | 1,4                                                                  |
+| Stickman, **stylo bille**                     | 2,2                                                                  |
+| Stickman, **feutre**                          | 3,8                                                                  |
+| Stickman, **crayon**                          | 2,6 (grain)                                                          |
+| Stickman, **pinceau**                         | 3,2 (effilé : chaque segment passe de 100 % à 45 % de son épaisseur) |
+| Contour blanc de son propre stickman          | + 2,6 de chaque côté                                                 |
+| Armes et objets                               | 2,0                                                                  |
+| Effets (anneaux, lignes de vitesse)           | 1,6 à 2,4                                                            |
+| Rature de mort                                | 2,4                                                                  |
+| Interface : contour des cartes et des boutons | 2,5 px                                                               |
+| Interface : champs, séparateurs               | 2 px, 1 px                                                           |
 
-Bout des traits : toujours **arrondi** ; jonctions arrondies. Le trait n'a jamais une largeur parfaitement constante : ±8 % le long d'un segment (bille et crayon).
+Bout des traits : toujours **arrondi** ; jonctions arrondies. Le trait n'a jamais une largeur parfaitement constante : ≈ 10 % de variation le long d'un segment (bille), un grain par pixel (crayon). Ces profils sont des textures blanches générées au démarrage sur un canvas (`render/pen.ts`), teintées à l'encre du joueur : aucun fichier image.
 
 ## 4. Polices
 
@@ -119,13 +119,13 @@ Repli : `'Comic Sans MS', 'Segoe Print', cursive`. Les glyphes absents du sous-e
 
 ## 5. Règles d'animation
 
-- **Line boiling, « en deux » à 12 i/s.** Les sommets de chaque trait sont décalés d'un bruit qui change **12 fois par seconde**, en cyclant sur **3 variantes précalculées** (A B C B…). Amplitude : 0,55 unité sur les stickmen, 0,8 sur le terrain, 0,35 sur l'interface (CSS `steps()`). Aucun coût par image : les variantes sont une table, ou trois rendus en cache. Désactivé en mouvement réduit et en qualité basse.
+- **Line boiling, « en deux » à 12 i/s.** Les sommets de chaque trait sont décalés d'un bruit qui change **12 fois par seconde**, en cyclant sur **3 variantes précalculées** (A B C B…). Amplitude : 0,55 unité sur les stickmen, 0,8 sur le terrain, 0,35 sur l'interface (CSS `steps()`). Aucun coût par image : les variantes sont une table, ou trois rendus en cache. Désactivé en mouvement réduit ; en qualité basse il n'y a plus de tremblé du tout, en qualité moyenne seuls les traits (stickmen, armes) tremblent, le terrain n'a qu'une variante.
 - **Les corps restent fluides.** Les positions suivent la simulation à la cadence de l'écran (60, 120, 144 Hz). Seuls le tremblé et les effets secondaires (étincelles, éclats) sont « en deux ».
 - **Poses-clés mélangées en 80 à 120 ms.** Chaque état (garde, course, saut, chute, mur, accroupi, coups 1-2-3, charge, parade, étourdi, emote) est une pose-clé ; on passe de l'une à l'autre par un mélange exponentiel (τ = 40 ms ≈ 100 ms pour 90 %). Anticipation avant un coup (recul du bras, 2 ticks) et retombée après (repli).
 - **Pieds et mains par IK à 2 os** : les pieds se posent sur le sol réel (pentes, bords), les mains tiennent l'arme à deux mains si besoin.
 - **Hit-stop visuel de 50 à 90 ms** sur les gros coups (la simulation ne s'arrête pas) : les deux protagonistes figent leur pose et leur position affichées, puis rattrapent en ≈ 60 ms. Tremblement d'écran proportionnel (amplitude 2 à 7 unités, 180 ms, amorti).
 - **Page qui se tourne** entre les manches (0,7 s), **arène qui se dessine** trait par trait (0,8 s), décompte « écrit à la main » (chiffre qui se trace, 0,5 s).
-- **Effets** : taches d'encre persistantes (au plus 48 par manche), onomatopées sur les gros coups (pop-in avec dépassement de 12 %, 450 ms), éclats de papier (au plus 300), traînées, flash de parade parfaite (or, 120 ms).
+- **Effets** : taches d'encre persistantes (au plus 48 par manche), onomatopées sur les gros coups (pop-in avec dépassement de 12 %, 450 ms), éclats de papier (360 particules au plus en tout), traînées, flash de parade parfaite (or, 120 ms).
 - **Interface** : apparition d'une carte = « dessinée » par un fondu + déplacement de 6 px en 140 ms ; survol d'un bouton = contour qui re-tremble ; jamais plus de 200 ms.
 - **Flashs** : jamais plus de 3 par seconde (limiteur global, §11 de l'analyse).
 - **Mouvement réduit** (`prefers-reduced-motion` ou option) : ni tremblement d'écran, ni line boiling, ni hit-stop ; page qui se tourne et arène qui se dessine deviennent un fondu de 150 ms ; les transitions d'interface sont instantanées.
@@ -134,7 +134,7 @@ Repli : `'Comic Sans MS', 'Segoe Print', cursive`. Les glyphes absents du sous-e
 
 ### 6.1 Le stickman
 
-Squelette de **13 points** : tête, cou, épaules (×1 centrale), coudes (×2), mains (×2), bassin, genoux (×2), pieds (×2). Proportions (corps debout de 28,8 unités : 1,8 cellule) : tête = rond de 5,2 de rayon ; cou à 9 % de la hauteur sous le haut de la tête ; torse 30 % ; cuisses et jambes 25 % chacune ; bras 17 % + 17 %. Segments épais à extrémités arrondies, dans le style de trait choisi (§3). Style de trait : **stylo bille** (fin, régulier), **feutre** (épais, plat), **crayon** (grainé, un peu transparent), **pinceau** (largeur qui varie selon la vitesse du membre).
+Squelette de **13 points** : tête, cou, épaules (×1 centrale), coudes (×2), mains (×2), bassin, genoux (×2), pieds (×2). Proportions (corps debout de 28,8 unités : 1,8 cellule, valeurs de `BODY` dans `render/skeleton.ts`) : tête = anneau de 4,4 de rayon (8,8 de haut) ; cou 1,0 ; torse 7,4 (26 %) ; cuisse et jambe 5,8 chacune (20 %) ; bras et avant-bras 5,0 chacun (17 %). Bras et jambes peuvent s'allonger jusqu'à 2,6 fois quand la cible est loin (style « tuyau de caoutchouc »). Segments épais à extrémités arrondies, dans le style de trait choisi (§3). Style de trait : **stylo bille** (fin, régulier), **feutre** (épais, plat), **crayon** (grainé, un peu transparent), **pinceau** (effilé).
 
 - **Contour de son propre stickman** : le même squelette redessiné en blanc, + 2,6 de chaque côté, sous le trait coloré.
 - **Daltoniens** : chaque encre a un **motif** de poitrine (12 motifs : points, rayures, damier, zigzag, croix, anneau, triangle, losange, étoile, vagues, spirale, cœur) ; en équipes, les stickmen portent le motif de leur **équipe** (4) et un liseré à sa couleur.
@@ -182,4 +182,4 @@ Mouvement réduit (§5), motifs pour les daltoniens (§6.1), contraste AA des me
 
 ## 9. Planche de référence
 
-`npm run dev`, puis <http://localhost:5173/sheet> : une page **de développement seulement** (comme `/editor`, absente du build de production) qui affiche tous les éléments ci-dessus avec les vrais modules de rendu : palette du papier et des encres, épaisseurs de trait, polices, les 12 stickmen (poses, styles de trait, motifs, accessoires), les 13 armes et objets, les effets, le décor de chaque arène et les composants d'interface. Les captures de `docs/screenshots/` (dont `sheet.png`) viennent de la suite E2E (`npm run e2e`).
+`npm run dev`, puis <http://localhost:5173/sheet> : une page **de développement seulement** (comme `/editor`, absente du build de production) qui affiche tous les éléments ci-dessus avec les vrais modules de rendu : palette du papier et des encres, épaisseurs de trait, polices, les 12 stickmen (poses, styles de trait, motifs, accessoires), les 13 armes et objets, les effets, le décor de chaque arène et les composants d'interface. Les captures de `docs/screenshots/` (dont `19-fiche-de-style.jpg`) viennent de la suite E2E (`npm run e2e`, `-- --sheet` pour la planche).
