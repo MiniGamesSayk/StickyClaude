@@ -1,6 +1,7 @@
 import { isMovementKey, MAX_PLAYERS } from '@stickyclaude/shared';
 import type { ArenaData, Recording } from '@stickyclaude/shared';
-import { addPlayer, removePlayer, step } from './step.ts';
+import { addPlayer, removePlayer } from './spawn.ts';
+import { step } from './step.ts';
 import { createWorld } from './world.ts';
 import type { World } from './world.ts';
 

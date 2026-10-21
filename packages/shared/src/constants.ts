@@ -1,6 +1,6 @@
 /** Constantes globales du jeu. Les constantes de mouvement sont dans `movement.ts`. */
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Simulation à pas de temps fixe. */
 export const TICK_HZ = 60;
@@ -18,7 +18,15 @@ export const WORLD_W = GRID_W * CELL;
 export const WORLD_H = GRID_H * CELL;
 
 export const MAX_PLAYERS = 8;
+export const MAX_SPECTATORS = 4;
 export const MAX_MOVERS = 8;
+/** Objets dynamiques (armes au sol, caisses, ballons, boule…) et projectiles : réservés à l'avance. */
+export const MAX_OBJECTS = 32;
+export const MAX_PROJECTILES = 64;
+/** Flaques d'encre glissantes simultanées. */
+export const MAX_PUDDLES = 8;
+/** Traits et gouttes posés par les fantômes, simultanés. */
+export const MAX_GHOST_MARKS = 16;
 
 /** Au-delà de cette profondeur sous la page, un joueur est considéré comme tombé. */
 export const FALL_MARGIN = 3 * CELL;
@@ -37,8 +45,25 @@ export const PREDICTION_HISTORY = 128;
 export const MARGIN_MIN = 1;
 export const MARGIN_MAX = 4;
 export const MARGIN_TARGET = 2;
-/** Compensation de latence (phase 2) : historique conservé côté serveur. */
-export const LAG_COMP_MS = 200;
+/**
+ * Compensation de latence : historique des positions conservé côté serveur. L'analyse prévoit
+ * 200 ms ; les entrées étant étiquetées dans le futur (voir DECISIONS.md), la durée à remonter est
+ * 2 × latence aller + avance + interpolation, d'où 250 ms (15 ticks).
+ */
+export const LAG_COMP_MS = 250;
+export const LAG_COMP_TICKS = 15;
+/** Taille de l'anneau d'historique (puissance de 2 > LAG_COMP_TICKS). */
+export const HISTORY_TICKS = 16;
+
+/** Reconnexion : un joueur déconnecté garde sa place pendant ce délai. */
+export const RECONNECT_GRACE_MS = 20_000;
+/** Inactivité : sans aucune entrée pendant une manche → spectateur ; en attente → déconnexion. */
+export const IDLE_PLAYING_MS = 60_000;
+export const IDLE_LOBBY_MS = 10 * 60_000;
+/** Un salon public en attente se lance seul après ce délai, dès que 2 joueurs sont prêts. */
+export const AUTOSTART_MS = 20_000;
+/** Emotes : au plus une par seconde et par joueur. */
+export const EMOTE_COOLDOWN_MS = 1000;
 
 /** Quantification des positions et vitesses dans les snapshots : 1/8 d'unité. */
 export const POS_SCALE = 8;

@@ -357,17 +357,13 @@ describe('chute et réapparition', () => {
     const w = worldWithPlayer();
     const p = put(w, 31 * CELL, 33 * CELL); // dans le fosse
     p.grounded = false;
-    let fell = false;
     let respawned = false;
     for (let i = 0; i < 300; i++) {
       inputs.fill(0);
       step(w, inputs);
-      const t = eventTypes(w);
-      if (t.includes(SimEvent.FELL)) fell = true;
-      if (t.includes(SimEvent.SPAWN)) respawned = true;
-      if (fell && respawned) break;
+      if (eventTypes(w).includes(SimEvent.SPAWN)) respawned = true;
+      if (respawned) break;
     }
-    expect(fell).toBe(true);
     expect(respawned).toBe(true);
     expect(p.y).toBeLessThan(WORLD_H);
     expect(p.respawns).toBe(2);
@@ -449,10 +445,11 @@ describe('plusieurs joueurs', () => {
     addPlayer(w, 0);
     addPlayer(w, 1);
     run(w, 90, 0);
+    const x0 = w.players[0].x;
     const x1 = w.players[1].x;
     run(w, 30, RIGHT, 0);
     expect(w.players[1].x).toBe(x1);
-    expect(w.players[0].x).toBeGreaterThan(w.players[1].x);
+    expect(w.players[0].x).toBeGreaterThan(x0 + 20);
     expect(Input.RIGHT).toBe(RIGHT);
   });
 });

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { GRID_H, GRID_W, MAX_PLAYERS } from './constants.ts';
+import { EMOTE_COUNT } from './emotes.ts';
+import { SUDDEN_MAX_SEC, SUDDEN_MIN_SEC } from './settings.ts';
 import { isMovementKey } from './movement.ts';
 import type { ArenaData } from './arena.ts';
 
@@ -75,6 +77,35 @@ export function parseArena(data: unknown): ArenaData {
 
 const name = z.string().min(1).max(64);
 
+/** Apparence : indices bornés ; les champs inconnus sont ignorés puis `sanitizeLook` valide. */
+export const lookSchema = z
+  .object({
+    color: z.number().int().min(0).max(63),
+    stroke: z.number().int().min(0).max(63),
+    hat: z.number().int().min(0).max(63),
+    victory: z.number().int().min(0).max(63),
+  })
+  .partial();
+
+/** Réglages envoyés par l'hôte (partiels) : types stricts, clés inconnues refusées. */
+export const settingsPatchSchema = z
+  .object({
+    mode: z.enum(['ffa', 'teams']),
+    teams: z.number().int().min(2).max(4),
+    friendlyFire: z.boolean(),
+    roundsToWin: z.number().int().min(3).max(7),
+    arenas: z.array(z.string().max(40)).max(32),
+    weapons: z.boolean(),
+    suddenDeath: z.boolean(),
+    suddenDeathSec: z.number().int().min(SUDDEN_MIN_SEC).max(SUDDEN_MAX_SEC),
+    bonusModes: z.array(z.number().int().min(0).max(31)).max(16),
+    bonusEvery: z.number().int().min(0).max(6),
+    ghosts: z.boolean(),
+    isPublic: z.boolean(),
+  })
+  .partial()
+  .strict();
+
 /** Messages de contrôle client → serveur (JSON, longueurs bornées, énumérations strictes). */
 export const clientMessageSchema = z.discriminatedUnion('t', [
   z
@@ -82,7 +113,9 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
       t: z.literal('create'),
       v: z.number().int(),
       name,
+      look: lookSchema.optional(),
       arena: z.string().max(40).optional(),
+      isPublic: z.boolean().optional(),
     })
     .strict(),
   z
@@ -90,10 +123,33 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
       t: z.literal('join'),
       v: z.number().int(),
       name,
+      look: lookSchema.optional(),
+      code: z.string().min(1).max(8),
+    })
+    .strict(),
+  z.object({ t: z.literal('quick'), v: z.number().int(), name, look: lookSchema.optional() }).strict(),
+  z
+    .object({
+      t: z.literal('resume'),
+      v: z.number().int(),
+      token: z.string().regex(/^[0-9a-f]{32}$/),
       code: z.string().min(1).max(8),
     })
     .strict(),
   z.object({ t: z.literal('leave') }).strict(),
+  z.object({ t: z.literal('ready'), ready: z.boolean() }).strict(),
+  z.object({ t: z.literal('start') }).strict(),
+  z.object({ t: z.literal('settings'), settings: settingsPatchSchema }).strict(),
+  z
+    .object({
+      t: z.literal('teams'),
+      assign: z.array(z.number().int().min(-1).max(3)).max(MAX_PLAYERS).optional(),
+      shuffle: z.boolean().optional(),
+    })
+    .strict(),
+  z.object({ t: z.literal('kick'), slot: z.number().int().min(0).max(MAX_PLAYERS - 1) }).strict(),
+  z.object({ t: z.literal('look'), look: lookSchema }).strict(),
+  z.object({ t: z.literal('emote'), id: z.number().int().min(0).max(EMOTE_COUNT - 1) }).strict(),
   z
     .object({
       t: z.literal('tune'),

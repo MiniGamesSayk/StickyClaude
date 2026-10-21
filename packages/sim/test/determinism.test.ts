@@ -1,4 +1,4 @@
-import { MAX_PLAYERS, Rng, TICK_HZ } from '@stickyclaude/shared';
+import { MAX_PLAYERS, Rng, SimEvent, TICK_HZ } from '@stickyclaude/shared';
 import type { Recording } from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import {
@@ -127,12 +127,14 @@ describe('déterminisme', () => {
 
 describe('restauration d état (réconciliation)', () => {
   it('un monde restauré depuis l état exporté évolue de façon identique', () => {
+    // Mouvements seulement : sans coups ni armes, rien ne vient d'un autre joueur.
     const full = createWorld(arena('test-flat'), 1);
     const gen = new InputGen(21);
     const inputs = new Uint16Array(MAX_PLAYERS);
     for (let s = 0; s < MAX_PLAYERS; s++) addPlayer(full, s);
     for (let t = 0; t < 500; t++) {
       gen.next(inputs);
+      for (let s = 0; s < MAX_PLAYERS; s++) inputs[s] = inputs[s]! & 0x1f;
       step(full, inputs);
     }
     // Monde « client » : un seul joueur actif, restauré à partir de l'état exporté.
@@ -144,10 +146,18 @@ describe('restauration d état (réconciliation)', () => {
     const mine = new Uint16Array(MAX_PLAYERS);
     for (let t = 0; t < 2000; t++) {
       gen.next(inputs);
+      for (let s = 0; s < MAX_PLAYERS; s++) inputs[s] = inputs[s]! & 0x1f;
       mine.fill(0);
       mine[3] = inputs[3]!;
       step(full, inputs);
       step(client, mine);
+      // Une réapparition est une décision du serveur (point choisi selon les autres joueurs) :
+      // le client la reçoit par un snapshot, il ne la prédit pas.
+      let respawned = false;
+      for (let i = 0; i < full.events.count; i++) {
+        if (full.events.type[i] === SimEvent.SPAWN && full.events.slot[i] === 3) respawned = true;
+      }
+      if (respawned) break;
       const a = full.players[3];
       const b = client.players[3];
       expect(b.x).toBe(a.x);
