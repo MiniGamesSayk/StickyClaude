@@ -34,6 +34,8 @@ export type ServerMessage =
       snapshotHz: number;
       /** Tick serveur au moment de l'entrée dans le salon. */
       tick: number;
+      /** Dernier identifiant d'événement fiable déjà émis dans ce salon. */
+      ev: number;
       players: RosterEntry[];
       devTools: boolean;
     }
