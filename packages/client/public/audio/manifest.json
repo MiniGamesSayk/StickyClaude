@@ -1,0 +1,211 @@
+{
+  "sfx": {
+    "step": {
+      "file": "sfx/step.opus",
+      "bytes": 410,
+      "seconds": 0.07
+    },
+    "jump": {
+      "file": "sfx/jump.opus",
+      "bytes": 827,
+      "seconds": 0.16
+    },
+    "double_jump": {
+      "file": "sfx/double_jump.opus",
+      "bytes": 1064,
+      "seconds": 0.2
+    },
+    "wall_jump": {
+      "file": "sfx/wall_jump.opus",
+      "bytes": 803,
+      "seconds": 0.14
+    },
+    "land": {
+      "file": "sfx/land.opus",
+      "bytes": 618,
+      "seconds": 0.12
+    },
+    "drop": {
+      "file": "sfx/drop.opus",
+      "bytes": 592,
+      "seconds": 0.12
+    },
+    "swing": {
+      "file": "sfx/swing.opus",
+      "bytes": 624,
+      "seconds": 0.13
+    },
+    "hit": {
+      "file": "sfx/hit.opus",
+      "bytes": 644,
+      "seconds": 0.14
+    },
+    "hit_heavy": {
+      "file": "sfx/hit_heavy.opus",
+      "bytes": 1202,
+      "seconds": 0.3
+    },
+    "block": {
+      "file": "sfx/block.opus",
+      "bytes": 542,
+      "seconds": 0.1
+    },
+    "parry": {
+      "file": "sfx/parry.opus",
+      "bytes": 3522,
+      "seconds": 0.8
+    },
+    "ko": {
+      "file": "sfx/ko.opus",
+      "bytes": 2141,
+      "seconds": 0.5
+    },
+    "shot_pistol": {
+      "file": "sfx/shot_pistol.opus",
+      "bytes": 656,
+      "seconds": 0.14
+    },
+    "shot_shotgun": {
+      "file": "sfx/shot_shotgun.opus",
+      "bytes": 1314,
+      "seconds": 0.34
+    },
+    "shot_blow": {
+      "file": "sfx/shot_blow.opus",
+      "bytes": 592,
+      "seconds": 0.12
+    },
+    "shot_plane": {
+      "file": "sfx/shot_plane.opus",
+      "bytes": 1112,
+      "seconds": 0.26
+    },
+    "shot_bazooka": {
+      "file": "sfx/shot_bazooka.opus",
+      "bytes": 1702,
+      "seconds": 0.45
+    },
+    "explosion": {
+      "file": "sfx/explosion.opus",
+      "bytes": 2621,
+      "seconds": 0.75
+    },
+    "terrain": {
+      "file": "sfx/terrain.opus",
+      "bytes": 1279,
+      "seconds": 0.32
+    },
+    "eraser": {
+      "file": "sfx/eraser.opus",
+      "bytes": 1123,
+      "seconds": 0.26
+    },
+    "grapple": {
+      "file": "sfx/grapple.opus",
+      "bytes": 1266,
+      "seconds": 0.3
+    },
+    "throw": {
+      "file": "sfx/throw.opus",
+      "bytes": 682,
+      "seconds": 0.14
+    },
+    "stamp": {
+      "file": "sfx/stamp.opus",
+      "bytes": 1344,
+      "seconds": 0.35
+    },
+    "crate": {
+      "file": "sfx/crate.opus",
+      "bytes": 1129,
+      "seconds": 0.28
+    },
+    "pickup": {
+      "file": "sfx/pickup.opus",
+      "bytes": 775,
+      "seconds": 0.16
+    },
+    "weapon_spawn": {
+      "file": "sfx/weapon_spawn.opus",
+      "bytes": 2260,
+      "seconds": 0.55
+    },
+    "emote": {
+      "file": "sfx/emote.opus",
+      "bytes": 730,
+      "seconds": 0.12
+    },
+    "spawn": {
+      "file": "sfx/spawn.opus",
+      "bytes": 867,
+      "seconds": 0.2
+    },
+    "goal": {
+      "file": "sfx/goal.opus",
+      "bytes": 3656,
+      "seconds": 0.9
+    },
+    "page_turn": {
+      "file": "sfx/page_turn.opus",
+      "bytes": 1953,
+      "seconds": 0.5
+    },
+    "count_tick": {
+      "file": "sfx/count_tick.opus",
+      "bytes": 622,
+      "seconds": 0.12
+    },
+    "count_go": {
+      "file": "sfx/count_go.opus",
+      "bytes": 1837,
+      "seconds": 0.4
+    },
+    "victory": {
+      "file": "sfx/victory.opus",
+      "bytes": 5707,
+      "seconds": 1.5
+    },
+    "sudden": {
+      "file": "sfx/sudden.opus",
+      "bytes": 3586,
+      "seconds": 0.95
+    },
+    "ui_hover": {
+      "file": "sfx/ui_hover.opus",
+      "bytes": 351,
+      "seconds": 0.05
+    },
+    "ui_click": {
+      "file": "sfx/ui_click.opus",
+      "bytes": 514,
+      "seconds": 0.09
+    }
+  },
+  "music": {
+    "menu": {
+      "file": "music/menu.opus",
+      "bytes": 107784,
+      "seconds": 20.87,
+      "bpm": 92
+    },
+    "combat1": {
+      "file": "music/combat1.opus",
+      "bytes": 77669,
+      "seconds": 15,
+      "bpm": 128
+    },
+    "combat2": {
+      "file": "music/combat2.opus",
+      "bytes": 71756,
+      "seconds": 13.913,
+      "bpm": 138
+    },
+    "tension": {
+      "file": "music/tension.opus",
+      "bytes": 66284,
+      "seconds": 12.8,
+      "bpm": 150
+    }
+  },
+  "bytes": 374160
+}

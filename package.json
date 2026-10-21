@@ -22,9 +22,12 @@
     "typecheck": "tsc -p tsconfig.json && npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run typecheck && npm run test",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run audio:check",
     "simulate": "tsx scripts/simulate.ts",
-    "loadtest": "tsx scripts/loadtest.ts"
+    "loadtest": "tsx scripts/loadtest.ts",
+    "gen-audio": "tsx scripts/gen-audio/index.ts",
+    "audio:check": "tsx scripts/gen-audio/index.ts --check",
+    "e2e": "node e2e/e2e.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -35,6 +38,7 @@
     "eslint": "^10.13.0",
     "fast-check": "^4.10.2",
     "globals": "^17.13.0",
+    "opusscript": "^0.1.1",
     "playwright-core": "^1.56.1",
     "prettier": "^3.6.2",
     "tsx": "^4.20.6",

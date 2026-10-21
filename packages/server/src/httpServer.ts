@@ -25,6 +25,8 @@ const MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.webp': 'image/webp',
   '.woff2': 'font/woff2',
+  '.opus': 'audio/ogg; codecs=opus',
+  '.ogg': 'audio/ogg',
   '.ico': 'image/x-icon',
   '.map': 'application/json; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
