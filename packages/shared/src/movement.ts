@@ -38,6 +38,9 @@ export interface MovementParams {
   wallCoyoteTicks: number;
   // Plateformes à sens unique
   dropThroughTicks: number;
+  // Événements
+  /** Vitesse de chute minimale pour émettre l'événement d'atterrissage (son, poussière). */
+  landEventSpeed: number;
 }
 
 export const DEFAULT_MOVEMENT: Readonly<MovementParams> = {
@@ -70,6 +73,8 @@ export const DEFAULT_MOVEMENT: Readonly<MovementParams> = {
   wallCoyoteTicks: 5,
 
   dropThroughTicks: 14,
+
+  landEventSpeed: 200,
 };
 
 export type MovementKey = keyof MovementParams;
@@ -108,6 +113,7 @@ export const MOVEMENT_TUNING: Readonly<Record<MovementKey, TuningMeta>> = {
   wallLockTicks: { label: 'Blocage après saut mur', min: 0, max: 30, step: 1 },
   wallCoyoteTicks: { label: 'Coyote mur (ticks)', min: 0, max: 20, step: 1 },
   dropThroughTicks: { label: 'Traversée sens unique', min: 4, max: 40, step: 1 },
+  landEventSpeed: { label: 'Seuil d’atterrissage (événement)', min: 0, max: 800, step: 5 },
 };
 
 export const MOVEMENT_KEYS = Object.keys(DEFAULT_MOVEMENT) as MovementKey[];

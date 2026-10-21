@@ -173,6 +173,26 @@ describe('salons', () => {
   });
 });
 
+describe('quitter un salon', () => {
+  it('libère l emplacement, prévient les autres et permet de rejoindre à nouveau', () => {
+    const h = harness();
+    const a = h.connect('4.0.0.1');
+    const b = h.connect('4.0.0.2');
+    const code = h.create(a);
+    h.join(b, code, 'Bobb');
+    h.send(b, { t: 'leave' });
+    expect(b.lastOf('left')).toEqual({ t: 'left' });
+    expect(a.lastOf('roster')!.players).toHaveLength(1);
+    expect(h.server.stats().players).toBe(1);
+    // Sans salon : erreur
+    h.send(b, { t: 'leave' });
+    expect(b.lastOf('error')!.code).toBe('not_joined');
+    // Il peut revenir (même connexion), et reprend l'emplacement libéré
+    h.join(b, code, 'Bobb');
+    expect(b.lastOf('joined')!.slot).toBe(1);
+  });
+});
+
 describe('messages invalides', () => {
   it('déconnecte après 20 messages invalides', () => {
     const h = harness();

@@ -209,7 +209,8 @@ function stepPlayer(world: World, p: Player, slot: number, input: number): void 
   const groundAfter = probeGround(world, p);
   p.groundMover = probeMover(world, p);
   p.grounded = groundAfter !== 0 || p.groundMover >= 0;
-  if (!wasGrounded && p.grounded && fallSpeed > 200) emit(world, SimEvent.LAND, slot, p.x, p.y);
+  if (!wasGrounded && p.grounded && fallSpeed > P.landEventSpeed)
+    emit(world, SimEvent.LAND, slot, p.x, p.y);
 
   if (p.y > WORLD_H + FALL_MARGIN) {
     emit(world, SimEvent.FELL, slot, p.x, p.y);

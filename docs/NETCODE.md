@@ -246,7 +246,7 @@ Les corrections qui restent viennent des blocages TCP du flux d'entrées : penda
 
 - **Simulateur de réseau** : `?lag=150&jitter=30&loss=2`. `lag` = latence **aller-retour** ajoutée (moitié dans chaque sens), `jitter` = ± ms par sens, `loss` = % de messages « perdus ». L'ordre est conservé comme en TCP : un message perdu est retransmis après `max(200 ms, 2 × lag)` et retarde tous les suivants. Code : `packages/client/src/net/transport.ts`.
 - **Graphe réseau** (`F3` ou `?debug=1`) : RTT, débit montant et descendant, corrections par seconde, retard d'interpolation, avance, tick prédit et estimé, marge, tampon, gigue. Le fantôme rouge est le dernier état confirmé par le serveur pour son propre stickman.
-- **Panneau de réglage** (build de développement seulement, serveur lancé avec `DEV_TOOLS=1`, ce que fait `npm run dev`) : les 25 constantes de `packages/shared/src/movement.ts`, appliquées en direct à la salle entière.
+- **Panneau de réglage** (build de développement seulement, serveur lancé avec `DEV_TOOLS=1`, ce que fait `npm run dev`) : les 26 constantes de `packages/shared/src/movement.ts`, appliquées en direct à la salle entière.
 - **Enregistrement / relecture** : avec `DEV_TOOLS=1` (ou `RECORD_DIR=dossier`), chaque salle enregistre ses entrées (changements de masque, arrivées, départs, réglages). `GET /dev/recording/CODE` renvoie le JSON. Relecture visuelle : `?replay=/dev/recording/CODE` (espace : pause, `[` et `]` : vitesse) ; relecture headless et vérification du hash : `npm run simulate -- --replay fichier.json`.
 - **`npm run simulate`** : déterminisme sur 60 000 ticks (deux mondes, hash comparé tous les 1 000 ticks) et coût d'un pas.
 - **`npm run loadtest`** : voir §8.
@@ -262,11 +262,11 @@ Machine de développement (20 cœurs, Node 22), serveur épinglé sur **un seul 
 
 | Mesure                                                         | Résultat                  | Budget (§2.8)     |
 | -------------------------------------------------------------- | ------------------------- | ----------------- |
-| Pas de simulation d'une salle (p50 / p99)                      | 0,008 ms / 0,026 ms       | < 0,15 / < 0,5 ms |
-| Tick complet, 25 salles (p50 / p99)                            | 2,5 ms / 5,9 ms           | —                 |
+| Pas de simulation d'une salle (p50 / p99)                      | 0,009 ms / 0,029 ms       | < 0,15 / < 0,5 ms |
+| Tick complet, 25 salles (p50 / p99)                            | 2,7 ms / 4,1 ms           | —                 |
 | CPU du serveur (1 cœur)                                        | 47 %                      | < 60 %            |
-| Tas JS / RSS                                                   | 26 Mo / 110 Mo            | < 250 Mo          |
-| Retard de boucle d'événements (p99)                            | 3,2 ms                    | < 10 ms           |
+| Tas JS / RSS                                                   | 26 Mo / 109 Mo            | < 250 Mo          |
+| Retard de boucle d'événements (p99)                            | 3,0 ms                    | < 10 ms           |
 | Débit descendant par client                                    | 5,1 Ko/s (30 snapshots/s) | < 20 Ko/s         |
 | Dépassements de la boucle, snapshots sautés, entrées en retard | 0, 0, 0                   | 0                 |
 

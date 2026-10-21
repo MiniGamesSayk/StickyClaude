@@ -130,6 +130,17 @@ export class Renderer {
     }
   }
 
+  /** Efface les joueurs et les plateformes (retour au menu). */
+  reset(): void {
+    for (const s of this.sprites.values()) {
+      s.body.destroy();
+      s.label.destroy();
+    }
+    this.sprites.clear();
+    this.moversG.clear();
+    this.overlay.clear();
+  }
+
   render(scene: Scene): void {
     this.drawMovers(scene);
     this.drawPlayers(scene);

@@ -90,6 +90,7 @@ export async function startApp(): Promise<void> {
       },
       onError: (code, msg) => ui.showError(ERRORS[code] + (msg ? ` (${msg})` : '')),
       onLeft: () => {
+        renderer.reset();
         graphCanvas.hidden = true;
         byId('tuning').hidden = true;
         ui.showMenu();

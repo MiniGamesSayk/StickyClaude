@@ -19,7 +19,7 @@ Journal des choix qui précisent ou s'écartent de `docs/ANALYSE.md`. Une entré
 ### D3. Envoi des snapshots décalé par client
 
 - **Contexte.** Le test de charge (200 clients) montrait des rafales : tous les clients d'une salle recevaient leur snapshot sur le même tick (une centaine d'envois d'un coup, ≈ 2 ms), d'où un retard de boucle de plus de 10 ms au p99.
-- **Choix.** Un client reçoit son snapshot quand `(tick + slot) % intervalle == 0` : chacun garde 30 snapshots/s, mais les envois se répartissent sur tous les ticks. Tick complet p99 : 9,5 ms → 5,9 ms (mesuré avec, en même temps, un générateur de charge multi-thread moins rafaleux).
+- **Choix.** Un client reçoit son snapshot quand `(tick + slot) % intervalle == 0` : chacun garde 30 snapshots/s, mais les envois se répartissent sur tous les ticks. Tick complet p99 : 9,5 ms → 4,1 ms (mesuré avec, en même temps, un générateur de charge multi-thread moins rafaleux).
 - **Alternative.** Décaler par salle seulement (déjà le cas par construction) : insuffisant à 8 joueurs par salle.
 
 ### D4. Pas de collision entre joueurs
