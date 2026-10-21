@@ -128,3 +128,137 @@ Aucune dépendance de production dans le client en dehors de Pixi ; aucune dans 
 - **Compensation de latence** : `interp` est déjà transmis ; reste à conserver 200 ms d'historique de positions et à rembobiner pour la mêlée et les tirs instantanés (§2.4). Le serveur répète les entrées manquantes pendant 20 ticks : à surveiller quand une attaque peut être répétée.
 - **Corrections après blocage TCP** : l'écart maximal observé est de ≈ 20 unités à 2 % de pertes (jusqu'à ≈ 60 à 5 %). Une piste si cela gêne en jeu : reprendre les entrées arrivées en retard pour ré-simuler _un seul joueur_ côté serveur (possible tant que rien ne dépend d'autrui, donc pas avec le combat).
 - **CPU** : 47 % d'un cœur à 200 joueurs (budget 60 %), dominé par les appels système. Si la mesure en conteneur à 1 CPU (phase 4) dépasse, passer à un paquet d'entrées tous les 2 ticks.
+
+Suite : la compensation de latence est faite (D26) ; l'enregistrement des entrées est devenu un enregistrement d'opérations (D37) ; le « ré-simuler un seul joueur » n'est plus possible avec le combat (D24) ; le CPU reste à vérifier en conteneur (D45).
+
+## Phase 2 : gameplay complet (21/10/2026)
+
+### D24. Les règles du jeu vivent dans `sim`, derrière le même `step`, en deux passes
+
+- **Contexte.** Le client doit prédire ses propres actions (§2.4), mais ni les dégâts, ni les ramassages, ni les scores : ils dépendent des autres joueurs, que le client n'a que dans le passé.
+- **Choix.** `step(world, inputs)` fait deux passes. **Passe 1**, pour tous les mondes : minuteries, mouvement et machine à états des actions de chaque joueur (enchaînement de coups, charge, parade, coup de pied, tir, lancer, munitions), qui ne dépendent que de lui, de ses entrées et du décor. **Passe 2**, si `world.auth` (serveur, entraînement hors ligne) : résolution des coups et des tirs, objets, projectiles, explosions, terrain, manches. Le monde de prédiction du client n'exécute que la passe 1 (`world.auth = false`) et avance seulement les compteurs de phase de partie (`stepGameClient`). Toutes les valeurs de combat sont dans `shared/src/combat.ts`, `weapons.ts`, `modes.ts`.
+- **Alternative.** Deux simulations distinctes (client et serveur) : plus simple à écrire, mais elles divergeraient ; ou prédire aussi les coups reçus, ce qui exigerait de prédire les autres joueurs.
+
+### D25. Compensation de latence dans le masque d'entrées, posée par le serveur
+
+- **Choix.** Le masque d'entrées fait 16 bits : les bits 0 à 7 sont les boutons, les bits 12 à 15 portent le retard de compensation en ticks. Le serveur ne lit des paquets que les 8 premiers bits (`INPUT_MASK_USED`) et ajoute lui-même le retard borné avant d'appeler `step` : la simulation reste une fonction pure de `(état, masques)`, et un client ne peut pas se donner de compensation.
+- **Alternative.** Un second tableau d'arguments à `step` : même effet, mais l'enregistrement et la relecture devraient le transporter à part.
+
+### D26. Historique de 250 ms au lieu de 200, et `rewind` = RTT + avance + interpolation
+
+- **Contexte.** L'analyse (§2.4) remonte au « tick de l'entrée moins le retard d'interpolation ». Mais les entrées sont étiquetées _dans le futur_ (D1) : ce que le tireur voit date de `RTT/2 + interpolation` avant l'instant où il tire, et son entrée s'exécute `RTT/2 + avance` après. Il faut donc remonter du tick d'exécution de `RTT + avance + interpolation`, soit jusqu'à 230 ms pour 100 ms de RTT.
+- **Choix.** Le serveur garde 16 ticks de positions (`HISTORY_TICKS`) et remonte au plus de 15 ticks (250 ms, `LAG_COMP_MS`). Le client annonce la durée totale (champ `rewind` des paquets d'entrées, pas de 4 ms), bornée par le serveur ; elle sert à la mêlée, aux tirs instantanés et à l'aide à la visée (±8°, identique pour tous les appareils). Les projectiles lents ne sont pas compensés (§2.4). Au-delà de 250 ms, la compensation est partielle.
+- **Alternative.** 200 ms comme dans l'analyse : le tireur au-dessus de ≈ 70 ms de RTT n'aurait déjà plus été compensé en entier.
+
+### D27. Les coups d'un tick sont mis en file, puis appliqués ensemble
+
+- **Contexte.** Si le premier joueur traité frappe et que son adversaire est étourdi ou projeté avant d'avoir frappé, l'ordre des emplacements décide du vainqueur.
+- **Choix.** `resolveMelee` et `resolveActions` détectent d'abord tous les coups du tick (`queueHit`), puis `applyHits` les applique dans l'ordre de détection : deux coups simultanés se touchent tous les deux. Un coup détecté ne dépend pas de l'état que ceux du même tick vont produire. La parade (70 % de dégâts en moins de face, parfaite dans les 6 premiers ticks) se juge à l'application.
+- **Alternative.** Appliquer chaque coup tout de suite : plus simple, mais l'emplacement 0 aurait un avantage systématique.
+
+### D28. Bloc « état exact » de 69 octets
+
+- **Contexte.** D2 : 28 octets suffisaient pour le mouvement. La rejouabilité du combat demande aussi les compteurs d'attaque, de charge, de parade, d'étourdissement, les munitions, le grappin, le curseur fantôme.
+- **Choix.** 41 champs, 69 octets, flottants 32 bits pour les positions (`OWN_FIELDS`). C'est ≈ 2 Ko/s par client ; le snapshot de 8 joueurs en combat fait ≈ 280 octets et le total mesuré 8,7 Ko/s (budget 20). Tout le bloc est comparé à la prédiction (D40) : une divergence sur un seul champ restaure l'état et rejoue.
+- **Alternative.** Ne restaurer que le mouvement et « laisser rattraper » le combat : une parade ou un coup chargé en cours se décalerait d'un tick à chaque correction.
+
+### D29. Événements fiables génériques
+
+- **Choix.** Un événement = `u8 slot` puis un entier 16 bits par argument ; le format de chaque type est un seul tableau (`EVENT_SPECS`, un caractère par argument : position au 1/8 d'unité, entier signé ou non). Au plus 24 par snapshot, 13 octets de charge. Les événements restent dans le journal de la salle (128) jusqu'à l'accusé du client ; un client en retard de plus de 120 est déconnecté. Les événements de mouvement ne sont pas transmis (le client les recalcule pour lui-même, et lit l'état d'animation des autres).
+- **Côté client.** Les événements qui changent le monde (terrain, traits de fantôme, flaques) sont appliqués dès leur réception, par les mêmes fonctions entières que le serveur ; les effets (coups, explosions, éliminations) attendent que l'interpolation atteigne le tick de leur snapshot, pour coller à ce que l'on voit des autres joueurs.
+- **Alternative.** Une charge utile propre à chaque type de message : plus compacte, mais un décodeur et un test de plus par événement.
+
+### D30. Terrain destructible : un entier par cellule, calcul identique des deux côtés
+
+- **Choix.** Une destruction est `(cellule x, cellule y, rayon en dixièmes de cellule)` ; `destroyCircle` n'utilise que des entiers, donc serveur et client obtiennent le même terrain. Les blocs détruits ne reviennent pas pendant la manche. Un arrivant reçoit le terrain courant (`rows`, 36 chaînes) dans `joined`. Les traits des fantômes expirent à `tick de pose + durée`, donc à l'instant exact du serveur même si l'événement arrive en retard. Les traits et flaques déjà posés ne sont pas envoyés à un arrivant (quelques secondes de vie).
+- **Alternative.** Renvoyer la grille entière à chaque destruction : 2,3 Ko par explosion.
+
+### D31. Les mines adverses armées sont invisibles : snapshots filtrés par destinataire
+
+- **Choix.** Une mine armée n'apparaît pas dans la liste d'objets de ses ennemis (équipe différente, ou joueur seul contre tous) ; les spectateurs voient tout. La liste d'objets n'est recalculée par destinataire que lorsqu'une mine armée existe (`hasHiddenMines`) : le cas courant partage une seule liste entre tous les clients.
+- **Alternative.** Envoyer la mine et la masquer au rendu : un client modifié la verrait.
+
+### D32. Fantôme-crayon : le curseur est prédit, la pose est une décision du serveur
+
+- **Choix.** Un joueur éliminé devient un fantôme (si « Les morts dessinent » est activé et que le mode n'est pas à réapparition). Son curseur (`ghostX`, `ghostY`) et son délai (`ghostCd`) sont dans l'état exact, donc prédits ; poser un trait (attaque : 3 cellules à sens unique, 4 s) ou une goutte (parade : 1 cellule de danger, 5 s) est décidé par le serveur, qui émet `GHOST_DRAW`. Délai de 2 s après l'élimination, puis 8 s entre deux poses. Au plus 16 marques simultanées. Un fantôme ne compte plus dans la fin de manche.
+- **Alternative.** Prédire aussi la pose : le fantôme verrait son trait avant le serveur, mais il faudrait annuler un trait refusé (cellule prise entre-temps).
+
+### D33. Fin de manche, mort subite et plafonds
+
+- **Choix.** La manche s'arrête quand il reste 0 ou 1 équipe debout. Une manche sans survivant, ou une égalité à la colline ou à la boulette-ball, n'est attribuée à personne. Mort subite à 75 s par défaut (20 à 180 s), avançant à 14 unités/s ; une manche dure au plus 300 s même sans mort subite ; colline et boulette-ball durent au plus 150 s (sans encre). Pour qu'une partie finisse toujours, elle est **tranchée au score** après `(2 × manches à gagner − 1) × 3` manches (15 pour 3 manches à gagner) sans vainqueur.
+- **Alternative.** Aucun plafond de manches : une partie de boulette-ball entre joueurs incapables de marquer ne finirait jamais (c'était le cas avec des bots aléatoires).
+
+### D34. Modes bonus : tirage compatible, réapparitions, arme commune
+
+- **Choix.** Le tirage d'une manche bonus se fait parmi les modes autorisés que **au moins une arène du pool** sait jouer (une zone de colline, des cages), puis l'arène parmi celles qui le supportent, différente de la précédente si possible. Les 10 arènes déclarent toutes colline et cages. Colline et boulette-ball sont des modes à réapparition (3 s et 2 s) : pas de fantômes. « Même arme pour tous » tire l'arme avec le RNG de la partie et désactive l'apparition d'armes. La boule de papier est un objet comme un autre (coups, projectiles, explosions la poussent).
+- **Alternative.** Imposer ces zones à toutes les arènes futures par le schéma : trop rigide pour des arènes spéciales.
+
+### D35. Salons : places, hôte, spectateurs, reconnexion, partie rapide
+
+- **Choix.**
+  - 8 joueurs et 4 spectateurs. Qui arrive pendant une partie est spectateur et prend une place à la fin de la manche en cours (ou du podium) ; un joueur resté 60 s sans rien faire en manche le devient jusqu'à la fin de la partie ; 10 min d'inactivité en salon d'attente : retiré.
+  - **Reconnexion** : jeton de 128 bits, place gardée 20 s, stickman immobile. L'hôte passe tout de suite au plus ancien joueur connecté (on ne bloque pas un salon pour 20 s) ; il ne le redevient pas au retour. Délai écoulé : retiré en salon, éliminé puis retiré en manche. Un jeton déjà utilisé ou périmé est refusé et compte dans la limite d'essais de code.
+  - **Partie rapide** : le salon public non plein au meilleur score (100 points s'il attend, plus le nombre de joueurs), sinon un nouveau salon public. Un salon public se lance seul 20 s après que 2 joueurs sont prêts ; un salon privé n'a pas de lancement automatique.
+  - Les réglages de l'hôte sont normalisés par liste blanche (`normalizeSettings`) : toute valeur invalide est remplacée par l'ancienne.
+- **Alternative.** Garder l'hôte pendant la reconnexion : un hôte qui ferme son onglet bloquerait le salon.
+
+### D36. L'arène d'entraînement est le salon d'attente
+
+- **Choix.** Le salon est une partie en phase `LOBBY` sur l'arène `entrainement` : on saute, frappe, ramasse et lance des armes (selon les réglages) ; les coups projettent mais **ne retirent aucun PV**, et un joueur qui tombe de la page réapparaît aussitôt (une seconde après une élimination). Elle est simulée à 60 Hz comme une manche (D13 : pire cas mesuré).
+- **Alternative.** Un mode sans combat : le salon serait moins vivant et on n'y apprendrait rien.
+
+### D37. Enregistrement d'opérations et d'entrées (version 3)
+
+- **Contexte.** Rejouer une partie ne se réduit plus à des entrées : arrivées, départs, lancement (règles, arènes, équipes), retour au salon, éliminations par abandon et changements de règles modifient le monde.
+- **Choix.** `Recording` v3 : `ops` (ordonnées, appliquées quand `world.tick === tick`), `inputs` (changements de masque, avec la compensation de latence), `tunes`, hash final. La relecture (`ReplayCursor`) est la même fonction côté serveur et côté outil ; une partie complète rejouée redonne exactement le même état.
+- **Alternative.** Enregistrer des snapshots : volumineux et sans valeur de test (on veut rejouer la _simulation_).
+
+### D38. Accessibilité des arènes par simulation
+
+- **Choix.** `analyzeArena` ne raisonne pas sur des formules de saut : elle rejoue la vraie `step` depuis chaque position debout avec des séquences d'entrées types et construit le graphe des atterrissages (≈ 100 ms par arène). Les plateformes mobiles sont ignorées (jamais nécessaires). On exige que tout point d'apparition, d'arme et la colline soit atteignable depuis **chaque** point d'apparition (aucune impasse). L'analyse porte sur la grille d'origine : un bloc de papier détruit en cours de manche peut ouvrir ou fermer un chemin sans qu'elle le sache.
+- **Alternative.** Formules de portée de saut : fausses dès qu'on touche à une constante de mouvement.
+
+### D39. Sécurité et limites de la phase 2
+
+- **Choix.** Messages JSON : 20 par seconde et par connexion (au-delà : comptés comme invalides), 1 Ko, schémas stricts (clés inconnues refusées) ; 20 messages invalides ferment la connexion (1008). Entrées : 70 paquets/s, étiquette bornée à 24 ticks d'avance, masque filtré. Pseudos : NFKC, caractères de contrôle, de largeur nulle et d'inversion retirés, 2 à 16 caractères, filtre de mots (FR et EN, `badwords.ts`). Création de salon (3/min/IP), essais de code (10/min/IP, les échecs seulement), emotes (1/s), connexions par IP (8), origine du WebSocket vérifiée en production. L'arène d'attente à la création et le réglage des constantes de mouvement sont réservés à `DEV_TOOLS=1`.
+- **Alternative.** Aucune pour ces valeurs : ce sont celles de §2.9, rendues configurables par variables d'environnement.
+
+### D40. Le client prédit dans un monde non autoritaire et compare tout, phase comprise
+
+- **Choix.** Le client crée un `World` par salon (terrain, plateformes, règles, mode) avec `auth = false` ; le prédicteur n'y fait vivre que son joueur. L'historique garde, pour chaque tick, le bloc « own » et la phase de partie (phase et ticks dans la phase) : la comparaison avec le snapshot porte sur tous les champs. Toute divergence (un coup reçu, un ramassage, une réapparition, un changement de phase) restaure et rejoue ; `visibleCorrections` ne compte que celles qui ont déplacé le joueur de plus de 0,5 unité. Un joueur mort n'évolue plus : seuls son statut et son compteur de réapparitions sont comparés. L'expiration des traits et des flaques, qui est dans la passe d'autorité, est appelée par le prédicteur après chaque pas (`stepMarks`, `stepPuddles`). Les bornes de `invuln` (255 en réseau, 270 en jeu) font au plus une ou deux corrections de plus au début d'une manche.
+- **Alternative.** Ne comparer que le mouvement : les compteurs de combat dériveraient sans bruit.
+
+### D41. Spectateurs : un accusé toutes les 100 ms
+
+- **Choix.** Un spectateur n'a pas d'entrées, mais le serveur répète les événements fiables jusqu'à leur accusé et coupe un client qui a 120 événements de retard. Il envoie donc le même paquet `INPUT` avec un masque nul, 10 fois par seconde. Il reçoit les snapshots sans bloc « own » et voit **toutes** les mines (D31).
+
+### D42. Reconnexion automatique du client
+
+- **Choix.** Une coupure inattendue ouvre une nouvelle connexion et envoie `resume` (délais de 0,4 à 2,5 s, au plus 20 s), sous un écran « Connexion perdue » ; le dernier rendu reste derrière. Le jeton et le code sont gardés en `localStorage` avec l'heure de la dernière activité ; un rechargement de la page dans les 17 s tente la reprise. Un `bad_token` ou le délai écoulé ramène à l'accueil avec un message. `leave`, l'expulsion ou la fermeture du salon effacent le jeton.
+
+### D43. Éditeur d'arènes : développement seulement, hors du bundle
+
+- **Choix.** `packages/client/editor/index.html` est servi par Vite (`/editor`, via un plugin `apply: 'serve'`), n'est pas une entrée du build (`rollupOptions.input: 'index.html'`) et le serveur de production n'a aucune route `/editor` : vérifié en construisant (aucune trace de l'éditeur dans `dist`, `/editor/` répond 404). Son modèle est pur et testé ; il importe zod et l'analyse d'accessibilité lui-même, ce qui n'alourdit pas le client du jeu (D19).
+- **Alternative.** Un mode `?editor=1` du client : l'éditeur serait dans le bundle de production.
+
+### D44. Le retour au salon remet les manches et les scores à zéro
+
+- **Contexte.** Le salon d'attente n'est pas une manche ; `LobbyView.round` vaut 0 en attente (types). Le monde gardait pourtant le dernier numéro de manche et les scores.
+- **Choix.** `returnToLobby` remet `round`, `scores` et `matchWinner` à zéro. La relecture d'un enregistrement fait le même appel, donc reste identique.
+
+### D45. Mesure de charge avec combat actif, et ce qu'elle ne prouve pas
+
+- **Choix.** `npm run loadtest` fait par défaut tourner des parties en boucle (3 manches à gagner, mort subite à 20 s, un bonus toutes les 3 manches) avec des faux clients qui frappent, parent et ramassent ; `--no-combat` mesure les déplacements seuls. Il échoue si moins d'une partie par salon a démarré (une mesure sans combat ne vaut rien). `npm run simulate` fait aussi tourner un monde de parties enchaînées et vérifie son déterminisme.
+- **Résultats** (voir `NETCODE.md` §10) : le coût du pas de salle est de 6 µs au p50 en combat (15 µs au p99, budget 150) ; la mesure complète à 25 × 8 a été faite sous Windows, non épinglée, où même les déplacements seuls dépassent le CPU et le retard de boucle des budgets (appels système réseau plus chers, minuteries de 15,6 ms). Le combat y ajoute 12 % de CPU. **Les budgets du conteneur à 1 CPU sont à vérifier en phase 4**, sous Linux ; la piste « un paquet d'entrées tous les 2 ticks » reste la première à essayer.
+
+### D46. Dépendances
+
+Aucune dépendance nouvelle en phase 2 (client, serveur, `shared`, `sim`).
+
+### D47. Questions ouvertes pour la phase 3 et 4
+
+- **Rendu** : les armes sont « dessinées » (événement `WEAPON_SPAWN`, 0,8 s avant d'apparaître) ; la phase 3 doit en faire l'animation. Le HUD, le podium et les écrans de la phase 2 sont en DOM brut et en français seulement.
+- **Équilibre** : les valeurs de `combat.ts`, `weapons.ts` et des arènes n'ont été validées que par simulation (bots) ; elles demandent des parties à plusieurs humains.
+- **Compensation au-delà de 250 ms** : un joueur à plus de ≈ 100 ms de RTT n'est plus compensé en entier. Allonger l'historique coûte 12 octets par joueur et par tick ; à décider avec des mesures réelles.
+- **Salles d'attente** à 60 Hz : toujours le pire cas (D13).
+- **Traits des fantômes pour un arrivant** : non transmis (D30).

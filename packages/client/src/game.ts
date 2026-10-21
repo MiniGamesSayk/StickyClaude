@@ -248,7 +248,11 @@ export async function startApp(): Promise<void> {
     });
     client = c;
     previous?.close();
-    (window as unknown as { __stickyclaude: unknown }).__stickyclaude = { client: c, renderer };
+    (window as unknown as { __stickyclaude: unknown }).__stickyclaude = {
+      client: c,
+      renderer,
+      hud,
+    };
     action(c);
     return c;
   }

@@ -2,7 +2,7 @@
 
 ## Assets
 
-Phase 1 : **aucun asset repris**. Les visuels de développement sont des rectangles et des traits dessinés par code (Pixi) ; il n'y a ni son, ni musique, ni image, ni police embarquée. Les deux arènes de test (`packages/shared/arenas/*.json`) sont créées pour ce projet.
+Phases 1 et 2 : **aucun asset repris**. Les visuels de développement (stickmen, armes, objets, effets, interface) sont des rectangles, des traits et des textes dessinés par code (Pixi et DOM) ; il n'y a ni son, ni musique, ni image, ni police embarquée. Les arènes (`packages/shared/arenas/*.json` : les 10 arènes de la rotation, l'arène d'entraînement et les deux arènes de test), les noms et les motifs des armes, des modes et des objets, la liste de mots refusés des pseudos (`packages/server/src/badwords.ts`) et les textes de l'interface sont écrits pour ce projet. Les noms des armes et des modes viennent de l'analyse du projet (`docs/ANALYSE.md`) et ne reprennent aucun nom de Stick Fight ni d'un autre jeu.
 
 La feuille de style cite la police _Patrick Hand_ (licence OFL) en première famille ; elle n'est **pas** encore hébergée dans le dépôt, le navigateur retombe sur une police cursive du système. Elle sera ajoutée en phase 3 (woff2 réduit aux caractères latins) avec sa licence.
 

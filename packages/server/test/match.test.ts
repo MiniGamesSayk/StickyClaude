@@ -93,7 +93,8 @@ function expectClean(p: Played): void {
   expect(p.ticks).toBeLessThan(p.maxTicks);
 }
 
-describe('parties complètes : du salon au podium', () => {
+// Une partie complète simule jusqu'à 2000 s de jeu : de quelques secondes à plus d'une minute de calcul.
+describe('parties complètes : du salon au podium', { timeout: 300_000 }, () => {
   for (const n of SIZES) {
     it(`chacun pour soi à ${n} joueurs`, () => {
       const p = playMatch(n, { mode: 'ffa' });

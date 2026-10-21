@@ -1,5 +1,5 @@
-import { CELL, EMOTES, INK_COLORS, ObjType, SimEvent, TICK_MS } from '@stickyclaude/shared';
-import type { Graphics, Text } from 'pixi.js';
+import { CELL, EMOTES, SimEvent, TICK_MS } from '@stickyclaude/shared';
+import type { Graphics } from 'pixi.js';
 import type { GameEvent } from '../net/client.ts';
 import type { TextPool } from './textpool.ts';
 
@@ -370,6 +370,3 @@ export class FxLayer {
     this.fx = live;
   }
 }
-
-export { INK_COLORS, ObjType };
-export type { Text };
