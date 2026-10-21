@@ -17,7 +17,7 @@ import {
   Rng,
   TICK_HZ,
 } from '@stickyclaude/shared';
-import type { ArenaData, MovementParams } from '@stickyclaude/shared';
+import type { ArenaData, MovementParams, SimRules } from '@stickyclaude/shared';
 
 export interface Player {
   active: boolean;
@@ -212,19 +212,8 @@ export interface EventBuffer {
   v: Float64Array;
 }
 
-/** Réglages de partie lus par la simulation (copie des réglages de l'hôte). */
-export interface Rules {
-  friendlyFire: boolean;
-  weapons: boolean;
-  ghosts: boolean;
-  /** Ticks de manche avant la mort subite ; 0 = jamais (la limite absolue reste en vigueur). */
-  suddenAfterTicks: number;
-  roundsToWin: number;
-  teamsMode: boolean;
-  teamCount: number;
-  bonusModes: number[];
-  bonusEvery: number;
-}
+/** Règles de partie lues par la simulation. */
+export type Rules = SimRules;
 
 export interface GameState {
   phase: number;

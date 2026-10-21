@@ -11,7 +11,11 @@ export const ARENAS: Readonly<Record<string, ArenaData>> = {
   'test-tower': testTower as unknown as ArenaData,
 };
 
-export const DEFAULT_ARENA_ID = 'test-flat';
+/** Arène d'entraînement du salon d'attente. */
+export const LOBBY_ARENA_ID = 'test-flat';
+/** Arènes tirées au sort pour les manches (l'hôte peut en retenir une partie). */
+export const ROTATION_ARENA_IDS: readonly string[] = ['test-flat', 'test-tower'];
+export const DEFAULT_ARENA_ID = LOBBY_ARENA_ID;
 
 export function getArena(id: string): ArenaData | undefined {
   return Object.prototype.hasOwnProperty.call(ARENAS, id) ? ARENAS[id] : undefined;

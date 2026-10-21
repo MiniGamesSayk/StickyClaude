@@ -5,14 +5,14 @@ import {
   decodeInput,
   decodePing,
   DecodeError,
-  DEFAULT_ARENA_ID,
   encodePong,
-  encodeSnapshot,
   eventIdDiff,
   getArena,
+  INPUT_MASK_USED,
   INPUT_RING,
+  LOBBY_ARENA_ID,
+  MAX_CLIENT_MESSAGE_BYTES,
   MAX_INPUT_AHEAD_TICKS,
-  MAX_PLAYERS,
   MOVEMENT_TUNING,
   PROTOCOL_VERSION,
   ROOM_CODE_ALPHABET,
@@ -22,9 +22,9 @@ import {
 } from '@stickyclaude/shared';
 import { clientMessageSchema } from '@stickyclaude/shared/schemas';
 import type { ClientMessage } from '@stickyclaude/shared/schemas';
-import type { ErrorCode, ServerMessage } from '@stickyclaude/shared';
-import { exportOwn, fillPlayerSnap } from '@stickyclaude/sim';
+import type { ErrorCode, PublicRoom, ServerMessage } from '@stickyclaude/shared';
 import { ClientState } from './client.ts';
+import type { Member } from './client.ts';
 import type { ServerConfig } from './config.ts';
 import type { Connection } from './connection.ts';
 import { Metrics } from './metrics.ts';
@@ -32,12 +32,11 @@ import { sanitizeName } from './names.ts';
 import { RateLimiter } from './rateLimit.ts';
 import { RoomRecorder } from './recorder.ts';
 import { Room } from './room.ts';
+import type { RoomIO } from './room.ts';
 
 const MAX_INVALID = 20;
 const INPUT_PACKETS_PER_SEC = 70;
 const PINGS_PER_SEC = 10;
-const BACKPRESSURE_SKIP = 64 * 1024;
-const BACKPRESSURE_CLOSE = 1024 * 1024;
 
 export interface GameServerOptions {
   now?: () => number;
@@ -46,19 +45,20 @@ export interface GameServerOptions {
 }
 
 /**
- * Cœur du serveur : connexions, salons, entrées, ticks et snapshots. Indépendant de `ws` et de
- * l'horloge système : les tests le pilotent avec un temps virtuel (`tick(now)`).
+ * Cœur du serveur : connexions, routage des messages vers les salons, ticks et limites.
+ * Indépendant de `ws` et de l'horloge système : les tests le pilotent avec un temps virtuel
+ * (`tick(now)`).
  */
-export class GameServer {
+export class GameServer implements RoomIO {
   readonly rooms = new Map<string, Room>();
   readonly metrics = new Metrics();
+  readonly scratch = new Uint8Array(SNAPSHOT_MAX_BYTES);
+  readonly snapshotInterval: number;
   private readonly clients = new Map<Connection, ClientState>();
   private readonly ipCounts = new Map<string, number>();
   private readonly createLimiter: RateLimiter;
   private readonly codeLimiter: RateLimiter;
   private readonly now: () => number;
-  private readonly snapshotInterval: number;
-  private readonly scratch = new Uint8Array(SNAPSHOT_MAX_BYTES);
   private readonly pong = new Uint8Array(16);
   private readonly pkt = createInputPacket();
   private lastTickAt = 0;
@@ -102,7 +102,12 @@ export class GameServer {
   onClose(conn: Connection): void {
     const c = this.clients.get(conn);
     if (!c) return;
-    this.leaveRoom(c);
+    const m = c.member;
+    if (m) {
+      c.member = null;
+      m.room.onDisconnect(m, this.now());
+      this.maybeCloseRoom(m.room);
+    }
     this.clients.delete(conn);
     const n = (this.ipCounts.get(conn.ip) ?? 1) - 1;
     if (n <= 0) this.ipCounts.delete(conn.ip);
@@ -114,6 +119,11 @@ export class GameServer {
     if (!c) return;
     const size = typeof data === 'string' ? data.length : data.byteLength;
     this.metrics.bytesIn += size;
+    // Le plafond est aussi fixé par `ws` (maxPayload) ; on le vérifie ici pour les autres transports.
+    if (size > MAX_CLIENT_MESSAGE_BYTES) {
+      this.invalid(c);
+      return;
+    }
     if (isBinary && typeof data !== 'string') this.onBinary(c, data);
     else if (!isBinary && typeof data === 'string') this.onControl(c, data);
     else this.invalid(c);
@@ -134,11 +144,12 @@ export class GameServer {
   }
 
   private onInput(c: ClientState, data: Uint8Array): void {
-    const room = c.room;
-    if (!room) {
+    const m = c.member;
+    if (!m) {
       this.invalid(c);
       return;
     }
+    const room = m.room;
     const now = this.now();
     if (now - c.inputWindowStart >= 1000) {
       c.inputWindowStart = now;
@@ -152,27 +163,33 @@ export class GameServer {
     decodeInput(data, pkt);
     this.metrics.inputPackets++;
 
+    // Accusé de réception des événements fiables (joueurs et spectateurs).
+    if (
+      eventIdDiff(pkt.ack, m.ackedEvent) > 0 &&
+      eventIdDiff(pkt.ack, room.reliable.lastId) <= 0
+    ) {
+      m.ackedEvent = pkt.ack;
+    }
+    if (m.slot < 0) return;
+
     // Reconstitue l'étiquette complète de l'entrée la plus récente (16 bits → 32 bits).
     const next = room.world.tick + 1;
     const newest = next + (((pkt.tick - next + 0x8000) & 0xffff) - 0x8000);
     const margin = newest - next;
-    if (margin < c.minMargin) c.minMargin = margin;
+    if (margin < m.minMargin) m.minMargin = margin;
     if (margin < 0) this.metrics.inputsLate++;
 
     for (let k = 0; k < pkt.count; k++) {
       const label = newest - k;
       if (label < next || label > next + MAX_INPUT_AHEAD_TICKS) continue;
       const i = label & (INPUT_RING - 1);
-      if (c.ringTick[i] !== label) {
-        c.ringTick[i] = label;
-        c.ringMask[i] = pkt.masks[k]!;
+      if (m.ringTick[i] !== label) {
+        m.ringTick[i] = label;
+        // Seuls les boutons sont acceptés : les bits hauts (compensation de latence) sont à nous.
+        m.ringMask[i] = pkt.masks[k]! & INPUT_MASK_USED;
       }
     }
-
-    if (eventIdDiff(pkt.ack, c.ackedEvent) > 0 && eventIdDiff(pkt.ack, room.reliable.lastId) <= 0) {
-      c.ackedEvent = pkt.ack;
-    }
-    c.interpDelayMs = pkt.interp * 4;
+    m.rewindTicks = Room.rewindFromWire(pkt.rewind);
   }
 
   private onPing(c: ClientState, data: Uint8Array): void {
@@ -187,12 +204,22 @@ export class GameServer {
     if (!room) return;
     const frac = Math.min(0.999, Math.max(0, (now - this.lastTickAt) / TICK_MS));
     const n = encodePong(this.pong, clientTime, room.world.tick, frac);
-    this.sendRaw(c.conn, this.pong.slice(0, n));
+    this.sendRaw(c, this.pong.slice(0, n));
   }
 
   // --- Messages de contrôle (JSON) ------------------------------------------------------------
 
   private onControl(c: ClientState, text: string): void {
+    const now = this.now();
+    if (now - c.controlWindowStart >= 1000) {
+      c.controlWindowStart = now;
+      c.controlWindowCount = 0;
+    }
+    if (++c.controlWindowCount > this.config.controlPerSec) {
+      this.metrics.controlLimited++;
+      this.invalid(c);
+      return;
+    }
     let raw: unknown;
     try {
       raw = JSON.parse(text);
@@ -208,73 +235,186 @@ export class GameServer {
     const msg: ClientMessage = parsed.data;
     switch (msg.t) {
       case 'create':
-        this.onCreate(c, msg);
+        this.onCreate(c, msg, now);
         break;
       case 'join':
-        this.onJoin(c, msg);
+        this.onJoin(c, msg, now);
         break;
-      case 'leave':
-        if (c.room) {
-          this.leaveRoom(c);
-          this.sendJson(c.conn, { t: 'left' });
+      case 'quick':
+        this.onQuick(c, msg, now);
+        break;
+      case 'resume':
+        this.onResume(c, msg, now);
+        break;
+      case 'leave': {
+        const m = c.member;
+        if (m) {
+          const room = m.room;
+          room.removeMember(m, 'left', now);
+          this.maybeCloseRoom(room);
         } else this.error(c, 'not_joined');
         break;
-      case 'tune':
-        this.onTune(c, msg);
-        break;
+      }
+      default: {
+        const m = c.member;
+        if (!m) {
+          this.error(c, 'not_joined');
+          return;
+        }
+        this.onMemberMessage(c, m, msg, now);
+      }
     }
   }
 
-  private onCreate(c: ClientState, msg: Extract<ClientMessage, { t: 'create' }>): void {
-    if (msg.v !== PROTOCOL_VERSION) return this.error(c, 'version');
-    if (c.room) return this.error(c, 'already_joined');
-    const name = sanitizeName(msg.name);
-    if (name === null) return this.error(c, 'bad_name');
-    const arena = getArena(msg.arena ?? DEFAULT_ARENA_ID);
-    if (!arena) return this.error(c, 'bad_request', 'arena');
-    const now = this.now();
-    if (!this.createLimiter.hit(c.conn.ip, now)) return this.error(c, 'rate_limited');
-    if (this.draining || this.rooms.size >= this.config.maxRooms)
-      return this.error(c, 'server_full');
+  private onMemberMessage(c: ClientState, m: Member, msg: ClientMessage, now: number): void {
+    const room = m.room;
+    switch (msg.t) {
+      case 'ready':
+        if (!room.setReady(m, msg.ready, now)) this.error(c, m.slot < 0 ? 'forbidden' : 'in_game');
+        break;
+      case 'start': {
+        const r = room.startMatch(m, now);
+        if (r !== 'ok') this.error(c, r);
+        break;
+      }
+      case 'settings': {
+        const r = room.setSettings(m, msg.settings, now);
+        if (r !== 'ok') this.error(c, r);
+        break;
+      }
+      case 'teams': {
+        const r = room.setTeams(m, msg.assign, msg.shuffle, now);
+        if (r !== 'ok') this.error(c, r);
+        break;
+      }
+      case 'kick': {
+        const r = room.kick(m, msg.slot, now);
+        if (r !== 'ok') this.error(c, r);
+        break;
+      }
+      case 'look':
+        room.setLook(m, msg.look, now);
+        break;
+      case 'emote':
+        if (!room.emote(m, msg.id, now)) this.metrics.emotesLimited++;
+        break;
+      case 'tune':
+        this.onTune(c, m, msg);
+        break;
+      default:
+        this.invalid(c);
+    }
+  }
 
+  private onTune(c: ClientState, m: Member, msg: Extract<ClientMessage, { t: 'tune' }>): void {
+    if (!this.config.devTools) return this.error(c, 'forbidden');
+    const room = m.room;
+    const k = msg.k;
+    const meta = MOVEMENT_TUNING[k];
+    const val = Math.min(meta.max, Math.max(meta.min, msg.val));
+    room.world.baseParams[k] = val;
+    room.world.params[k] = val;
+    room.recording?.tune(room.world.tick, k, val);
+    const text = JSON.stringify({ t: 'tune', k, val } satisfies ServerMessage);
+    for (const other of room.slots) if (other?.client) this.sendRaw(other.client, text);
+  }
+
+  private checkEntry(c: ClientState, v: number, rawName: string): string | null {
+    if (v !== PROTOCOL_VERSION) {
+      this.error(c, 'version');
+      return null;
+    }
+    if (c.member) {
+      this.error(c, 'already_joined');
+      return null;
+    }
+    const name = sanitizeName(rawName);
+    if (name === null) {
+      this.error(c, 'bad_name');
+      return null;
+    }
+    return name;
+  }
+
+  private onCreate(c: ClientState, msg: Extract<ClientMessage, { t: 'create' }>, now: number): void {
+    const name = this.checkEntry(c, msg.v, msg.name);
+    if (name === null) return;
+    // Seul le mode développement choisit l'arène du salon d'attente.
+    let arenaId = LOBBY_ARENA_ID;
+    if (msg.arena !== undefined && this.config.devTools) {
+      if (!getArena(msg.arena)) return this.error(c, 'bad_request', 'arena');
+      arenaId = msg.arena;
+    }
+    const room = this.newRoom(c, arenaId, msg.isPublic ?? false, now);
+    if (!room) return;
+    room.addMember(c, name, msg.look, now);
+  }
+
+  /** Crée un salon (limites de création et de capacité) ; null si refusé (erreur envoyée). */
+  private newRoom(c: ClientState, arenaId: string, isPublic: boolean, now: number): Room | null {
+    if (!this.createLimiter.hit(c.conn.ip, now)) {
+      this.error(c, 'rate_limited');
+      return null;
+    }
+    if (this.draining || this.rooms.size >= this.config.maxRooms) {
+      this.error(c, 'server_full');
+      return null;
+    }
     const code = this.newCode();
     const seed = randomInt(1, 0x7fffffff);
     const recorder =
-      this.config.devTools || this.config.recordDir !== ''
-        ? new RoomRecorder(arena.id, seed)
-        : null;
-    const room = new Room(code, arena, seed, recorder, now);
+      this.config.devTools || this.config.recordDir !== '' ? new RoomRecorder(arenaId, seed) : null;
+    const room = new Room(this, code, arenaId, seed, recorder, now, isPublic);
     this.rooms.set(code, room);
-    this.enter(c, room, name);
+    return room;
   }
 
-  private onJoin(c: ClientState, msg: Extract<ClientMessage, { t: 'join' }>): void {
-    if (msg.v !== PROTOCOL_VERSION) return this.error(c, 'version');
-    if (c.room) return this.error(c, 'already_joined');
-    const name = sanitizeName(msg.name);
-    if (name === null) return this.error(c, 'bad_name');
-    const now = this.now();
+  private onJoin(c: ClientState, msg: Extract<ClientMessage, { t: 'join' }>, now: number): void {
+    const name = this.checkEntry(c, msg.v, msg.name);
+    if (name === null) return;
     if (this.codeLimiter.blocked(c.conn.ip, now)) return this.error(c, 'rate_limited');
     const room = this.rooms.get(msg.code.toUpperCase());
     if (!room) {
       if (!this.codeLimiter.hit(c.conn.ip, now)) return this.error(c, 'rate_limited');
       return this.error(c, 'not_found');
     }
-    if (room.freeSlot() < 0) return this.error(c, 'full');
-    this.enter(c, room, name);
+    if (!room.hasRoom() || !room.addMember(c, name, msg.look, now)) this.error(c, 'full');
   }
 
-  private onTune(c: ClientState, msg: Extract<ClientMessage, { t: 'tune' }>): void {
-    if (!this.config.devTools) return this.error(c, 'forbidden');
-    const room = c.room;
-    if (!room) return this.error(c, 'not_joined');
-    const k = msg.k;
-    const meta = MOVEMENT_TUNING[k];
-    const val = Math.min(meta.max, Math.max(meta.min, msg.val));
-    room.world.params[k] = val;
-    room.recording?.tune(room.world.tick, k, val);
-    const text = JSON.stringify({ t: 'tune', k, val } satisfies ServerMessage);
-    for (const other of room.slots) if (other) this.sendRaw(other.conn, text);
+  /** Partie rapide : le salon public le plus rempli (de préférence en attente), sinon un nouveau. */
+  private onQuick(c: ClientState, msg: Extract<ClientMessage, { t: 'quick' }>, now: number): void {
+    const name = this.checkEntry(c, msg.v, msg.name);
+    if (name === null) return;
+    let best: Room | null = null;
+    let bestScore = -1;
+    for (const r of this.rooms.values()) {
+      if (!r.settings.isPublic || !r.hasRoom()) continue;
+      const waiting = r.phase === 0 && r.freeSlot() >= 0;
+      const score = (waiting ? 100 : 0) + r.playerCount;
+      if (score > bestScore) {
+        best = r;
+        bestScore = score;
+      }
+    }
+    if (best && best.addMember(c, name, msg.look, now)) return;
+    const room = this.newRoom(c, LOBBY_ARENA_ID, true, now);
+    if (!room) return;
+    room.addMember(c, name, msg.look, now);
+  }
+
+  /** Reconnexion avec le jeton de session, dans le délai de 20 s. */
+  private onResume(c: ClientState, msg: Extract<ClientMessage, { t: 'resume' }>, now: number): void {
+    if (msg.v !== PROTOCOL_VERSION) return this.error(c, 'version');
+    if (c.member) return this.error(c, 'already_joined');
+    if (this.codeLimiter.blocked(c.conn.ip, now)) return this.error(c, 'rate_limited');
+    const room = this.rooms.get(msg.code.toUpperCase());
+    const m = room?.findByToken(msg.token) ?? null;
+    if (!room || !m || m.client || m.leaving) {
+      if (!this.codeLimiter.hit(c.conn.ip, now)) return this.error(c, 'rate_limited');
+      return this.error(c, 'bad_token');
+    }
+    this.metrics.reconnects++;
+    room.resume(m, c, now);
   }
 
   // --- Salons ---------------------------------------------------------------------------------
@@ -289,49 +429,27 @@ export class GameServer {
     }
   }
 
-  private enter(c: ClientState, room: Room, name: string): void {
-    const slot = room.freeSlot();
-    if (slot < 0) return this.error(c, 'full');
-    c.name = name;
-    room.addClient(c, slot);
-    this.sendJson(c.conn, {
-      t: 'joined',
-      v: PROTOCOL_VERSION,
-      slot,
-      code: room.code,
-      host: room.host,
-      arena: room.arena.id,
-      seed: room.seed,
-      tickHz: this.config.tickHz,
-      snapshotHz: this.config.snapshotHz,
-      tick: room.world.tick,
-      ev: room.reliable.lastId,
-      players: room.roster(),
-      devTools: this.config.devTools,
-    });
-    this.broadcastRoster(room, c);
-  }
-
-  private leaveRoom(c: ClientState): void {
-    const room = c.room;
-    if (!room) return;
-    room.removeClient(c, this.now());
-    this.broadcastRoster(room, null);
-    if (room.playerCount === 0 && this.config.roomIdleTtlSec === 0) this.closeRoom(room);
-  }
-
-  private broadcastRoster(room: Room, except: ClientState | null): void {
-    const text = JSON.stringify({
-      t: 'roster',
-      players: room.roster(),
-      host: room.host,
-    } satisfies ServerMessage);
-    for (const other of room.slots) if (other && other !== except) this.sendRaw(other.conn, text);
+  private maybeCloseRoom(room: Room): void {
+    if (room.isEmpty && this.config.roomIdleTtlSec === 0) this.closeRoom(room);
   }
 
   private closeRoom(room: Room): void {
     this.rooms.delete(room.code);
+    for (const m of room.spectators.slice()) {
+      if (m.client) {
+        this.sendJson(m.client, { t: 'left', reason: 'closed' });
+        m.client.member = null;
+        m.client = null;
+      }
+    }
     this.opts.onRoomClosed?.(room);
+  }
+
+  /** Salons publics, du plus rempli au moins rempli. */
+  publicRooms(): PublicRoom[] {
+    const out: PublicRoom[] = [];
+    for (const r of this.rooms.values()) if (r.settings.isPublic && r.hasRoom()) out.push(r.toPublic());
+    return out.sort((a, b) => b.players - a.players || a.code.localeCompare(b.code));
   }
 
   // --- Ticks ----------------------------------------------------------------------------------
@@ -343,8 +461,7 @@ export class GameServer {
     this.tickCount++;
     for (const room of this.rooms.values()) {
       if (room.playerCount === 0) continue;
-      room.step(this.metrics);
-      this.sendSnapshots(room);
+      room.tick(nowMs);
     }
     if (this.tickCount % this.config.tickHz === 0) this.housekeeping(nowMs);
     this.metrics.tickMs.add(performance.now() - t0);
@@ -355,59 +472,8 @@ export class GameServer {
     this.codeLimiter.sweep(now);
     const ttl = this.config.roomIdleTtlSec * 1000;
     for (const room of this.rooms.values()) {
+      if (room.playerCount === 0 && room.emptySince === null) room.emptySince = now;
       if (room.emptySince !== null && now - room.emptySince >= ttl) this.closeRoom(room);
-    }
-  }
-
-  /**
-   * Envoie les snapshots dus. Les clients d'un même salon sont décalés d'un tick les uns par rapport
-   * aux autres (emplacement + tick modulo l'intervalle) : chacun reçoit toujours 30 snapshots/s,
-   * mais les envois (coûteux en appels système) sont répartis sur tous les ticks au lieu d'arriver
-   * en rafale, ce qui garde la boucle d'événements réactive.
-   */
-  private sendSnapshots(room: Room): void {
-    const w = room.world;
-    const interval = this.snapshotInterval;
-    let due = false;
-    for (let s = 0; s < MAX_PLAYERS; s++) {
-      if (room.slots[s] && (w.tick + s) % interval === 0) {
-        due = true;
-        break;
-      }
-    }
-    if (!due) return;
-    const snap = room.snap;
-    snap.tick = w.tick;
-    let n = 0;
-    for (let s = 0; s < MAX_PLAYERS; s++) {
-      if (w.players[s].active) fillPlayerSnap(w, s, snap.players[n++]);
-    }
-    snap.playerCount = n;
-    for (let s = 0; s < MAX_PLAYERS; s++) {
-      const c = room.slots[s];
-      if (!c || (w.tick + s) % interval !== 0) continue;
-      const buffered = c.conn.bufferedAmount;
-      if (buffered > BACKPRESSURE_CLOSE) {
-        c.conn.close(1013, 'backpressure');
-        continue;
-      }
-      if (buffered > BACKPRESSURE_SKIP) {
-        this.metrics.snapshotsSkipped++;
-        continue;
-      }
-      snap.margin = c.minMargin;
-      c.minMargin = 127;
-      snap.hasOwn = true;
-      exportOwn(w, s, snap.own);
-      const count = room.reliable.fill(snap, c.ackedEvent);
-      if (count < 0) {
-        c.conn.close(1008, 'desync');
-        continue;
-      }
-      snap.eventCount = count;
-      const len = encodeSnapshot(this.scratch, snap);
-      this.metrics.snapshotsSent++;
-      this.sendRaw(c.conn, this.scratch.slice(0, len));
     }
   }
 
@@ -424,16 +490,20 @@ export class GameServer {
   }
 
   private error(c: ClientState, code: ErrorCode, msg?: string): void {
-    this.sendJson(c.conn, { t: 'error', code, msg });
+    this.sendJson(c, { t: 'error', code, msg });
   }
 
-  private sendJson(conn: Connection, msg: ServerMessage): void {
-    this.sendRaw(conn, JSON.stringify(msg));
+  sendJson(c: ClientState, msg: ServerMessage): void {
+    this.sendRaw(c, JSON.stringify(msg));
   }
 
-  private sendRaw(conn: Connection, data: Uint8Array | string): void {
+  sendRaw(c: ClientState, data: Uint8Array | string): void {
     this.metrics.bytesOut += typeof data === 'string' ? data.length : data.byteLength;
-    conn.send(data);
+    c.conn.send(data);
+  }
+
+  closeConn(c: ClientState, code: number, reason: string): void {
+    c.conn.close(code, reason);
   }
 
   stats(): { rooms: number; players: number; connections: number } {

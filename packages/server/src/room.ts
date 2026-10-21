@@ -1,207 +1,934 @@
+import { randomBytes, randomInt } from 'node:crypto';
 import {
-  INK_COLORS,
-  eventIdDiff,
-  MAX_PLAYERS,
+  ARENAS,
+  Cause,
+  closestFreeColor,
+  createSnapshot,
+  decodeEventPayload,
+  DEFAULT_LOOK,
+  encodeEventPayload,
+  encodeSnapshot,
+  GamePhase,
+  getArena,
+  gridToRows,
+  INPUT_RING,
+  isNetworkEvent,
+  LAG_COMP_TICKS,
+  LOBBY_ARENA_ID,
   MAX_EVENT_PAYLOAD,
-  MAX_SNAPSHOT_EVENTS,
-  ReliableType,
+  MAX_PLAYERS,
+  MAX_SPECTATORS,
+  normalizeSettings,
+  PROTOCOL_VERSION,
+  ROTATION_ARENA_IDS,
+  sanitizeLook,
   SimEvent,
-  writeSlotPosPayload,
+  SNAPSHOT_MAX_BYTES,
+  TICK_MS,
+  withRewind,
+  cloneSettings,
+  DEFAULT_SETTINGS,
+  createDecodedEvent,
 } from '@stickyclaude/shared';
-import type { ArenaData, RosterEntry, Snapshot } from '@stickyclaude/shared';
-import { createSnapshot, INPUT_RING } from '@stickyclaude/shared';
-import { addPlayer, createWorld, hashWorld, removePlayer, step } from '@stickyclaude/sim';
+import type {
+  ArenaData,
+  LobbyView,
+  Look,
+  PlayerInfo,
+  PlayerStats,
+  PublicRoom,
+  RoomSettings,
+  RoundInfo,
+  ServerMessage,
+  Snapshot,
+} from '@stickyclaude/shared';
+import {
+  addPlayer,
+  applyStart,
+  createWorld,
+  exportOwn,
+  fillGameSnap,
+  fillObjects,
+  fillPlayerSnap,
+  fillProjectiles,
+  hashWorld,
+  hasHiddenMines,
+  killPlayer,
+  removePlayer,
+  returnToLobby,
+  rulesFromSettings,
+  step,
+} from '@stickyclaude/sim';
 import type { World } from '@stickyclaude/sim';
 import type { ClientState } from './client.ts';
+import { Member } from './client.ts';
+import type { ServerConfig } from './config.ts';
 import type { Metrics } from './metrics.ts';
 import type { RoomRecorder } from './recorder.ts';
+import { ReliableLog } from './reliable.ts';
 
-const RELIABLE_RING = 128;
 /** Au-delà de ce nombre de ticks sans entrée, on arrête de répéter la dernière entrée. */
 const MISS_NEUTRAL_AFTER = 20;
+const BACKPRESSURE_SKIP = 64 * 1024;
+const BACKPRESSURE_CLOSE = 1024 * 1024;
+const KNOWN_ARENAS: ReadonlySet<string> = new Set(ROTATION_ARENA_IDS);
 
-/**
- * Journal d'événements fiables d'une salle : chaque événement reçoit un identifiant (u16) et est
- * répété dans les snapshots d'un client jusqu'à ce qu'il l'acquitte.
- */
-export class ReliableLog {
-  lastId = 0;
-  private readonly ids = new Uint16Array(RELIABLE_RING);
-  private readonly types = new Uint8Array(RELIABLE_RING);
-  private readonly lens = new Uint8Array(RELIABLE_RING);
-  private readonly data = new Uint8Array(RELIABLE_RING * MAX_EVENT_PAYLOAD);
-
-  push(type: number, payload: Uint8Array, len: number): void {
-    this.lastId = (this.lastId + 1) & 0xffff;
-    const i = this.lastId & (RELIABLE_RING - 1);
-    this.ids[i] = this.lastId;
-    this.types[i] = type;
-    this.lens[i] = len;
-    this.data.set(payload.subarray(0, len), i * MAX_EVENT_PAYLOAD);
-  }
-
-  /**
-   * Copie dans `snap` les événements postérieurs à `acked` (au plus MAX_SNAPSHOT_EVENTS).
-   * Retourne leur nombre, ou -1 si le client a trop de retard pour être resynchronisé.
-   */
-  fill(snap: Snapshot, acked: number): number {
-    const behind = eventIdDiff(this.lastId, acked);
-    if (behind <= 0) return 0;
-    if (behind > RELIABLE_RING - 8) return -1;
-    const n = Math.min(behind, MAX_SNAPSHOT_EVENTS);
-    for (let k = 0; k < n; k++) {
-      const id = (acked + 1 + k) & 0xffff;
-      const i = id & (RELIABLE_RING - 1);
-      const e = snap.events[k];
-      e.id = id;
-      e.type = this.types[i]!;
-      e.len = this.lens[i]!;
-      for (let j = 0; j < e.len; j++) e.data[j] = this.data[i * MAX_EVENT_PAYLOAD + j]!;
-    }
-    return n;
-  }
+/** Ce dont un salon a besoin du serveur qui l'héberge. */
+export interface RoomIO {
+  readonly config: ServerConfig;
+  readonly metrics: Metrics;
+  /** Un snapshot toutes les `snapshotInterval` ticks par client. */
+  readonly snapshotInterval: number;
+  readonly scratch: Uint8Array;
+  sendJson(c: ClientState, msg: ServerMessage): void;
+  sendRaw(c: ClientState, data: Uint8Array | string): void;
+  closeConn(c: ClientState, code: number, reason: string): void;
 }
 
+export type LeaveReason = 'left' | 'kicked' | 'closed' | 'idle';
+
+/** Un salon : participants, réglages, partie en cours (monde de simulation) et diffusion. */
 export class Room {
   readonly world: World;
-  readonly slots: (ClientState | null)[] = new Array<ClientState | null>(MAX_PLAYERS).fill(null);
+  readonly slots: (Member | null)[] = new Array<Member | null>(MAX_PLAYERS).fill(null);
+  readonly spectators: Member[] = [];
+  /** Emplacements inutilisables jusqu'à la fin de la partie (un joueur parti en cours de partie). */
+  readonly retired = new Uint8Array(MAX_PLAYERS);
   readonly reliable = new ReliableLog();
   readonly snap: Snapshot = createSnapshot();
-  readonly inputs = new Uint16Array(MAX_PLAYERS);
+  private readonly inputs = new Uint16Array(MAX_PLAYERS);
+  private readonly payload = new Uint8Array(MAX_EVENT_PAYLOAD);
+  private readonly decoded = createDecodedEvent();
+  settings: RoomSettings;
   host = -1;
   /** Horodatage (ms) du moment où le salon est devenu vide, sinon null. */
   emptySince: number | null = null;
+  readonly lobbyArena: ArenaData;
+  private memberSeq = 0;
   private joinCounter = 0;
-  private readonly payload = new Uint8Array(MAX_EVENT_PAYLOAD);
+  private tickCount = 0;
+  private lobbyDirty = false;
+  private lastLobbyAt = 0;
+  private autostartAt: number | null = null;
+  private matchEndAt: number | null = null;
+  /** Équipe de chaque emplacement pendant la partie (-1 absent), pour le podium. */
+  private readonly matchTeams = new Int8Array(MAX_PLAYERS).fill(-1);
+  private readonly matchNames: string[] = new Array<string>(MAX_PLAYERS).fill('');
+  private lastRoundWinner = -1;
 
   constructor(
+    private readonly io: RoomIO,
     readonly code: string,
-    readonly arena: ArenaData,
+    lobbyArenaId: string,
     readonly seed: number,
     private readonly recorder: RoomRecorder | null,
     createdAt: number,
+    isPublic = false,
   ) {
-    this.world = createWorld(arena, seed);
+    this.lobbyArena = getArena(lobbyArenaId) ?? ARENAS[LOBBY_ARENA_ID]!;
+    this.settings = cloneSettings(DEFAULT_SETTINGS);
+    this.settings.isPublic = isPublic;
+    this.world = createWorld(this.lobbyArena, seed);
+    this.world.rules = rulesFromSettings(this.settings);
+    this.recorder?.op({ tick: 0, op: 'rules', rules: this.world.rules });
     this.emptySince = createdAt;
   }
 
+  // --- Lecture ------------------------------------------------------------------------------
+
   get playerCount(): number {
     let n = 0;
-    for (const c of this.slots) if (c) n++;
+    for (const m of this.slots) if (m) n++;
     return n;
+  }
+
+  get connectedPlayers(): number {
+    let n = 0;
+    for (const m of this.slots) if (m?.client) n++;
+    return n;
+  }
+
+  get phase(): number {
+    return this.world.game.phase;
   }
 
   get recording(): RoomRecorder | null {
     return this.recorder;
   }
 
+  get isEmpty(): boolean {
+    return this.playerCount === 0 && this.spectators.length === 0;
+  }
+
+  /** Premier emplacement de joueur utilisable. */
   freeSlot(): number {
-    return this.slots.indexOf(null);
+    for (let s = 0; s < MAX_PLAYERS; s++) if (!this.slots[s] && this.retired[s] === 0) return s;
+    return -1;
   }
 
-  /** Plus petit indice de couleur d'encre libre dans le salon. */
-  freeColor(): number {
-    const used = new Set<number>();
-    for (const c of this.slots) if (c) used.add(c.color);
-    for (let i = 0; i < INK_COLORS.length; i++) if (!used.has(i)) return i;
-    return 0;
+  hasRoom(): boolean {
+    if (this.phase === GamePhase.LOBBY && this.freeSlot() >= 0) return true;
+    return this.spectators.length < MAX_SPECTATORS;
   }
 
-  roster(): RosterEntry[] {
-    const out: RosterEntry[] = [];
+  hostName(): string {
+    const m = this.host >= 0 ? this.slots[this.host] : null;
+    return m?.name ?? '';
+  }
+
+  toPublic(): PublicRoom {
+    return {
+      code: this.code,
+      players: this.playerCount,
+      maxPlayers: MAX_PLAYERS,
+      spectators: this.spectators.length,
+      mode: this.settings.mode,
+      phase: this.phase === GamePhase.LOBBY ? 'lobby' : 'playing',
+      host: this.hostName(),
+    };
+  }
+
+  findByToken(token: string): Member | null {
+    for (const m of this.slots) if (m && m.token === token) return m;
+    for (const m of this.spectators) if (m.token === token) return m;
+    return null;
+  }
+
+  private playersByJoin(): Member[] {
+    const out: Member[] = [];
+    for (const m of this.slots) if (m) out.push(m);
+    return out.sort((a, b) => a.joinSeq - b.joinSeq);
+  }
+
+  roundInfo(withRows: boolean): RoundInfo {
+    const w = this.world;
+    const g = w.game;
+    const teams: number[] = [];
     for (let s = 0; s < MAX_PLAYERS; s++) {
-      const c = this.slots[s];
-      if (c) out.push({ slot: s, name: c.name, color: c.color });
+      teams.push(this.slots[s] ? w.team[s]! : -1);
     }
-    return out;
+    return {
+      arena: w.arena.id,
+      seed: this.seed,
+      mode: g.mode,
+      round: g.round,
+      rows: withRows ? gridToRows(w.cells) : null,
+      teams,
+      suddenAfterTicks: w.rules.suddenAfterTicks,
+      ghosts: w.rules.ghosts,
+      weapons: w.rules.weapons,
+      friendlyFire: w.rules.friendlyFire,
+      commonWeapon: g.commonWeapon,
+    };
   }
 
-  addClient(client: ClientState, slot: number): void {
-    client.room = this;
-    client.slot = slot;
-    client.joinSeq = ++this.joinCounter;
-    client.color = this.freeColor();
-    client.resetInputs();
-    this.slots[slot] = client;
+  lobbyView(now: number): LobbyView {
+    const players: PlayerInfo[] = [];
+    for (let s = 0; s < MAX_PLAYERS; s++) {
+      const m = this.slots[s];
+      if (!m) continue;
+      players.push({
+        slot: s,
+        name: m.name,
+        look: m.look,
+        ready: m.ready,
+        team: this.settings.mode === 'teams' ? m.team : -1,
+        connected: m.connected,
+        ping: Math.round(m.client?.conn.rttMs ?? 0),
+      });
+    }
+    return {
+      code: this.code,
+      host: this.host,
+      settings: this.settings,
+      players,
+      spectators: this.spectators.map((m) => ({ id: m.id, name: m.name })),
+      phase: this.phase as LobbyView['phase'],
+      autostartMs: this.autostartAt === null ? -1 : Math.max(0, Math.round(this.autostartAt - now)),
+      round: this.world.game.round,
+      scores: Array.from(this.world.game.scores),
+    };
+  }
+
+  // --- Arrivée et départ ----------------------------------------------------------------------
+
+  /** Ajoute un participant (joueur en salle d'attente, sinon spectateur) ; null si le salon est plein. */
+  addMember(client: ClientState, name: string, rawLook: unknown, now: number): Member | null {
+    let slot = -1;
+    if (this.phase === GamePhase.LOBBY) slot = this.freeSlot();
+    if (slot < 0 && this.spectators.length >= MAX_SPECTATORS) return null;
+
+    const m = new Member(++this.memberSeq, this);
+    m.name = name;
+    m.look = sanitizeLook(rawLook, DEFAULT_LOOK);
+    m.look.color = closestFreeColor(m.look.color, this.usedColors(null));
+    m.token = randomBytes(16).toString('hex');
+    m.joinSeq = ++this.joinCounter;
+    m.lastActiveAt = now;
+    m.client = client;
+    client.member = m;
     this.emptySince = null;
+    if (slot >= 0) this.seat(m, slot, false);
+    else this.spectators.push(m);
+    // L'arrivant naît dans l'état du snapshot : il ne reçoit pas son propre SPAWN.
+    m.ackedEvent = this.reliable.lastId;
+    this.assignTeams(false);
+    this.sendJoined(m, now);
+    this.markLobby();
+    this.flushLobby(now);
+    return m;
+  }
+
+  private seat(m: Member, slot: number, inMatch: boolean): void {
+    m.slot = slot;
+    this.slots[slot] = m;
     if (this.host < 0) this.host = slot;
-    this.recorder?.join(this.world.tick, slot);
+    this.recorder?.op({ tick: this.world.tick, op: 'join', slot, inMatch });
     addPlayer(this.world, slot);
-    const p = this.world.players[slot];
-    this.pushSlotPos(ReliableType.SPAWN, slot, p.x, p.y);
-    // Le nouvel arrivant naît dans l'état du snapshot : il ne reçoit pas son propre SPAWN.
-    client.ackedEvent = this.reliable.lastId;
+    this.world.inMatch[slot] = inMatch ? 1 : 0;
+    this.drainEvents(0);
   }
 
-  removeClient(client: ClientState, now: number): void {
-    const slot = client.slot;
-    if (slot < 0 || this.slots[slot] !== client) return;
-    this.slots[slot] = null;
-    this.recorder?.leave(this.world.tick, slot);
-    removePlayer(this.world, slot);
-    client.room = null;
-    client.slot = -1;
-    if (this.host === slot) {
-      // L'hôte part : le plus ancien joueur restant devient hôte.
-      let best = -1;
-      let bestSeq = Infinity;
-      for (let s = 0; s < MAX_PLAYERS; s++) {
-        const c = this.slots[s];
-        if (c && c.joinSeq < bestSeq) {
-          best = s;
-          bestSeq = c.joinSeq;
-        }
-      }
-      this.host = best;
+  private usedColors(except: Member | null): Set<number> {
+    const used = new Set<number>();
+    for (const m of this.slots) if (m && m !== except) used.add(m.look.color);
+    return used;
+  }
+
+  /** Retire définitivement un participant (départ, expulsion, fin du délai de reconnexion). */
+  removeMember(m: Member, reason: LeaveReason, now: number): void {
+    const client = m.client;
+    if (m.slot >= 0) {
+      if (this.slots[m.slot] !== m) return;
+      this.slots[m.slot] = null;
+      this.recorder?.op({ tick: this.world.tick, op: 'leave', slot: m.slot });
+      removePlayer(this.world, m.slot);
+      if (this.phase !== GamePhase.LOBBY) this.retired[m.slot] = 1;
+      m.slot = -1;
+    } else {
+      const i = this.spectators.indexOf(m);
+      if (i < 0) return;
+      this.spectators.splice(i, 1);
     }
-    if (this.playerCount === 0) this.emptySince = now;
+    if (client) {
+      client.member = null;
+      m.client = null;
+      this.io.sendJson(client, { t: 'left', reason });
+    }
+    if (this.host >= 0 && this.slots[this.host] === null) this.pickHost();
+    else if (this.host >= 0 && this.slots[this.host]?.client === null) this.pickHost();
+    this.assignTeams(false);
+    if (this.isEmpty) this.emptySince = now;
+    this.markLobby();
+    this.flushLobby(now);
   }
 
-  /** Enregistre un événement fiable « emplacement + position ». */
-  pushSlotPos(type: number, slot: number, x: number, y: number): void {
-    const n = writeSlotPosPayload(this.payload, slot, x, y);
-    this.reliable.push(type, this.payload, n);
+  /** L'hôte part : le plus ancien joueur connecté devient hôte. */
+  private pickHost(): void {
+    let best: Member | null = null;
+    for (const m of this.slots) {
+      if (m?.client && (!best || m.joinSeq < best.joinSeq)) best = m;
+    }
+    this.host = best ? best.slot : -1;
   }
 
-  /** Avance la simulation d'un pas avec les entrées étiquetées pour ce tick. */
-  step(metrics: Metrics): void {
+  /** La connexion d'un participant est tombée. */
+  onDisconnect(m: Member, now: number): void {
+    m.client = null;
+    if (m.slot < 0 || this.io.config.reconnectGraceMs === 0) {
+      m.client = null;
+      this.removeMember(m, 'closed', now);
+      return;
+    }
+    m.disconnectedAt = now;
+    m.resetInputs();
+    if (this.host === m.slot) this.pickHost();
+    if (this.connectedPlayers === 0 && this.spectators.every((s) => !s.client)) {
+      // personne de connecté : le délai court quand même
+    }
+    this.markLobby();
+    this.flushLobby(now);
+  }
+
+  /** Un client revient avec son jeton. */
+  resume(m: Member, client: ClientState, now: number): void {
+    m.client = client;
+    client.member = m;
+    m.disconnectedAt = null;
+    m.resetInputs();
+    m.ackedEvent = this.reliable.lastId;
+    m.lastActiveAt = now;
+    if (this.host < 0) this.host = m.slot;
+    this.sendJoined(m, now);
+    this.markLobby();
+    this.flushLobby(now);
+  }
+
+  sendJoined(m: Member, now: number): void {
+    const c = m.client;
+    if (!c) return;
+    this.io.sendJson(c, {
+      t: 'joined',
+      v: PROTOCOL_VERSION,
+      slot: m.slot,
+      id: m.id,
+      token: m.token,
+      code: this.code,
+      tickHz: this.io.config.tickHz,
+      snapshotHz: this.io.config.snapshotHz,
+      tick: this.world.tick,
+      ev: this.reliable.lastId,
+      devTools: this.io.config.devTools,
+      lobby: this.lobbyView(now),
+      round: this.roundInfo(true),
+    });
+  }
+
+  // --- Salon : réglages, équipes, prêt, apparence -------------------------------------------
+
+  private markLobby(): void {
+    this.lobbyDirty = true;
+  }
+
+  /** Envoie l'état du salon à tous les participants connectés. */
+  flushLobby(now: number): void {
+    if (!this.lobbyDirty) return;
+    this.lobbyDirty = false;
+    this.lastLobbyAt = now;
+    const msg: ServerMessage = { t: 'lobby', lobby: this.lobbyView(now) };
+    const text = JSON.stringify(msg);
+    for (const m of this.slots) if (m?.client) this.io.sendRaw(m.client, text);
+    for (const m of this.spectators) if (m.client) this.io.sendRaw(m.client, text);
+  }
+
+  setReady(m: Member, ready: boolean, now: number): boolean {
+    if (this.phase !== GamePhase.LOBBY || m.slot < 0) return false;
+    m.ready = ready;
+    this.markLobby();
+    this.flushLobby(now);
+    return true;
+  }
+
+  setLook(m: Member, raw: unknown, now: number): void {
+    const look: Look = sanitizeLook(raw, m.look);
+    look.color = closestFreeColor(look.color, this.usedColors(m));
+    m.look = look;
+    this.markLobby();
+    this.flushLobby(now);
+  }
+
+  /** Réglages de l'hôte (partie en attente seulement). */
+  setSettings(m: Member, patch: Partial<RoomSettings>, now: number): 'ok' | 'not_host' | 'in_game' {
+    if (m.slot !== this.host) return 'not_host';
+    if (this.phase !== GamePhase.LOBBY) return 'in_game';
+    this.settings = normalizeSettings(patch, this.settings, KNOWN_ARENAS);
+    this.setLobbyRules();
+    this.assignTeams(false);
+    this.markLobby();
+    this.flushLobby(now);
+    return 'ok';
+  }
+
+  /** Règles du salon d'attente (armes d'entraînement…) : enregistrées pour la relecture. */
+  private setLobbyRules(): void {
+    this.world.rules = rulesFromSettings(this.settings);
+    this.recorder?.op({ tick: this.world.tick, op: 'rules', rules: this.world.rules });
+  }
+
+  setTeams(
+    m: Member,
+    assign: number[] | undefined,
+    shuffle: boolean | undefined,
+    now: number,
+  ): 'ok' | 'not_host' | 'in_game' | 'bad_request' {
+    if (m.slot !== this.host) return 'not_host';
+    if (this.phase !== GamePhase.LOBBY) return 'in_game';
+    if (this.settings.mode !== 'teams') return 'bad_request';
+    if (shuffle) this.assignTeams(true);
+    if (assign) {
+      for (let s = 0; s < Math.min(assign.length, MAX_PLAYERS); s++) {
+        const t = assign[s]!;
+        const mem = this.slots[s];
+        if (mem && t >= 0 && t < this.settings.teams) mem.team = t;
+      }
+    }
+    this.markLobby();
+    this.flushLobby(now);
+    return 'ok';
+  }
+
+  /** Répartition équilibrée en équipes (ou retrait en chacun pour soi). */
+  private assignTeams(reshuffle: boolean): void {
+    const players = this.playersByJoin();
+    if (this.settings.mode !== 'teams') {
+      for (const m of players) m.team = -1;
+      return;
+    }
+    const n = this.settings.teams;
+    if (reshuffle) {
+      const order = players.slice();
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = randomInt(i + 1);
+        const t = order[i]!;
+        order[i] = order[j]!;
+        order[j] = t;
+      }
+      order.forEach((m, i) => (m.team = i % n));
+      return;
+    }
+    const counts = new Array<number>(n).fill(0);
+    for (const m of players) {
+      if (m.team >= 0 && m.team < n) counts[m.team]!++;
+      else m.team = -1;
+    }
+    for (const m of players) {
+      if (m.team >= 0) continue;
+      let best = 0;
+      for (let t = 1; t < n; t++) if (counts[t]! < counts[best]!) best = t;
+      m.team = best;
+      counts[best]!++;
+    }
+  }
+
+  kick(m: Member, slot: number, now: number): 'ok' | 'not_host' | 'bad_request' {
+    if (m.slot !== this.host) return 'not_host';
+    const target = this.slots[slot];
+    if (!target || target === m) return 'bad_request';
+    this.removeMember(target, 'kicked', now);
+    return 'ok';
+  }
+
+  emote(m: Member, id: number, now: number): boolean {
+    if (m.slot < 0) return false;
+    if (now - m.lastEmoteAt < this.io.config.emoteCooldownMs) return false;
+    m.lastEmoteAt = now;
+    this.pushNet(SimEvent.EMOTE, m.slot, [id]);
+    return true;
+  }
+
+  // --- Partie ---------------------------------------------------------------------------------
+
+  /** L'hôte lance la partie. `force` (lancement automatique) ignore l'état « prêt ». */
+  startMatch(
+    m: Member | null,
+    now: number,
+    force = false,
+  ): 'ok' | 'not_host' | 'in_game' | 'not_enough_players' | 'not_ready' {
+    if (m && m.slot !== this.host) return 'not_host';
+    if (this.phase !== GamePhase.LOBBY) return 'in_game';
+    // Les absents (reconnexion en cours) ne participent pas.
+    for (const p of this.playersByJoin()) {
+      if (!p.client) this.removeMember(p, 'closed', now);
+    }
+    const players = this.playersByJoin();
+    if (players.length < 2) return 'not_enough_players';
+    if (!force && players.some((p) => p !== m && !p.ready && p.slot !== this.host)) {
+      return 'not_ready';
+    }
+    this.retired.fill(0);
+    this.assignTeams(false);
+    const inMatch = new Array<number>(MAX_PLAYERS).fill(0);
+    const teams: number[] = [];
+    for (let s = 0; s < MAX_PLAYERS; s++) {
+      const p = this.slots[s];
+      inMatch[s] = p ? 1 : 0;
+      const team = p && this.settings.mode === 'teams' ? p.team : s;
+      teams.push(team);
+      this.matchTeams[s] = p ? team : -1;
+      this.matchNames[s] = p?.name ?? '';
+    }
+    const ids = this.settings.arenas.length > 0 ? this.settings.arenas : [...ROTATION_ARENA_IDS];
+    const arenas: ArenaData[] = [];
+    for (const id of ids) {
+      const a = getArena(id);
+      if (a) arenas.push(a);
+    }
+    const rules = rulesFromSettings(this.settings);
+    this.recorder?.op({ tick: this.world.tick, op: 'start', rules, arenas: ids, inMatch, teams });
+    applyStart(this.world, { rules, arenas, inMatch, teams });
+    for (const p of players) p.ready = false;
+    this.autostartAt = null;
+    this.io.metrics.matchesStarted++;
+    this.drainEvents(now);
+    this.markLobby();
+    this.flushLobby(now);
+    return 'ok';
+  }
+
+  private sendAll(msg: ServerMessage): void {
+    const text = JSON.stringify(msg);
+    for (const m of this.slots) if (m?.client) this.io.sendRaw(m.client, text);
+    for (const m of this.spectators) if (m.client) this.io.sendRaw(m.client, text);
+  }
+
+  /** Une nouvelle manche (ou le salon d'attente) commence : on annonce l'arène et on repart propre. */
+  private announceRound(): void {
+    this.sendAll({ t: 'round', round: this.roundInfo(false), ev: this.reliable.lastId });
+    // Les événements d'avant le changement d'arène n'ont plus de sens pour les clients.
+    for (const m of this.slots) if (m) m.ackedEvent = this.reliable.lastId;
+    for (const m of this.spectators) m.ackedEvent = this.reliable.lastId;
+  }
+
+  private onRoundEnd(winner: number, round: number, matchWinner: number, now: number): void {
+    this.lastRoundWinner = winner;
+    this.sendAll({
+      t: 'scores',
+      round,
+      winner,
+      scores: Array.from(this.world.game.scores),
+      final: matchWinner >= 0,
+    });
+    // Ceux qui sont arrivés en cours de manche entrent à la suivante ; ceux qui sont partis s'effacent.
+    for (const m of this.playersByJoin()) {
+      if (m.leaving) this.removeMember(m, 'closed', now);
+    }
+    if (matchWinner < 0) this.promoteSpectators(true, now);
+    this.markLobby();
+    this.flushLobby(now);
+  }
+
+  private onMatchEnd(now: number): void {
+    const w = this.world;
+    const g = w.game;
+    const present = new Set<number>();
+    for (let s = 0; s < MAX_PLAYERS; s++) if (this.matchTeams[s]! >= 0) present.add(this.matchTeams[s]!);
+    const podium = [...present].sort((a, b) => g.scores[b]! - g.scores[a]! || a - b);
+    const stats: PlayerStats[] = [];
+    for (let s = 0; s < MAX_PLAYERS; s++) {
+      if (this.matchTeams[s]! < 0) continue;
+      stats.push({
+        slot: s,
+        kos: w.stats.kos[s]!,
+        deaths: w.stats.deaths[s]!,
+        damage: w.stats.damage[s]!,
+        bestCombo: w.stats.bestCombo[s]!,
+        silly: w.stats.silly[s]!,
+      });
+    }
+    this.sendAll({
+      t: 'results',
+      winner: g.matchWinner,
+      podium,
+      scores: Array.from(g.scores),
+      teams: Array.from(this.matchTeams),
+      stats,
+    });
+    this.io.metrics.matchesCompleted++;
+    this.matchEndAt = now + this.io.config.matchEndMs;
+  }
+
+  /** Retour au salon d'attente : tout le monde réapparaît, les spectateurs deviennent joueurs. */
+  backToLobby(now: number): void {
+    this.matchEndAt = null;
+    this.retired.fill(0);
+    for (const m of this.playersByJoin()) {
+      if (m.leaving || !m.client) this.removeMember(m, 'closed', now);
+    }
+    this.recorder?.op({ tick: this.world.tick, op: 'lobby' });
+    returnToLobby(this.world, this.lobbyArena);
+    this.setLobbyRules();
+    for (const m of this.slots) if (m) m.ready = false;
+    this.promoteSpectators(false, now);
+    this.assignTeams(false);
+    this.drainEvents(now);
+    this.announceRound();
+    this.markLobby();
+    this.flushLobby(now);
+  }
+
+  /** Les spectateurs prennent les places libres (par ordre d'arrivée). */
+  private promoteSpectators(inMatch: boolean, now: number): void {
+    for (const m of this.spectators.slice()) {
+      if (!m.client || (inMatch && !m.wantsToPlay)) continue;
+      const slot = this.freeSlot();
+      if (slot < 0) break;
+      this.spectators.splice(this.spectators.indexOf(m), 1);
+      this.seat(m, slot, inMatch);
+      m.ackedEvent = this.reliable.lastId;
+      m.wantsToPlay = true;
+      if (inMatch) {
+        this.matchTeams[slot] = this.settings.mode === 'teams' ? this.smallestTeam() : slot;
+        this.matchNames[slot] = m.name;
+        this.world.team[slot] = this.matchTeams[slot]!;
+        m.team = this.settings.mode === 'teams' ? this.matchTeams[slot]! : -1;
+      }
+      m.lastActiveAt = now;
+      this.sendJoined(m, now);
+    }
+  }
+
+  private smallestTeam(): number {
+    const counts = new Array<number>(this.settings.teams).fill(0);
+    for (let s = 0; s < MAX_PLAYERS; s++) {
+      const t = this.matchTeams[s]!;
+      if (this.slots[s] && t >= 0 && t < counts.length) counts[t]!++;
+    }
+    let best = 0;
+    for (let t = 1; t < counts.length; t++) if (counts[t]! < counts[best]!) best = t;
+    return best;
+  }
+
+  /** Un joueur inactif devient spectateur jusqu'à la fin de la partie. */
+  private demote(m: Member, now: number): void {
+    const slot = m.slot;
+    if (slot < 0 || !m.client) return;
+    this.recorder?.op({ tick: this.world.tick, op: 'leave', slot });
+    this.slots[slot] = null;
+    removePlayer(this.world, slot);
+    this.retired[slot] = 1;
+    m.slot = -1;
+    m.wantsToPlay = false;
+    m.ready = false;
+    this.spectators.push(m);
+    if (this.host === slot) this.pickHost();
+    this.sendJoined(m, now);
+    this.markLobby();
+    this.flushLobby(now);
+  }
+
+  // --- Événements de la simulation ------------------------------------------------------------
+
+  /** Enregistre un événement fiable (réseau). */
+  pushNet(type: number, slot: number, args: ArrayLike<number>): void {
+    const n = encodeEventPayload(this.payload, type, slot, args);
+    if (n > 0) this.reliable.push(type, this.payload, n);
+  }
+
+  /** Traite les événements émis par la simulation (pas, ou appel direct comme `startMatch`). */
+  private drainEvents(now: number): void {
+    const ev = this.world.events;
+    const n = ev.count;
+    ev.count = 0;
+    let roundStart = false;
+    let roundEnd = -1;
+    let matchEnd = false;
+    let endWinner = -1;
+    let endRound = 0;
+    let endMatchWinner = -1;
+    for (let i = 0; i < n; i++) {
+      const type = ev.type[i]!;
+      const o = i * 6;
+      if (isNetworkEvent(type)) {
+        this.pushNet(type, ev.slot[i]!, ev.v.subarray(o, o + 6));
+      } else if (type === SimEvent.ROUND_START) {
+        roundStart = true;
+      } else if (type === SimEvent.ROUND_END) {
+        roundEnd = i;
+        endWinner = ev.v[o]!;
+        endRound = ev.v[o + 2]!;
+        endMatchWinner = ev.v[o + 3]!;
+      } else if (type === SimEvent.MATCH_END) {
+        matchEnd = true;
+      }
+    }
+    if (roundStart) {
+      this.announceRound();
+      this.markLobby();
+    }
+    if (roundEnd >= 0) this.onRoundEnd(endWinner, endRound, endMatchWinner, now);
+    if (matchEnd) this.onMatchEnd(now);
+  }
+
+  // --- Tick -----------------------------------------------------------------------------------
+
+  /** Avance la simulation d'un pas avec les entrées étiquetées pour ce tick, puis diffuse. */
+  tick(now: number): void {
+    this.tickCount++;
+    const w = this.world;
+    this.stepMembers(now);
+    this.gatherInputs(now);
+    const t0 = performance.now();
+    step(w, this.inputs);
+    this.io.metrics.roomStepMs.add(performance.now() - t0);
+    this.drainEvents(now);
+    this.stepLobby(now);
+    this.sendSnapshots();
+    if (this.lobbyDirty || (this.tickCount % 180 === 0 && this.hasConnected())) {
+      this.lobbyDirty = true;
+      if (now - this.lastLobbyAt >= 500) this.flushLobby(now);
+    }
+  }
+
+  private hasConnected(): boolean {
+    return this.connectedPlayers > 0 || this.spectators.some((m) => m.client);
+  }
+
+  /** Reconnexions expirées et inactivité (vérifiées une fois par seconde). */
+  private stepMembers(now: number): void {
+    if (this.tickCount % 60 !== 0) return;
+    const cfg = this.io.config;
+    for (const m of this.playersByJoin()) {
+      if (m.disconnectedAt !== null && !m.leaving) {
+        if (now - m.disconnectedAt >= cfg.reconnectGraceMs) this.expire(m, now);
+      } else if (m.client && this.phase === GamePhase.PLAYING) {
+        if (now - m.lastActiveAt >= cfg.idlePlayingMs) this.demote(m, now);
+      } else if (m.client && this.phase === GamePhase.LOBBY) {
+        if (now - m.lastActiveAt >= cfg.idleLobbyMs) this.removeMember(m, 'idle', now);
+      }
+    }
+  }
+
+  /** Fin du délai de reconnexion : éliminé pour la manche, retiré à la fin de la manche. */
+  private expire(m: Member, now: number): void {
+    const phase = this.phase;
+    if (phase === GamePhase.LOBBY || phase === GamePhase.MATCH_END || phase === GamePhase.ROUND_END) {
+      this.removeMember(m, 'closed', now);
+      return;
+    }
+    m.leaving = true;
+    const p = this.world.players[m.slot]!;
+    if (phase === GamePhase.PLAYING && !p.dead && !p.ghost) {
+      this.recorder?.op({ tick: this.world.tick, op: 'kill', slot: m.slot });
+      killPlayer(this.world, m.slot, -1, Cause.NONE);
+      this.drainEvents(now);
+    }
+  }
+
+  private gatherInputs(now: number): void {
     const w = this.world;
     const label = w.tick + 1;
     const idx = label & (INPUT_RING - 1);
     for (let s = 0; s < MAX_PLAYERS; s++) {
-      const c = this.slots[s];
-      if (!c) {
+      const m = this.slots[s];
+      if (!m) {
         this.inputs[s] = 0;
         continue;
       }
       let mask: number;
-      if (c.ringTick[idx] === label) {
-        mask = c.ringMask[idx]!;
-        c.ringTick[idx] = -1;
-        c.missStreak = 0;
+      if (!m.client) {
+        mask = 0;
+        m.lastMask = 0;
+      } else if (m.ringTick[idx] === label) {
+        mask = m.ringMask[idx]!;
+        m.ringTick[idx] = -1;
+        m.missStreak = 0;
       } else {
-        c.missStreak++;
-        metrics.inputsMissed++;
-        mask = c.missStreak > MISS_NEUTRAL_AFTER ? 0 : c.lastMask;
+        m.missStreak++;
+        this.io.metrics.inputsMissed++;
+        mask = m.missStreak > MISS_NEUTRAL_AFTER ? 0 : m.lastMask;
       }
-      c.lastMask = mask;
-      this.inputs[s] = mask;
-      this.recorder?.input(label, s, mask);
+      if (mask !== 0 || mask !== m.lastMask) m.lastActiveAt = now;
+      m.lastMask = mask;
+      const packed = withRewind(mask, m.rewindTicks);
+      this.inputs[s] = packed;
+      this.recorder?.input(label, s, packed);
     }
-    const t0 = performance.now();
-    step(w, this.inputs);
-    metrics.roomStepMs.add(performance.now() - t0);
+  }
 
-    const ev = w.events;
-    for (let i = 0; i < ev.count; i++) {
-      const t = ev.type[i];
-      if (t === SimEvent.SPAWN) this.pushSlotPos(ReliableType.SPAWN, ev.slot[i], ev.a[i], ev.b[i]);
-      else if (t === SimEvent.FELL)
-        this.pushSlotPos(ReliableType.FELL, ev.slot[i], ev.a[i], ev.b[i]);
+  private stepLobby(now: number): void {
+    const phase = this.phase;
+    if (phase === GamePhase.MATCH_END && this.matchEndAt !== null && now >= this.matchEndAt) {
+      this.backToLobby(now);
+      return;
     }
+    if (phase !== GamePhase.LOBBY) {
+      this.autostartAt = null;
+      return;
+    }
+    if (!this.settings.isPublic) {
+      this.autostartAt = null;
+      return;
+    }
+    let ready = 0;
+    for (const m of this.slots) if (m?.client && m.ready) ready++;
+    if (ready < 2) {
+      if (this.autostartAt !== null) {
+        this.autostartAt = null;
+        this.markLobby();
+      }
+      return;
+    }
+    if (this.autostartAt === null) {
+      this.autostartAt = now + this.io.config.autostartMs;
+      this.markLobby();
+    } else if (now >= this.autostartAt) {
+      this.startMatch(null, now, true);
+    }
+  }
+
+  // --- Snapshots ------------------------------------------------------------------------------
+
+  private sendSnapshots(): void {
+    const w = this.world;
+    const interval = this.io.snapshotInterval;
+    let due = false;
+    for (let s = 0; s < MAX_PLAYERS && !due; s++) {
+      const m = this.slots[s];
+      if (m?.client && (w.tick + s) % interval === 0) due = true;
+    }
+    for (let k = 0; k < this.spectators.length && !due; k++) {
+      const m = this.spectators[k]!;
+      if (m.client && (w.tick + MAX_PLAYERS + k) % interval === 0) due = true;
+    }
+    if (!due) return;
+    const snap = this.snap;
+    snap.tick = w.tick;
+    let n = 0;
+    for (let s = 0; s < MAX_PLAYERS; s++) {
+      const p = w.players[s]!;
+      if (p.active) fillPlayerSnap(w, s, snap.players[n++]!);
+    }
+    snap.playerCount = n;
+    fillGameSnap(w, snap.game);
+    snap.projCount = fillProjectiles(w, snap.projectiles);
+    const hidden = hasHiddenMines(w);
+    if (!hidden) snap.objectCount = fillObjects(w, snap.objects, -1);
+
+    for (let s = 0; s < MAX_PLAYERS; s++) {
+      const m = this.slots[s];
+      if (m?.client && (w.tick + s) % interval === 0) this.sendTo(m, hidden);
+    }
+    for (let k = 0; k < this.spectators.length; k++) {
+      const m = this.spectators[k]!;
+      if (m.client && (w.tick + MAX_PLAYERS + k) % interval === 0) this.sendTo(m, false);
+    }
+  }
+
+  private sendTo(m: Member, hidden: boolean): void {
+    const c = m.client!;
+    const snap = this.snap;
+    const w = this.world;
+    const buffered = c.conn.bufferedAmount;
+    if (buffered > BACKPRESSURE_CLOSE) {
+      this.io.closeConn(c, 1013, 'backpressure');
+      return;
+    }
+    if (buffered > BACKPRESSURE_SKIP) {
+      this.io.metrics.snapshotsSkipped++;
+      return;
+    }
+    if (hidden) snap.objectCount = fillObjects(w, snap.objects, m.slot);
+    snap.margin = m.minMargin;
+    m.minMargin = 127;
+    snap.hasOwn = m.slot >= 0;
+    if (snap.hasOwn) exportOwn(w, m.slot, snap.own);
+    const count = this.reliable.fill(snap, m.ackedEvent);
+    if (count < 0) {
+      this.io.closeConn(c, 1008, 'desync');
+      return;
+    }
+    snap.eventCount = count;
+    const len = encodeSnapshot(this.io.scratch, snap);
+    this.io.metrics.snapshotsSent++;
+    this.io.sendRaw(c, this.io.scratch.slice(0, len));
   }
 
   stateHash(): number {
     return hashWorld(this.world);
   }
+
+  /** Décodage d'un événement fiable pour les tests et les outils. */
+  decodeEvent(type: number, data: Uint8Array, len: number): ReturnType<typeof createDecodedEvent> {
+    decodeEventPayload(type, data, len, this.decoded);
+    return this.decoded;
+  }
+
+  /** Borne la compensation de latence annoncée par un client. */
+  static rewindFromWire(units4ms: number): number {
+    const ticks = Math.round((units4ms * 4) / TICK_MS);
+    return Math.max(0, Math.min(LAG_COMP_TICKS, ticks));
+  }
+
+  /** Taille maximale d'un snapshot (dimensionnement du tampon d'envoi). */
+  static readonly scratchBytes = SNAPSHOT_MAX_BYTES;
 }

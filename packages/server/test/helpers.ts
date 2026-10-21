@@ -5,23 +5,43 @@ import {
   decodeSnapshot,
   encodeInput,
   encodePing,
+  Input,
   PROTOCOL_VERSION,
+  Rng,
   TICK_MS,
 } from '@stickyclaude/shared';
-import type { ServerMessage, Snapshot } from '@stickyclaude/shared';
+import type { RoomSettings, ServerMessage, Snapshot } from '@stickyclaude/shared';
 import { GameServer, loadConfig } from '../src/index.ts';
-import type { Connection, ServerConfig } from '../src/index.ts';
+import type { Connection, Room, ServerConfig } from '../src/index.ts';
 
 export class FakeConn implements Connection {
+  /** Messages JSON reçus. */
   readonly sent: (Uint8Array | string)[] = [];
+  /** Snapshots décodés à l'arrivée (les plus récents, bornés). */
+  private snaps: Snapshot[] = [];
+  private pongList: { clientTime: number; tick: number; frac: number }[] = [];
   bufferedAmount = 0;
+  rttMs = 0;
   closed: { code: number; reason: string } | null = null;
+  snapshotTotal = 0;
   constructor(
     readonly id: number,
     readonly ip = '10.0.0.1',
   ) {}
   send(data: Uint8Array | string): void {
-    this.sent.push(data);
+    if (typeof data === 'string') {
+      this.sent.push(data);
+    } else if (data[0] === BinType.SNAPSHOT) {
+      const s = createSnapshot();
+      decodeSnapshot(data, s);
+      this.snaps.push(s);
+      this.snapshotTotal++;
+      if (this.snaps.length > 4000) this.snaps.splice(0, 1000);
+    } else if (data[0] === BinType.PONG) {
+      const p = { clientTime: 0, tick: 0, frac: 0 };
+      decodePong(data, p);
+      this.pongList.push(p);
+    }
   }
   close(code: number, reason: string): void {
     this.closed = { code, reason };
@@ -31,34 +51,31 @@ export class FakeConn implements Connection {
       .filter((m): m is string => typeof m === 'string')
       .map((m) => JSON.parse(m) as ServerMessage);
   }
+  of<T extends ServerMessage['t']>(t: T): Extract<ServerMessage, { t: T }>[] {
+    return this.messages().filter((m) => m.t === t) as Extract<ServerMessage, { t: T }>[];
+  }
   lastOf<T extends ServerMessage['t']>(t: T): Extract<ServerMessage, { t: T }> | undefined {
-    const all = this.messages().filter((m) => m.t === t);
-    return all[all.length - 1] as Extract<ServerMessage, { t: T }> | undefined;
+    for (let i = this.sent.length - 1; i >= 0; i--) {
+      const m = this.sent[i];
+      if (typeof m === 'string' && m.startsWith(`{"t":"${t}"`)) {
+        return JSON.parse(m) as Extract<ServerMessage, { t: T }>;
+      }
+    }
+    return undefined;
   }
   snapshots(): Snapshot[] {
-    const out: Snapshot[] = [];
-    for (const m of this.sent) {
-      if (typeof m !== 'string' && m[0] === BinType.SNAPSHOT) {
-        const s = createSnapshot();
-        decodeSnapshot(m, s);
-        out.push(s);
-      }
-    }
-    return out;
+    return this.snaps;
+  }
+  lastSnapshot(): Snapshot | undefined {
+    return this.snaps[this.snaps.length - 1];
   }
   pongs(): { clientTime: number; tick: number; frac: number }[] {
-    const out = [];
-    for (const m of this.sent) {
-      if (typeof m !== 'string' && m[0] === BinType.PONG) {
-        const p = { clientTime: 0, tick: 0, frac: 0 };
-        decodePong(m, p);
-        out.push(p);
-      }
-    }
-    return out;
+    return this.pongList;
   }
   clear(): void {
     this.sent.length = 0;
+    this.snaps = [];
+    this.pongList = [];
   }
 }
 
@@ -71,8 +88,13 @@ export interface Harness {
   send(conn: FakeConn, msg: unknown): void;
   sendInput(conn: FakeConn, tick: number, masks: number[], ack?: number): void;
   sendPing(conn: FakeConn, clientTime: number): void;
-  create(conn: FakeConn, name?: string): string;
+  create(conn: FakeConn, name?: string, extra?: Record<string, unknown>): string;
   join(conn: FakeConn, code: string, name?: string): void;
+  room(code: string): Room;
+  slotOf(conn: FakeConn): number;
+  /** Les joueurs de la liste se déclarent prêts, l'hôte lance. */
+  startMatch(host: FakeConn, others: FakeConn[]): void;
+  settings(conn: FakeConn, patch: Partial<RoomSettings>): void;
 }
 
 export function harness(env: Record<string, string> = {}): Harness {
@@ -105,8 +127,8 @@ export function harness(env: Record<string, string> = {}): Harness {
       const n = encodePing(buf, clientTime);
       h.server.onMessage(conn, buf.slice(0, n), true);
     },
-    create(conn, name = 'Alice') {
-      h.send(conn, { t: 'create', v: PROTOCOL_VERSION, name });
+    create(conn, name = 'Alice', extra = {}) {
+      h.send(conn, { t: 'create', v: PROTOCOL_VERSION, name, ...extra });
       const j = conn.lastOf('joined');
       if (!j) throw new Error('no joined message: ' + JSON.stringify(conn.messages()));
       return j.code;
@@ -114,8 +136,52 @@ export function harness(env: Record<string, string> = {}): Harness {
     join(conn, code, name = 'Bob') {
       h.send(conn, { t: 'join', v: PROTOCOL_VERSION, name, code });
     },
+    room(code) {
+      const r = h.server.rooms.get(code);
+      if (!r) throw new Error(`no room ${code}`);
+      return r;
+    },
+    slotOf(conn) {
+      return conn.lastOf('joined')?.slot ?? -1;
+    },
+    startMatch(host, others) {
+      for (const o of others) h.send(o, { t: 'ready', ready: true });
+      h.send(host, { t: 'start' });
+    },
+    settings(conn, patch) {
+      h.send(conn, { t: 'settings', settings: patch });
+    },
   };
   let nextId = 0;
   h.server = new GameServer(config, { now: () => h.time });
   return h;
 }
+
+/** Joueur automatique : envoie à chaque tick des entrées étiquetées juste devant le serveur. */
+export class Bot {
+  private hold = 0;
+  private mask = 0;
+  private readonly rng: Rng;
+  constructor(
+    private readonly h: Harness,
+    readonly conn: FakeConn,
+    seed: number,
+  ) {
+    this.rng = new Rng(seed);
+  }
+
+  /** À appeler avant chaque tick du serveur. */
+  act(code: string): void {
+    const room = this.h.server.rooms.get(code);
+    if (!room || this.conn.closed) return;
+    if (--this.hold <= 0) {
+      this.hold = 3 + this.rng.int(25);
+      this.mask = this.rng.nextU32() & 0xff;
+    }
+    const tick = room.world.tick + 3;
+    const ack = this.conn.lastSnapshot()?.events.at(-1)?.id ?? 0;
+    this.h.sendInput(this.conn, tick, [this.mask], ack);
+  }
+}
+
+export { Input };

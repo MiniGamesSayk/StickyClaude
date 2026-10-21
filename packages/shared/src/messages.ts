@@ -112,7 +112,12 @@ export type ServerMessage =
       round: RoundInfo;
     }
   | { t: 'lobby'; lobby: LobbyView }
-  | { t: 'round'; round: RoundInfo }
+  | {
+      t: 'round';
+      round: RoundInfo;
+      /** Dernier événement fiable émis : les précédents ne comptent plus. */
+      ev: number;
+    }
   | {
       t: 'scores';
       round: number;

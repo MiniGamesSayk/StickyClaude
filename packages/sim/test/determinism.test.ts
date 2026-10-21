@@ -80,13 +80,12 @@ describe('déterminisme', () => {
     const gen = new InputGen(5);
     const inputs = new Uint16Array(MAX_PLAYERS);
     const rec: Recording = {
-      version: 1,
+      version: 3,
       arenaId: 'test-tower',
       seed: 99,
       tickHz: TICK_HZ,
       ticks: 4000,
-      joins: [],
-      leaves: [],
+      ops: [],
       inputs: [],
     };
     const last = new Int32Array(MAX_PLAYERS).fill(-1);
@@ -96,7 +95,7 @@ describe('déterminisme', () => {
       if (t % 300 === 1) {
         const s = Math.floor(t / 300) % MAX_PLAYERS;
         if (!joined[s]) {
-          rec.joins.push({ tick: w.tick, slot: s });
+          rec.ops.push({ tick: w.tick, op: 'join', slot: s, inMatch: false });
           addPlayer(w, s);
           joined[s] = 1;
         }
@@ -104,7 +103,7 @@ describe('déterminisme', () => {
       if (t % 700 === 0) {
         const s = Math.floor(t / 700) % MAX_PLAYERS;
         if (joined[s]) {
-          rec.leaves.push({ tick: w.tick, slot: s });
+          rec.ops.push({ tick: w.tick, op: 'leave', slot: s });
           removePlayer(w, s);
           joined[s] = 0;
         }

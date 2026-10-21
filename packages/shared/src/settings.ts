@@ -100,3 +100,17 @@ export function normalizeSettings(
   if (typeof raw.isPublic === 'boolean') out.isPublic = raw.isPublic;
   return out;
 }
+
+/** Règles lues par la simulation (dérivées des réglages de l'hôte, voir `rulesFromSettings`). */
+export interface SimRules {
+  friendlyFire: boolean;
+  weapons: boolean;
+  ghosts: boolean;
+  /** Ticks de manche avant la mort subite ; 0 = jamais (la limite absolue reste en vigueur). */
+  suddenAfterTicks: number;
+  roundsToWin: number;
+  teamsMode: boolean;
+  teamCount: number;
+  bonusModes: number[];
+  bonusEvery: number;
+}

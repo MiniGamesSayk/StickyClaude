@@ -1,12 +1,11 @@
 import { MAX_PLAYERS, TICK_HZ } from '@stickyclaude/shared';
-import type { Recording } from '@stickyclaude/shared';
+import type { RecordOp, Recording } from '@stickyclaude/shared';
 
 const MAX_CHANGES = 400_000;
 
-/** Enregistre les entrées d'une salle sous forme de changements de masque. */
+/** Enregistre les entrées et les opérations d'une salle, pour les rejouer à l'identique. */
 export class RoomRecorder {
-  private readonly joins: Recording['joins'] = [];
-  private readonly leaves: Recording['leaves'] = [];
+  private readonly ops: RecordOp[] = [];
   private readonly inputs: Recording['inputs'] = [];
   private readonly tunes: [number, string, number][] = [];
   private readonly last = new Uint16Array(MAX_PLAYERS);
@@ -16,14 +15,10 @@ export class RoomRecorder {
     private readonly seed: number,
   ) {}
 
-  join(tick: number, slot: number): void {
-    this.joins.push({ tick, slot });
-    this.last[slot] = 0;
-  }
-
-  leave(tick: number, slot: number): void {
-    this.leaves.push({ tick, slot });
-    this.last[slot] = 0;
+  /** Opération du salon (arrivée, départ, lancement…), à enregistrer au moment où elle a lieu. */
+  op(op: RecordOp): void {
+    if (op.op === 'join' || op.op === 'leave') this.last[op.slot] = 0;
+    this.ops.push(op);
   }
 
   input(tick: number, slot: number, mask: number): void {
@@ -38,13 +33,12 @@ export class RoomRecorder {
 
   toRecording(ticks: number, finalHash?: number): Recording {
     return {
-      version: 1,
+      version: 3,
       arenaId: this.arenaId,
       seed: this.seed,
       tickHz: TICK_HZ,
       ticks,
-      joins: this.joins,
-      leaves: this.leaves,
+      ops: this.ops,
       inputs: this.inputs,
       tunes: this.tunes,
       finalHash,

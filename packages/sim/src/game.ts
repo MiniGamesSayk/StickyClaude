@@ -43,6 +43,25 @@ export function rulesFromSettings(s: Readonly<RoomSettings>): Rules {
   };
 }
 
+/** Ce qu'il faut pour lancer une partie dans un monde (voir `StartRecord`). */
+export interface StartConfig {
+  rules: Rules;
+  arenas: ArenaData[];
+  inMatch: ArrayLike<number>;
+  teams: ArrayLike<number>;
+}
+
+/** Règles, participants, équipes et arènes en place, puis première manche. */
+export function applyStart(world: World, cfg: StartConfig): void {
+  world.rules = { ...cfg.rules, bonusModes: [...cfg.rules.bonusModes] };
+  world.arenaPool = cfg.arenas;
+  for (let s = 0; s < MAX_PLAYERS; s++) {
+    world.inMatch[s] = cfg.inMatch[s]! ? 1 : 0;
+    world.team[s] = cfg.teams[s]!;
+  }
+  startMatch(world);
+}
+
 /** Constantes de mouvement de la manche : réglage de base, puis modification du mode. */
 export function applyModeParams(world: World, mode: number): void {
   Object.assign(world.params, world.baseParams);

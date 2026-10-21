@@ -34,6 +34,7 @@ const MIME: Record<string, string> = {
 const HEARTBEAT_MAX_MISSED = 3;
 
 class WsConnection implements Connection {
+  rttMs = 0;
   constructor(
     readonly id: number,
     readonly ip: string,
@@ -155,6 +156,10 @@ export function startServer(
       json(res, 200, { ok: true, rooms: game.rooms.size, players: game.playerCount });
       return;
     }
+    if (url.pathname === '/api/rooms') {
+      json(res, 200, game.publicRooms());
+      return;
+    }
     if (url.pathname === '/metrics') {
       if (cfg.metricsToken !== '' && req.headers.authorization !== `Bearer ${cfg.metricsToken}`) {
         res.writeHead(401).end();
@@ -200,7 +205,12 @@ export function startServer(
         return;
       }
       missed.set(ws, 0);
-      ws.on('pong', () => missed.set(ws, 0));
+      ws.on('pong', (payload: Buffer) => {
+        missed.set(ws, 0);
+        // La charge du ping est l'horloge d'envoi : on en déduit la latence aller-retour.
+        const sent = Number(payload.toString('utf8'));
+        if (Number.isFinite(sent)) conn.rttMs = Math.max(0, performance.now() - sent);
+      });
       ws.on('message', (data: RawData, isBinary: boolean) => {
         const bytes = toBytes(data);
         game.onMessage(conn, isBinary ? bytes : Buffer.from(bytes).toString('utf8'), isBinary);
@@ -218,7 +228,7 @@ export function startServer(
         continue;
       }
       missed.set(ws, n + 1);
-      ws.ping();
+      ws.ping(String(performance.now()));
     }
   }, cfg.heartbeatMs);
   heartbeat.unref();

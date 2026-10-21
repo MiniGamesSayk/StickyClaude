@@ -4,6 +4,8 @@ export interface Connection {
   readonly ip: string;
   /** Octets en attente d'envoi (contre-pression). */
   readonly bufferedAmount: number;
+  /** Latence aller-retour mesurée par le serveur (ms), 0 si inconnue. */
+  rttMs?: number;
   send(data: Uint8Array | string): void;
   close(code: number, reason: string): void;
 }

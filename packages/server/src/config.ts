@@ -1,4 +1,12 @@
-import { SNAPSHOT_HZ_DEFAULT, TICK_HZ } from '@stickyclaude/shared';
+import {
+  AUTOSTART_MS,
+  EMOTE_COOLDOWN_MS,
+  IDLE_LOBBY_MS,
+  IDLE_PLAYING_MS,
+  RECONNECT_GRACE_MS,
+  SNAPSHOT_HZ_DEFAULT,
+  TICK_HZ,
+} from '@stickyclaude/shared';
 
 export interface ServerConfig {
   port: number;
@@ -27,6 +35,19 @@ export interface ServerConfig {
   recordDir: string;
   /** Si défini, `/metrics` exige `Authorization: Bearer <jeton>`. */
   metricsToken: string;
+  /** Délai de reconnexion d'un joueur (ms). */
+  reconnectGraceMs: number;
+  /** Lancement automatique d'un salon public, une fois 2 joueurs prêts (ms). */
+  autostartMs: number;
+  /** Inactivité : en manche → spectateur ; en attente → déconnexion (ms). */
+  idlePlayingMs: number;
+  idleLobbyMs: number;
+  /** Durée du podium avant le retour au salon (ms). */
+  matchEndMs: number;
+  /** Délai minimal entre deux emotes d'un joueur (ms). */
+  emoteCooldownMs: number;
+  /** Messages de contrôle JSON acceptés par seconde et par connexion. */
+  controlPerSec: number;
 }
 
 function int(v: string | undefined, def: number, min: number, max: number): number {
@@ -60,6 +81,13 @@ export function loadConfig(
     staticDir: env.STATIC_DIR ?? defaultStaticDir,
     recordDir: env.RECORD_DIR ?? '',
     metricsToken: env.METRICS_TOKEN ?? '',
+    reconnectGraceMs: int(env.RECONNECT_GRACE_MS, RECONNECT_GRACE_MS, 0, 600_000),
+    autostartMs: int(env.AUTOSTART_MS, AUTOSTART_MS, 0, 600_000),
+    idlePlayingMs: int(env.IDLE_PLAYING_MS, IDLE_PLAYING_MS, 1000, 3_600_000),
+    idleLobbyMs: int(env.IDLE_LOBBY_MS, IDLE_LOBBY_MS, 1000, 86_400_000),
+    matchEndMs: int(env.MATCH_END_MS, 12_000, 0, 120_000),
+    emoteCooldownMs: int(env.EMOTE_COOLDOWN_MS, EMOTE_COOLDOWN_MS, 0, 60_000),
+    controlPerSec: int(env.CONTROL_PER_SEC, 20, 1, 1000),
   };
 }
 

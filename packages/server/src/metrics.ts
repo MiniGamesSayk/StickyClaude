@@ -59,6 +59,11 @@ export class Metrics {
   inputsLimited = 0;
   invalidMessages = 0;
   tickOverruns = 0;
+  matchesStarted = 0;
+  matchesCompleted = 0;
+  reconnects = 0;
+  emotesLimited = 0;
+  controlLimited = 0;
   private readonly loop: IntervalHistogram = monitorEventLoopDelay({
     resolution: LOOP_RESOLUTION_MS,
   });
@@ -108,6 +113,11 @@ export class Metrics {
       inputsLimited: this.inputsLimited,
       invalidMessages: this.invalidMessages,
       tickOverruns: this.tickOverruns,
+      matchesStarted: this.matchesStarted,
+      matchesCompleted: this.matchesCompleted,
+      reconnects: this.reconnects,
+      emotesLimited: this.emotesLimited,
+      controlLimited: this.controlLimited,
       heapUsedMB: round(mem.heapUsed / 1048576),
       rssMB: round(mem.rss / 1048576),
       eventLoopDelayMs: {

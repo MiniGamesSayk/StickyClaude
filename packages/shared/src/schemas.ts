@@ -80,10 +80,10 @@ const name = z.string().min(1).max(64);
 /** Apparence : indices bornés ; les champs inconnus sont ignorés puis `sanitizeLook` valide. */
 export const lookSchema = z
   .object({
-    color: z.number().int().min(0).max(63),
-    stroke: z.number().int().min(0).max(63),
-    hat: z.number().int().min(0).max(63),
-    victory: z.number().int().min(0).max(63),
+    color: z.number(),
+    stroke: z.number(),
+    hat: z.number(),
+    victory: z.number(),
   })
   .partial();
 

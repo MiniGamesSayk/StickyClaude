@@ -2,6 +2,8 @@ export * from './config.ts';
 export * from './connection.ts';
 export * from './gameServer.ts';
 export * from './room.ts';
+export * from './reliable.ts';
+export * from './badwords.ts';
 export * from './client.ts';
 export * from './metrics.ts';
 export * from './recorder.ts';
