@@ -107,7 +107,37 @@ export const COMBAT = {
 
 /** Coups à mains nues : jab, crochet, final (projette). */
 export const FIST: readonly MeleeAttack[] = [
-  { startup: 3, active: 2, recovery: 8, damage: 5, kbx: 110, kby: -70, stun: 0, reach: 20, lunge: 40 },
-  { startup: 3, active: 2, recovery: 9, damage: 7, kbx: 150, kby: -90, stun: 0, reach: 22, lunge: 50 },
-  { startup: 6, active: 3, recovery: 16, damage: 12, kbx: 340, kby: -230, stun: 24, reach: 26, lunge: 70 },
+  {
+    startup: 3,
+    active: 2,
+    recovery: 8,
+    damage: 5,
+    kbx: 110,
+    kby: -70,
+    stun: 0,
+    reach: 20,
+    lunge: 40,
+  },
+  {
+    startup: 3,
+    active: 2,
+    recovery: 9,
+    damage: 7,
+    kbx: 150,
+    kby: -90,
+    stun: 0,
+    reach: 22,
+    lunge: 50,
+  },
+  {
+    startup: 6,
+    active: 3,
+    recovery: 16,
+    damage: 12,
+    kbx: 340,
+    kby: -230,
+    stun: 24,
+    reach: 26,
+    lunge: 70,
+  },
 ];

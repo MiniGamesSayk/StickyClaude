@@ -38,7 +38,7 @@ export function fightWorld(opts: FightOptions = {}): World {
   const zero = new Uint16Array(MAX_PLAYERS);
   for (let i = 0; i < 100; i++) step(w, zero);
   for (let s = 0; s < n; s++) {
-    const p = w.players[s]!;
+    const p = w.players[s];
     p.x = 300 + s * 30;
     p.y = FLOOR;
     p.vx = 0;
@@ -89,14 +89,14 @@ export function countEvents(w: World, n: number, type: number, ...masks: number[
 }
 
 export function pl(w: World, slot: number): Player {
-  return w.players[slot]!;
+  return w.players[slot];
 }
 
 /** Arène avec un mur de papier (colonne x0..x1, du sol jusqu'en haut). */
 export function paperWall(x0: number, x1: number): ArenaData {
   return customArena((r) => {
-    for (let y = 2; y < 33; y++) for (let x = 2; x < 62; x++) r[y]![x] = '.';
-    for (let y = 33; y < 36; y++) for (let x = 0; x < 64; x++) r[y]![x] = '#';
+    for (let y = 2; y < 33; y++) for (let x = 2; x < 62; x++) r[y][x] = '.';
+    for (let y = 33; y < 36; y++) for (let x = 0; x < 64; x++) r[y][x] = '#';
     fill(r, x0, 20, x1, 32, 'p');
   });
 }

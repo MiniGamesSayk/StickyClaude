@@ -74,15 +74,15 @@ function isAlive(p: Player): boolean {
 export function aliveTeams(world: World): number {
   let mask = 0;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
-    if (participates(world, p, s) && isAlive(p)) mask |= 1 << world.team[s]!;
+    const p = world.players[s];
+    if (participates(world, p, s) && isAlive(p)) mask |= 1 << world.team[s];
   }
   return mask;
 }
 
 export function participantCount(world: World): number {
   let n = 0;
-  for (let s = 0; s < MAX_PLAYERS; s++) if (participates(world, world.players[s]!, s)) n++;
+  for (let s = 0; s < MAX_PLAYERS; s++) if (participates(world, world.players[s], s)) n++;
   return n;
 }
 
@@ -110,13 +110,16 @@ function pickRound(world: World): { arena: ArenaData; mode: number } {
     if (ok.length > 0) mode = ok[world.rng.int(ok.length)]!;
   }
   const compatible: number[] = [];
-  for (let i = 0; i < pool.length; i++) if (supportsMode(pool[i]!, mode)) compatible.push(i);
-  let idx = compatible[world.rng.int(compatible.length)]!;
+  for (let i = 0; i < pool.length; i++) if (supportsMode(pool[i], mode)) compatible.push(i);
+  let idx = compatible[world.rng.int(compatible.length)];
   if (compatible.length > 1 && idx === g.lastArena) {
-    idx = compatible[(compatible.indexOf(idx) + 1 + world.rng.int(compatible.length - 1)) % compatible.length]!;
+    idx =
+      compatible[
+        (compatible.indexOf(idx) + 1 + world.rng.int(compatible.length - 1)) % compatible.length
+      ]!;
   }
   g.lastArena = idx;
-  return { arena: pool[idx]!, mode };
+  return { arena: pool[idx], mode };
 }
 
 // --- Démarrage d'une partie et d'une manche ----------------------------------------------------
@@ -165,20 +168,26 @@ export function beginRound(world: World, arena: ArenaData, mode: number): void {
   for (let i = 0; i < n; i++) order.push(i);
   for (let i = n - 1; i > 0; i--) {
     const j = world.rng.int(i + 1);
-    const t = order[i]!;
+    const t = order[i];
     order[i] = order[j]!;
     order[j] = t;
   }
   let k = 0;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (world.inMatch[s] !== 1) {
       p.active = false;
       continue;
     }
     if (!p.active) continue;
-    const idx = order[k++ % n]!;
-    spawnPlayerAt(world, s, world.spawnX[idx]!, world.spawnY[idx]!, COUNTDOWN_TICKS + COMBAT.spawnInvulnTicks);
+    const idx = order[k++ % n];
+    spawnPlayerAt(
+      world,
+      s,
+      world.spawnX[idx],
+      world.spawnY[idx],
+      COUNTDOWN_TICKS + COMBAT.spawnInvulnTicks,
+    );
   }
   spawnProps(world);
 
@@ -186,7 +195,7 @@ export function beginRound(world: World, arena: ArenaData, mode: number): void {
     g.commonWeapon = randomWeapon(world);
     const w = weaponDef(g.commonWeapon);
     for (let s = 0; s < MAX_PLAYERS; s++) {
-      const p = world.players[s]!;
+      const p = world.players[s];
       if (participates(world, p, s)) {
         p.weapon = g.commonWeapon;
         p.ammo = w.ammo;
@@ -204,9 +213,9 @@ export function beginRound(world: World, arena: ArenaData, mode: number): void {
 function assignSides(world: World): void {
   let k = 0;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!participates(world, p, s)) continue;
-    world.side[s] = world.rules.teamsMode ? world.team[s]! & 1 : k & 1;
+    world.side[s] = world.rules.teamsMode ? world.team[s] & 1 : k & 1;
     k++;
   }
 }
@@ -244,7 +253,7 @@ export function returnToLobby(world: World, lobbyArena: ArenaData): void {
   applyModeParams(world, ModeId.FFA);
   world.inMatch.fill(0);
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (p.active) spawnPlayer(world, s);
   }
 }
@@ -258,7 +267,7 @@ function endRound(world: World, mask: number): void {
   let first = -1;
   for (let t = 0; t < MAX_PLAYERS; t++) {
     if ((mask & (1 << t)) !== 0) {
-      g.scores[t] = g.scores[t]! + 1;
+      g.scores[t] = g.scores[t] + 1;
       if (first < 0) first = t;
     }
   }
@@ -267,7 +276,7 @@ function endRound(world: World, mask: number): void {
   let best = -1;
   let bestScore = 0;
   for (let t = 0; t < MAX_PLAYERS; t++) {
-    if (g.scores[t]! >= world.rules.roundsToWin && g.scores[t]! > bestScore) {
+    if (g.scores[t] >= world.rules.roundsToWin && g.scores[t] > bestScore) {
       best = t;
       bestScore = g.scores[t]!;
     }
@@ -275,7 +284,7 @@ function endRound(world: World, mask: number): void {
   const cap = (2 * world.rules.roundsToWin - 1) * ROUND_CAP_FACTOR;
   if (best < 0 && g.round >= cap) {
     for (let t = 0; t < MAX_PLAYERS; t++) {
-      if (g.scores[t]! > bestScore) {
+      if (g.scores[t] > bestScore) {
         best = t;
         bestScore = g.scores[t]!;
       }
@@ -312,7 +321,7 @@ function usesSudden(mode: number): boolean {
 }
 
 function envDamage(world: World, slot: number, dmg: number, cause: number): void {
-  const p = world.players[slot]!;
+  const p = world.players[slot];
   p.hp -= dmg;
   if (p.hp <= 0) {
     p.hp = 0;
@@ -333,7 +342,7 @@ function stepSudden(world: World): void {
   if (!world.auth) return;
   const ink = g.mode === ModeId.INK_RISE || world.arena.suddenDeath === 'ink-rise';
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!participates(world, p, s) || !isAlive(p)) continue;
     const inZone = ink ? p.y > g.inkY : p.x < g.tear || p.x > WORLD_W - g.tear;
     if (inZone) envDamage(world, s, COMBAT.inkDamagePerTick, Cause.INK);
@@ -352,7 +361,7 @@ function updateSuddenGeometry(world: World): void {
 // --- Boucle d'une phase ------------------------------------------------------------------------
 
 function respawnPlayer(world: World, slot: number): void {
-  const p = world.players[slot]!;
+  const p = world.players[slot];
   p.dead = false;
   p.ghost = false;
   spawnPlayer(world, slot);
@@ -364,7 +373,7 @@ function respawnPlayer(world: World, slot: number): void {
 
 function stepRespawns(world: World): void {
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!p.active || !p.dead || p.respawnTimer <= 0) continue;
     p.respawnTimer--;
     if (p.respawnTimer === 0) respawnPlayer(world, s);
@@ -374,7 +383,7 @@ function stepRespawns(world: World): void {
 function stepOutOfBounds(world: World): void {
   const phase = world.game.phase;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!p.active || p.dead || p.ghost) continue;
     if (p.y > WORLD_H + FALL_MARGIN || p.y - bodyHeight(world, p) < -COMBAT.outTop) {
       if (phase === GamePhase.PLAYING) killPlayer(world, s, -1, Cause.FALL);
@@ -387,7 +396,7 @@ function leaderMask(world: World, values: ArrayLike<number>): number {
   let best = 0;
   let mask = 0;
   for (let t = 0; t < MAX_PLAYERS; t++) {
-    const v = values[t]!;
+    const v = values[t];
     if (v > best) {
       best = v;
       mask = 1 << t;
@@ -407,15 +416,15 @@ function stepKoth(world: World): void {
   const b = (z[1] + z[3]) * CELL;
   let present = 0;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!participates(world, p, s) || !isAlive(p)) continue;
     const cy = p.y - bodyHeight(world, p) * 0.5;
-    if (p.x >= l && p.x <= r && cy >= t && cy <= b) present |= 1 << world.team[s]!;
+    if (p.x >= l && p.x <= r && cy >= t && cy <= b) present |= 1 << world.team[s];
   }
   if (popcount(present) === 1) {
     const team = 31 - Math.clz32(present);
-    g.modeData[team] = g.modeData[team]! + 1;
-    if (g.modeData[team]! >= MODE_PARAMS.kothHoldTicks) {
+    g.modeData[team] = g.modeData[team] + 1;
+    if (g.modeData[team] >= MODE_PARAMS.kothHoldTicks) {
       endRound(world, 1 << team);
       return;
     }
@@ -430,8 +439,8 @@ function stepBall(world: World): void {
   let ball = null;
   for (const o of world.objects) if (o.active && o.type === ObjType.BALL) ball = o;
   if (!ball) {
-    if (g.modeData[2]! > 0) {
-      g.modeData[2] = g.modeData[2]! - 1;
+    if (g.modeData[2] > 0) {
+      g.modeData[2] = g.modeData[2] - 1;
       if (g.modeData[2] === 0) spawnBall(world);
     } else spawnBall(world);
     return;
@@ -443,7 +452,7 @@ function stepBall(world: World): void {
     return;
   }
   for (let i = 0; i < 2; i++) {
-    const gl = goals[i]!;
+    const gl = goals[i];
     if (
       ball.x >= gl[0] * CELL &&
       ball.x <= (gl[0] + gl[2]) * CELL &&
@@ -451,15 +460,15 @@ function stepBall(world: World): void {
       cy <= (gl[1] + gl[3]) * CELL
     ) {
       const side = 1 - i;
-      g.modeData[side] = g.modeData[side]! + 1;
+      g.modeData[side] = g.modeData[side] + 1;
       emit(world, SimEvent.GOAL, 0, side, ball.x, cy);
       ball.active = false;
       g.modeData[2] = MODE_PARAMS.ballResetTicks;
-      if (g.modeData[side]! >= MODE_PARAMS.ballGoals) {
+      if (g.modeData[side] >= MODE_PARAMS.ballGoals) {
         let mask = 0;
         for (let s = 0; s < MAX_PLAYERS; s++) {
-          const p = world.players[s]!;
-          if (participates(world, p, s) && world.side[s] === side) mask |= 1 << world.team[s]!;
+          const p = world.players[s];
+          if (participates(world, p, s) && world.side[s] === side) mask |= 1 << world.team[s];
         }
         endRound(world, mask);
       }
@@ -467,14 +476,14 @@ function stepBall(world: World): void {
     }
   }
   if (g.roundTick >= MODE_PARAMS.ballMaxTicks) {
-    const d0 = g.modeData[0]!;
-    const d1 = g.modeData[1]!;
+    const d0 = g.modeData[0];
+    const d1 = g.modeData[1];
     let mask = 0;
     if (d0 !== d1) {
       const side = d0 > d1 ? 0 : 1;
       for (let s = 0; s < MAX_PLAYERS; s++) {
-        const p = world.players[s]!;
-        if (participates(world, p, s) && world.side[s] === side) mask |= 1 << world.team[s]!;
+        const p = world.players[s];
+        if (participates(world, p, s) && world.side[s] === side) mask |= 1 << world.team[s];
       }
     }
     endRound(world, mask);
@@ -486,12 +495,12 @@ const POTATO_EXPLOSION = { radius: 52, damage: 35, kb: 380, destroys: false, pud
 function assignBomb(world: World): void {
   const alive: number[] = [];
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (participates(world, p, s) && isAlive(p)) alive.push(s);
   }
   if (alive.length < 2) return;
-  const s = alive[world.rng.int(alive.length)]!;
-  const p = world.players[s]!;
+  const s = alive[world.rng.int(alive.length)];
+  const p = world.players[s];
   p.hasBomb = true;
   p.bombPassCd = MODE_PARAMS.potatoPassCooldownTicks;
   world.game.modeData[0] = s + 1;
@@ -500,12 +509,12 @@ function assignBomb(world: World): void {
 
 function stepPotato(world: World): void {
   const g = world.game;
-  const holder = g.modeData[0]! - 1;
-  const hp = holder >= 0 ? world.players[holder]! : null;
+  const holder = g.modeData[0] - 1;
+  const hp = holder >= 0 ? world.players[holder] : null;
   if (!hp || !hp.hasBomb || !isAlive(hp)) {
     if (hp) hp.hasBomb = false;
     g.modeData[0] = 0;
-    if (g.modeData[2]! > 0) g.modeData[2] = g.modeData[2]! - 1;
+    if (g.modeData[2] > 0) g.modeData[2] = g.modeData[2] - 1;
     else {
       g.modeData[2] = MODE_PARAMS.potatoNextTicks;
       return;
@@ -513,21 +522,17 @@ function stepPotato(world: World): void {
     if (g.modeData[2] === 0) assignBomb(world);
     return;
   }
-  g.modeData[1] = g.modeData[1]! - 1;
+  g.modeData[1] = g.modeData[1] - 1;
   // Passage au contact.
   const hw = world.params.width * 0.5;
   if (hp.bombPassCd === 0) {
     for (let s = 0; s < MAX_PLAYERS; s++) {
       if (s === holder) continue;
-      const q = world.players[s]!;
+      const q = world.players[s];
       if (!participates(world, q, s) || !isAlive(q)) continue;
       const hh = bodyHeight(world, hp);
       const qh = bodyHeight(world, q);
-      if (
-        Math.abs(q.x - hp.x) < hw * 2 &&
-        q.y > hp.y - hh &&
-        q.y - qh < hp.y
-      ) {
+      if (Math.abs(q.x - hp.x) < hw * 2 && q.y > hp.y - hh && q.y - qh < hp.y) {
         hp.hasBomb = false;
         q.hasBomb = true;
         q.bombPassCd = MODE_PARAMS.potatoPassCooldownTicks;
@@ -536,7 +541,7 @@ function stepPotato(world: World): void {
       }
     }
   }
-  if (g.modeData[1]! <= 0) {
+  if (g.modeData[1] <= 0) {
     const x = hp.x;
     const y = hp.y - bodyHeight(world, hp) * 0.5;
     hp.hasBomb = false;
@@ -629,7 +634,7 @@ export function stepGameClient(world: World): void {
 
 /** Remet un joueur dans l'état d'un nouveau-venu (ré-entrée après une manche). */
 export function refreshPlayer(world: World, slot: number): void {
-  resetCombatState(world.players[slot]!);
+  resetCombatState(world.players[slot]);
 }
 
 /** Données propres au mode pour les snapshots : jusqu'à 8 valeurs de 16 bits. Retourne leur nombre. */
@@ -638,7 +643,7 @@ export function exportModeData(world: World, out: Uint16Array): number {
   const d = g.modeData;
   switch (g.mode) {
     case ModeId.KOTH:
-      for (let i = 0; i < 8; i++) out[i] = Math.min(65535, d[i]!);
+      for (let i = 0; i < 8; i++) out[i] = Math.min(65535, d[i]);
       return 8;
     case ModeId.BALL:
       out[0] = d[0]!;
@@ -647,7 +652,7 @@ export function exportModeData(world: World, out: Uint16Array): number {
       return 3;
     case ModeId.POTATO:
       out[0] = d[0]!;
-      out[1] = Math.max(0, d[1]!);
+      out[1] = Math.max(0, d[1]);
       out[2] = d[2]!;
       return 3;
     default:

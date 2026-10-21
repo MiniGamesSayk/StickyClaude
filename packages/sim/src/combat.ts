@@ -36,7 +36,7 @@ export function recordHistory(world: World): void {
   const base = (world.tick & (HISTORY_TICKS - 1)) * MAX_PLAYERS * 3;
   const h = world.history;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     const o = base + s * 3;
     if (p.active && !p.dead && !p.ghost) {
       h[o] = p.x;
@@ -54,7 +54,7 @@ export const rewound = { x: 0, y: 0, h: 0 };
 
 /** Boîte d'un joueur il y a `ago` ticks (position actuelle si l'historique ne la connaît pas). */
 export function rewoundBox(world: World, slot: number, ago: number): void {
-  const p = world.players[slot]!;
+  const p = world.players[slot];
   rewound.x = p.x;
   rewound.y = p.y;
   rewound.h = bodyHeight(world, p);
@@ -63,7 +63,7 @@ export function rewoundBox(world: World, slot: number, ago: number): void {
   const t = world.tick - a;
   if (t < 0) return;
   const o = ((t & (HISTORY_TICKS - 1)) * MAX_PLAYERS + slot) * 3;
-  const hh = world.history[o + 2]!;
+  const hh = world.history[o + 2];
   if (hh > 0) {
     rewound.x = world.history[o]!;
     rewound.y = world.history[o + 1]!;
@@ -91,7 +91,7 @@ export function queueHit(
   y: number,
 ): void {
   if (world.hitCount >= world.hits.length) return;
-  const h = world.hits[world.hitCount++]!;
+  const h = world.hits[world.hitCount++];
   h.victim = victim;
   h.attacker = attacker;
   h.damage = damage;
@@ -114,15 +114,19 @@ export function applyHits(world: World): void {
 }
 
 function applyHit(world: World, index: number): void {
-  const h = world.hits[index]!;
-  const v = world.players[h.victim]!;
+  const h = world.hits[index];
+  const v = world.players[h.victim];
   if (!v.active || v.dead || v.ghost) return;
   const phase = world.game.phase;
-  if (phase === GamePhase.COUNTDOWN || phase === GamePhase.ROUND_END || phase === GamePhase.MATCH_END) {
+  if (
+    phase === GamePhase.COUNTDOWN ||
+    phase === GamePhase.ROUND_END ||
+    phase === GamePhase.MATCH_END
+  ) {
     return;
   }
   const attacker = h.attacker;
-  const a = attacker >= 0 ? world.players[attacker]! : null;
+  const a = attacker >= 0 ? world.players[attacker] : null;
   if (attacker >= 0 && isTeammate(world, attacker, h.victim) && !world.rules.friendlyFire) return;
   if (v.invuln > 0) return;
 
@@ -152,7 +156,15 @@ function applyHit(world: World, index: number): void {
           a.blockTicks = 0;
           a.hitMask = 0;
         }
-        emit(world, SimEvent.BLOCKED, h.victim, v.x, v.y - 14, attacker < 0 ? NO_SLOT : attacker, 1);
+        emit(
+          world,
+          SimEvent.BLOCKED,
+          h.victim,
+          v.x,
+          v.y - 14,
+          attacker < 0 ? NO_SLOT : attacker,
+          1,
+        );
         return;
       }
       if (!h.pierce) {
@@ -161,7 +173,15 @@ function applyHit(world: World, index: number): void {
         kby *= COMBAT.blockKnockbackMul;
         stun = 0;
         blocked = true;
-        emit(world, SimEvent.BLOCKED, h.victim, v.x, v.y - 14, attacker < 0 ? NO_SLOT : attacker, 0);
+        emit(
+          world,
+          SimEvent.BLOCKED,
+          h.victim,
+          v.x,
+          v.y - 14,
+          attacker < 0 ? NO_SLOT : attacker,
+          0,
+        );
       }
     }
   }
@@ -178,8 +198,8 @@ function applyHit(world: World, index: number): void {
     if (world.tick - a.lastHitTick <= 90) a.combos++;
     else a.combos = 1;
     a.lastHitTick = world.tick;
-    if (a.combos > world.stats.bestCombo[attacker]!) world.stats.bestCombo[attacker] = a.combos;
-    world.stats.damage[attacker] = world.stats.damage[attacker]! + dealt;
+    if (a.combos > world.stats.bestCombo[attacker]) world.stats.bestCombo[attacker] = a.combos;
+    world.stats.damage[attacker] = world.stats.damage[attacker] + dealt;
   }
   v.combos = 0;
   if (attacker >= 0 && attacker !== h.victim) {
@@ -224,7 +244,7 @@ function applyHit(world: World, index: number): void {
 // --- Mort --------------------------------------------------------------------------------------
 
 export function killPlayer(world: World, slot: number, killer: number, cause: number): void {
-  const p = world.players[slot]!;
+  const p = world.players[slot];
   if (p.dead || p.ghost || !p.active) return;
   let credited = killer;
   if (
@@ -235,13 +255,13 @@ export function killPlayer(world: World, slot: number, killer: number, cause: nu
     credited = p.lastAttacker;
   }
   const stats = world.stats;
-  stats.deaths[slot] = stats.deaths[slot]! + 1;
-  if (credited >= 0 && credited !== slot) stats.kos[credited] = stats.kos[credited]! + 1;
+  stats.deaths[slot] = stats.deaths[slot] + 1;
+  if (credited >= 0 && credited !== slot) stats.kos[credited] = stats.kos[credited] + 1;
   let silly: number = SillyDeath.NONE;
   if (credited === slot) silly = SillyDeath.SELF;
   else if (credited >= 0 && isTeammate(world, credited, slot)) silly = SillyDeath.FRIENDLY;
   else if (cause === Cause.FALL && credited < 0) silly = SillyDeath.FALL;
-  if (silly > stats.silly[slot]!) stats.silly[slot] = silly;
+  if (silly > stats.silly[slot]) stats.silly[slot] = silly;
 
   p.hp = 0;
   emit(
@@ -314,7 +334,7 @@ function meleeSpec(p: Player): boolean {
     case AttackKind.FIST1:
     case AttackKind.FIST2:
     case AttackKind.FIST3: {
-      const a = FIST[p.atkKind - AttackKind.FIST1]!;
+      const a = FIST[p.atkKind - AttackKind.FIST1];
       spec.damage = a.damage;
       spec.kbx = a.kbx;
       spec.kby = a.kby;
@@ -402,7 +422,7 @@ function meleeBox(world: World, p: Player): void {
 export function resolveMelee(world: World): void {
   const hw = world.params.width * 0.5;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!p.active || p.dead || p.ghost || p.atkPhase !== AtkPhase.ACTIVE) continue;
     if (!meleeSpec(p)) continue;
     meleeBox(world, p);
@@ -415,7 +435,7 @@ export function resolveMelee(world: World): void {
     let hitAny = false;
     for (let v = 0; v < MAX_PLAYERS; v++) {
       if (v === s || (p.hitMask & (1 << v)) !== 0) continue;
-      const q = world.players[v]!;
+      const q = world.players[v];
       if (!q.active || q.dead || q.ghost) continue;
       rewoundBox(world, v, p.rewind);
       const l = rewound.x - hw;
@@ -442,10 +462,12 @@ export function resolveMelee(world: World): void {
     }
     // Objets : caisses, ballons, boule.
     for (let i = 0; i < world.objects.length; i++) {
-      const o = world.objects[i]!;
+      const o = world.objects[i];
       if (!o.active) continue;
-      if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON && o.type !== ObjType.BALL) continue;
-      if (o.x + o.w / 2 < box.l || o.x - o.w / 2 > box.r || o.y < box.t || o.y - o.h > box.b) continue;
+      if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON && o.type !== ObjType.BALL)
+        continue;
+      if (o.x + o.w / 2 < box.l || o.x - o.w / 2 > box.r || o.y < box.t || o.y - o.h > box.b)
+        continue;
       if (o.type === ObjType.BALL) kickBall(world, o, p, spec.kbx, spec.kby);
       else damageObject(world, o, Math.max(spec.damage, 8), s);
     }
@@ -472,7 +494,7 @@ export function explode(
   emit(world, SimEvent.EXPLOSION, 0, x, y, ex.radius, kind);
   const hw = world.params.width * 0.5;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!p.active || p.dead || p.ghost) continue;
     const cy = p.y - bodyHeight(world, p) * 0.5;
     const dx = p.x - x;
@@ -498,7 +520,7 @@ export function explode(
     );
   }
   for (let i = 0; i < world.objects.length; i++) {
-    const o = world.objects[i]!;
+    const o = world.objects[i];
     if (!o.active) continue;
     if (o.type === ObjType.CRATE || o.type === ObjType.BALLOON) {
       const dist = Math.hypot(o.x - x, o.y - o.h / 2 - y);
@@ -565,7 +587,7 @@ export function traceRay(
   const full = trace.dist;
   for (let v = 0; v < MAX_PLAYERS; v++) {
     if (v === shooter) continue;
-    const q = world.players[v]!;
+    const q = world.players[v];
     if (!q.active || q.dead || q.ghost || q.invuln > 0) continue;
     if (isTeammate(world, shooter, v) && !world.rules.friendlyFire) continue;
     rewoundBox(world, v, rewind);
@@ -587,7 +609,7 @@ export function traceRay(
     }
   }
   for (let i = 0; i < world.objects.length; i++) {
-    const o = world.objects[i]!;
+    const o = world.objects[i];
     if (!o.active) continue;
     if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON) continue;
     const t = segmentBox(ox, oy, ex, ey, o.x - o.w / 2, o.y - o.h, o.x + o.w / 2, o.y);
@@ -611,9 +633,9 @@ const ASSIST_MAX = 0.14;
 export const aimDir = { x: 1, y: 0 };
 
 export function assistAim(world: World, slot: number, range: number, rewind: number): void {
-  const p = world.players[slot]!;
-  let ux = AIM_DX[p.aim]!;
-  let uy = AIM_DY[p.aim]!;
+  const p = world.players[slot];
+  let ux = AIM_DX[p.aim];
+  let uy = AIM_DY[p.aim];
   const n = Math.hypot(ux, uy);
   ux /= n;
   uy /= n;
@@ -624,7 +646,7 @@ export function assistAim(world: World, slot: number, range: number, rewind: num
   let bestDist = Infinity;
   for (let v = 0; v < MAX_PLAYERS; v++) {
     if (v === slot) continue;
-    const q = world.players[v]!;
+    const q = world.players[v];
     if (!q.active || q.dead || q.ghost) continue;
     if (isTeammate(world, slot, v)) continue;
     rewoundBox(world, v, rewind);

@@ -13,14 +13,7 @@ import {
 } from '@stickyclaude/shared';
 import { bodyHeight, raycastGrid } from './collision.ts';
 import type { RayHit } from './collision.ts';
-import {
-  aimDir,
-  assistAim,
-  HitFlag,
-  queueHit,
-  trace,
-  traceRay,
-} from './combat.ts';
+import { aimDir, assistAim, HitFlag, queueHit, trace, traceRay } from './combat.ts';
 import { damageObject, dropWeapon, spawnObj, spawnWeaponObj } from './objects.ts';
 import { spawnProjectile } from './projectiles.ts';
 import { emit } from './world.ts';
@@ -30,7 +23,13 @@ const grapple: RayHit = { dist: 0, cx: 0, cy: 0 };
 const pelletHits = new Int32Array(MAX_PLAYERS);
 const pelletAngles = new Float64Array(8);
 
-function muzzle(world: World, p: Player, ux: number, uy: number, out: { x: number; y: number }): void {
+function muzzle(
+  world: World,
+  p: Player,
+  ux: number,
+  uy: number,
+  out: { x: number; y: number },
+): void {
   out.x = p.x + ux * 9;
   out.y = p.y - bodyHeight(world, p) * 0.6 + uy * 9;
 }
@@ -61,14 +60,14 @@ export function fire(world: World, p: Player, slot: number): void {
         const dx = Math.cos(base + off);
         const dy = Math.sin(base + off);
         traceRay(world, slot, mz.x, mz.y, dx, dy, w.reach, p.rewind);
-        if (trace.kind === 2) pelletHits[trace.slot]!++;
+        if (trace.kind === 2) pelletHits[trace.slot]++;
         else if (trace.kind === 3 && trace.obj) damageObject(world, trace.obj, w.damage, slot);
         farX = mz.x + dx * trace.dist;
         farY = mz.y + dy * trace.dist;
       }
       emit(world, SimEvent.SHOT, slot, mz.x, mz.y, farX, farY, w.id);
       for (let v = 0; v < MAX_PLAYERS; v++) {
-        const c = pelletHits[v]!;
+        const c = pelletHits[v];
         if (c === 0) continue;
         const dir = ux >= 0 ? 1 : -1;
         queueHit(
@@ -115,13 +114,34 @@ export function fire(world: World, p: Player, slot: number): void {
     }
     case WeaponKind.GRAPPLE: {
       traceRay(world, slot, mz.x, mz.y, ux, uy, w.reach, p.rewind);
-      emit(world, SimEvent.SHOT, slot, mz.x, mz.y, mz.x + ux * trace.dist, mz.y + uy * trace.dist, w.id);
+      emit(
+        world,
+        SimEvent.SHOT,
+        slot,
+        mz.x,
+        mz.y,
+        mz.x + ux * trace.dist,
+        mz.y + uy * trace.dist,
+        w.id,
+      );
       if (trace.kind === 2) {
-        const v = world.players[trace.slot]!;
+        const v = world.players[trace.slot];
         v.grappleTicks = w.pullTicks;
         v.grappleX = p.x;
         v.grappleY = p.y - bodyHeight(world, p) * 0.5;
-        queueHit(world, trace.slot, slot, w.damage, 0, 0, 0, Cause.PROJECTILE, HitFlag.RANGED, mz.x, mz.y);
+        queueHit(
+          world,
+          trace.slot,
+          slot,
+          w.damage,
+          0,
+          0,
+          0,
+          Cause.PROJECTILE,
+          HitFlag.RANGED,
+          mz.x,
+          mz.y,
+        );
         emit(world, SimEvent.GRAPPLE, slot, v.x, v.y - 14, trace.slot);
       } else if (trace.kind === 1) {
         // Ancrage au décor : le joueur est tiré vers le point d'impact.
@@ -145,8 +165,8 @@ export function fire(world: World, p: Player, slot: number): void {
 export function throwHeld(world: World, p: Player, slot: number): void {
   const wid = p.throwW;
   if (wid === WeaponId.NONE) return;
-  const dx = AIM_DX[p.aim]!;
-  const dy = AIM_DY[p.aim]!;
+  const dx = AIM_DX[p.aim];
+  const dy = AIM_DY[p.aim];
   const n = Math.hypot(dx, dy);
   const ux = dx / n;
   const uy = dy / n;
@@ -176,7 +196,7 @@ export function pickupOrThrow(world: World, p: Player, slot: number): void {
   let best: number = -1;
   let bestD = Infinity;
   for (let i = 0; i < world.objects.length; i++) {
-    const o = world.objects[i]!;
+    const o = world.objects[i];
     if (!o.active) continue;
     if (o.type !== ObjType.WEAPON && o.type !== ObjType.CRATE) continue;
     if (o.x + o.w / 2 < p.x - hw || o.x - o.w / 2 > p.x + hw) continue;
@@ -188,7 +208,7 @@ export function pickupOrThrow(world: World, p: Player, slot: number): void {
     }
   }
   if (best >= 0) {
-    const o = world.objects[best]!;
+    const o = world.objects[best];
     if (p.weapon !== WeaponId.NONE) dropWeapon(world, p, slot);
     p.weapon = o.type === ObjType.CRATE ? WeaponId.CRATE : o.a;
     p.ammo = o.type === ObjType.CRATE ? 1 : o.b;
@@ -208,7 +228,7 @@ export function pickupOrThrow(world: World, p: Player, slot: number): void {
 /** Résout les demandes d'actions du tick (tir, lancer, ramassage, lâcher) : autorité seulement. */
 export function resolveActions(world: World): void {
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!p.active) continue;
     if (p.dead || p.ghost) {
       p.wantFire = p.wantThrow = p.wantPickup = p.wantDrop = false;

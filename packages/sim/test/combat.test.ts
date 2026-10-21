@@ -1,4 +1,12 @@
-import { AtkPhase, AttackKind, COMBAT, FIST, GamePhase, PlayerState, SimEvent } from '@stickyclaude/shared';
+import {
+  AtkPhase,
+  AttackKind,
+  COMBAT,
+  FIST,
+  GamePhase,
+  PlayerState,
+  SimEvent,
+} from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import {
   ATTACK,
@@ -21,7 +29,7 @@ describe('mains nues : enchaînement de 3 coups', () => {
   it('un jab touche à portée, retire des PV et repousse', () => {
     const w = fightWorld();
     ticks(w, 12, ATTACK);
-    expect(pl(w, 1).hp).toBe(100 - FIST[0]!.damage);
+    expect(pl(w, 1).hp).toBe(100 - FIST[0].damage);
     expect(pl(w, 1).x).toBeGreaterThan(330);
   });
 
@@ -37,7 +45,7 @@ describe('mains nues : enchaînement de 3 coups', () => {
     // L'appui est bref : une seule attaque démarre, et elle ne touche qu'une fois.
     tick(w, ATTACK);
     ticks(w, 20, 0);
-    expect(pl(w, 1).hp).toBe(100 - FIST[0]!.damage);
+    expect(pl(w, 1).hp).toBe(100 - FIST[0].damage);
   });
 
   it('trois appuis enchaînés : jab, crochet, final qui étourdit', () => {
@@ -57,7 +65,7 @@ describe('mains nues : enchaînement de 3 coups', () => {
         }
       }
     }
-    expect(hits).toEqual([FIST[0]!.damage, FIST[1]!.damage, FIST[2]!.damage]);
+    expect(hits).toEqual([FIST[0].damage, FIST[1].damage, FIST[2].damage]);
     expect(pl(w, 1).stun).toBeGreaterThan(0);
   });
 
@@ -159,7 +167,7 @@ describe('parade', () => {
     pl(w, 0).x = 300;
     q.x = 330;
     ticks(w, 12, ATTACK, BLOCK);
-    expect(q.hp).toBe(100 - Math.round(FIST[0]!.damage * COMBAT.blockDamageTaken));
+    expect(q.hp).toBe(100 - Math.round(FIST[0].damage * COMBAT.blockDamageTaken));
     expect(q.stun).toBe(0);
   });
 
@@ -170,7 +178,7 @@ describe('parade', () => {
     ticks(w, 20, 0, BLOCK);
     q.x = 330;
     ticks(w, 12, ATTACK, BLOCK);
-    expect(q.hp).toBe(100 - FIST[0]!.damage);
+    expect(q.hp).toBe(100 - FIST[0].damage);
   });
 
   it('parade parfaite : coup annulé et attaquant étourdi 0,4 s', () => {

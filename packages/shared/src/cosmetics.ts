@@ -75,12 +75,12 @@ function rgb(c: number): [number, number, number] {
 export function closestFreeColor(requested: number, used: ReadonlySet<number>): number {
   const want = idx(requested, COLOR_COUNT, 0);
   if (!used.has(want)) return want;
-  const [r0, g0, b0] = rgb(INK_COLORS[want]!);
+  const [r0, g0, b0] = rgb(INK_COLORS[want]);
   let best = -1;
   let bestD = Infinity;
   for (let i = 0; i < COLOR_COUNT; i++) {
     if (used.has(i)) continue;
-    const [r, g, b] = rgb(INK_COLORS[i]!);
+    const [r, g, b] = rgb(INK_COLORS[i]);
     const d = (r - r0) ** 2 + (g - g0) ** 2 + (b - b0) ** 2;
     if (d < bestD) {
       bestD = d;

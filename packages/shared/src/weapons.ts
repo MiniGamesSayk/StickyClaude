@@ -135,7 +135,13 @@ function def(p: Partial<WeaponDef> & Pick<WeaponDef, 'id' | 'key' | 'name' | 'ki
 }
 
 export const WEAPONS: readonly WeaponDef[] = [
-  def({ id: WeaponId.NONE, key: 'fists', name: { fr: 'Poings', en: 'Fists' }, kind: WeaponKind.FISTS, weight: 0 }),
+  def({
+    id: WeaponId.NONE,
+    key: 'fists',
+    name: { fr: 'Poings', en: 'Fists' },
+    kind: WeaponKind.FISTS,
+    weight: 0,
+  }),
   def({
     id: WeaponId.RULER,
     key: 'ruler',
@@ -347,7 +353,7 @@ export const SPAWNABLE_WEAPONS: readonly number[] = WEAPONS.filter((w) => w.weig
 );
 
 export function weaponDef(id: number): WeaponDef {
-  return id >= 0 && id < WEAPONS.length ? WEAPONS[id]! : WEAPONS[0]!;
+  return id >= 0 && id < WEAPONS.length ? WEAPONS[id] : WEAPONS[0];
 }
 
 /** Durée d'une utilisation complète (ticks). */

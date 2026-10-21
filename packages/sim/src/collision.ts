@@ -175,7 +175,7 @@ export function moveBoxY(
       const l = e.x - hw;
       const rr = e.x + hw;
       for (let i = 0; i < world.moverCount; i++) {
-        const m = world.movers[i]!;
+        const m = world.movers[i];
         if (l < m.x + m.w - EPS && rr > m.x + EPS) {
           const tol = EPS + (m.dy < 0 ? -m.dy : 0);
           if (b <= m.y + tol && b + dy >= m.y && m.y < land) land = m.y;
@@ -247,10 +247,8 @@ export function raycastGrid(
   const stepY = dy > 0 ? 1 : -1;
   const tDeltaX = dx === 0 ? Infinity : Math.abs(CELL / dx);
   const tDeltaY = dy === 0 ? Infinity : Math.abs(CELL / dy);
-  let tMaxX =
-    dx === 0 ? Infinity : ((dx > 0 ? (cx + 1) * CELL - x0 : x0 - cx * CELL) / Math.abs(dx));
-  let tMaxY =
-    dy === 0 ? Infinity : ((dy > 0 ? (cy + 1) * CELL - y0 : y0 - cy * CELL) / Math.abs(dy));
+  let tMaxX = dx === 0 ? Infinity : (dx > 0 ? (cx + 1) * CELL - x0 : x0 - cx * CELL) / Math.abs(dx);
+  let tMaxY = dy === 0 ? Infinity : (dy > 0 ? (cy + 1) * CELL - y0 : y0 - cy * CELL) / Math.abs(dy);
   for (let i = 0; i < 256; i++) {
     let t: number;
     if (tMaxX < tMaxY) {

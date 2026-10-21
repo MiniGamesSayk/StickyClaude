@@ -49,18 +49,30 @@ export function phaseTicks(p: Player, phase: number): number {
     case AttackKind.FIST1:
     case AttackKind.FIST2:
     case AttackKind.FIST3: {
-      const a = FIST[p.atkKind - AttackKind.FIST1]!;
-      return phase === AtkPhase.STARTUP ? a.startup : phase === AtkPhase.ACTIVE ? a.active : a.recovery;
+      const a = FIST[p.atkKind - AttackKind.FIST1];
+      return phase === AtkPhase.STARTUP
+        ? a.startup
+        : phase === AtkPhase.ACTIVE
+          ? a.active
+          : a.recovery;
     }
     case AttackKind.CHARGED:
-      return phase === AtkPhase.STARTUP ? ch.startup : phase === AtkPhase.ACTIVE ? ch.active : ch.recovery;
+      return phase === AtkPhase.STARTUP
+        ? ch.startup
+        : phase === AtkPhase.ACTIVE
+          ? ch.active
+          : ch.recovery;
     case AttackKind.KICK:
       return phase === AtkPhase.STARTUP ? 0 : phase === AtkPhase.ACTIVE ? 0 : COMBAT.kick.recovery;
     case AttackKind.THROW:
       return phase === AtkPhase.STARTUP ? 3 : phase === AtkPhase.ACTIVE ? 1 : 8;
     default: {
       const w = weaponDef(p.weapon);
-      return phase === AtkPhase.STARTUP ? w.startup : phase === AtkPhase.ACTIVE ? w.active : w.recovery;
+      return phase === AtkPhase.STARTUP
+        ? w.startup
+        : phase === AtkPhase.ACTIVE
+          ? w.active
+          : w.recovery;
     }
   }
 }
@@ -104,7 +116,7 @@ function onActiveStart(world: World, p: Player, slot: number): void {
   const dir = p.facing;
   emit(world, SimEvent.SWING, slot, p.x, p.y, k);
   if (k === AttackKind.FIST1 || k === AttackKind.FIST2 || k === AttackKind.FIST3) {
-    const a = FIST[k - AttackKind.FIST1]!;
+    const a = FIST[k - AttackKind.FIST1];
     if (Math.abs(p.vx) < a.lunge) p.vx = dir * a.lunge;
   } else if (k === AttackKind.CHARGED) {
     if (Math.abs(p.vx) < COMBAT.charged.lunge) p.vx = dir * COMBAT.charged.lunge;
@@ -123,7 +135,7 @@ function onActiveStart(world: World, p: Player, slot: number): void {
       p.wantFire = true;
       if (w.recoil > 0 && w.kind !== WeaponKind.MINE) {
         const a = p.aim;
-        p.vx -= AIM_DX[a]! * w.recoil;
+        p.vx -= AIM_DX[a] * w.recoil;
       }
     }
   }

@@ -19,7 +19,7 @@ import type { World } from './world.ts';
 
 /** Écrit l'état exact de prédiction d'un joueur (envoyé à son propriétaire, voir snapshot). */
 export function exportOwn(world: World, slot: number, out: OwnState): void {
-  const p = world.players[slot]!;
+  const p = world.players[slot];
   out.x = p.x;
   out.y = p.y;
   out.vx = p.vx;
@@ -74,7 +74,7 @@ export function exportOwn(world: World, slot: number, out: OwnState): void {
 
 /** Restaure l'état d'un joueur depuis un état exact (réconciliation côté client). */
 export function importOwn(world: World, slot: number, o: OwnState): void {
-  const p = world.players[slot]!;
+  const p = world.players[slot];
   p.active = true;
   p.x = o.x;
   p.y = o.y;
@@ -132,7 +132,7 @@ export function importOwn(world: World, slot: number, o: OwnState): void {
 
 /** Remplit l'entrée de snapshot d'un joueur (valeurs en flottants, quantifiées à l'encodage). */
 export function fillPlayerSnap(world: World, slot: number, out: PlayerSnap): void {
-  const p = world.players[slot]!;
+  const p = world.players[slot];
   out.slot = slot;
   const alive = !p.dead && !p.ghost;
   out.flags =
@@ -187,12 +187,12 @@ export function fillPlayerSnap(world: World, slot: number, out: PlayerSnap): voi
  */
 export function fillObjects(world: World, objects: ObjSnap[], viewer: number): number {
   let n = 0;
-  const viewerTeam = viewer >= 0 ? world.team[viewer]! : -1;
+  const viewerTeam = viewer >= 0 ? world.team[viewer] : -1;
   for (let i = 0; i < world.objects.length; i++) {
-    const o = world.objects[i]!;
+    const o = world.objects[i];
     if (!o.active) continue;
     if (o.type === ObjType.MINE && o.b === 1 && viewer >= 0 && o.team !== viewerTeam) continue;
-    const s = objects[n++]!;
+    const s = objects[n++];
     s.uid = o.uid;
     s.type = o.type;
     s.x = o.x;
@@ -213,7 +213,7 @@ export function fillObjects(world: World, objects: ObjSnap[], viewer: number): n
 /** Vrai si une mine armée existe : les snapshots doivent alors être filtrés par destinataire. */
 export function hasHiddenMines(world: World): boolean {
   for (let i = 0; i < world.objects.length; i++) {
-    const o = world.objects[i]!;
+    const o = world.objects[i];
     if (o.active && o.type === ObjType.MINE && o.b === 1) return true;
   }
   return false;
@@ -222,9 +222,9 @@ export function hasHiddenMines(world: World): boolean {
 export function fillProjectiles(world: World, out: ProjSnap[]): number {
   let n = 0;
   for (let i = 0; i < world.projectiles.length; i++) {
-    const p = world.projectiles[i]!;
+    const p = world.projectiles[i];
     if (!p.active) continue;
-    const s = out[n++]!;
+    const s = out[n++];
     s.uid = p.uid;
     s.type = p.type;
     s.x = p.x;
@@ -255,14 +255,14 @@ function mix(h: number, v: number): number {
 
 function mixF(h: number, v: number): number {
   f64[0] = v;
-  return mix(mix(h, u32[0]!), u32[1]!);
+  return mix(mix(h, u32[0]), u32[1]);
 }
 
 /** Hash FNV-1a de tout l'état de la simulation (pour les tests de déterminisme). */
 export function hashWorld(world: World): number {
   let h = 2166136261;
   h = mix(h, world.tick >>> 0);
-  for (let i = 0; i < 4; i++) h = mix(h, world.rng.s[i]!);
+  for (let i = 0; i < 4; i++) h = mix(h, world.rng.s[i]);
   const g = world.game;
   h = mix(h, g.phase);
   h = mix(h, g.phaseTick);
@@ -270,11 +270,11 @@ export function hashWorld(world: World): number {
   h = mix(h, g.mode);
   h = mix(h, g.roundTick);
   h = mix(h, g.weaponTimer);
-  for (let i = 0; i < MAX_PLAYERS; i++) h = mix(h, g.scores[i]! & 0xffff);
-  for (let i = 0; i < 8; i++) h = mix(h, g.modeData[i]! >>> 0);
+  for (let i = 0; i < MAX_PLAYERS; i++) h = mix(h, g.scores[i] & 0xffff);
+  for (let i = 0; i < 8; i++) h = mix(h, g.modeData[i] >>> 0);
   h = mixF(h, g.inkY);
   for (let i = 0; i < world.players.length; i++) {
-    const p = world.players[i]!;
+    const p = world.players[i];
     h = mix(h, p.active ? 1 : 0);
     if (!p.active) continue;
     h = mixF(h, p.x);
@@ -325,7 +325,7 @@ export function hashWorld(world: World): number {
     h = mix(h, p.respawnTimer);
   }
   for (let i = 0; i < world.objects.length; i++) {
-    const o = world.objects[i]!;
+    const o = world.objects[i];
     if (!o.active) continue;
     h = mix(h, o.uid);
     h = mix(h, o.type);
@@ -338,7 +338,7 @@ export function hashWorld(world: World): number {
     h = mix(h, o.life);
   }
   for (let i = 0; i < world.projectiles.length; i++) {
-    const p = world.projectiles[i]!;
+    const p = world.projectiles[i];
     if (!p.active) continue;
     h = mix(h, p.uid);
     h = mixF(h, p.x);
@@ -348,7 +348,7 @@ export function hashWorld(world: World): number {
     h = mix(h, p.life);
   }
   const cells = world.cells;
-  for (let i = 0; i < cells.length; i++) h = mix(h, cells[i]!);
+  for (let i = 0; i < cells.length; i++) h = mix(h, cells[i]);
   return h >>> 0;
 }
 

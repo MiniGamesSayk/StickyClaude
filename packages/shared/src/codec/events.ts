@@ -78,8 +78,8 @@ export function decodeEventPayload(
   out.n = spec.length;
   let o = 1;
   for (let i = 0; i < spec.length; i++) {
-    const lo = data[o++]!;
-    const hi = data[o++]!;
+    const lo = data[o++];
+    const hi = data[o++];
     const raw = lo | (hi << 8);
     switch (spec.charAt(i)) {
       case 'p':

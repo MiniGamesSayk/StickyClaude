@@ -1,9 +1,4 @@
-import {
-  MAX_OBJECTS,
-  MAX_PLAYERS,
-  MAX_PROJECTILES,
-  POS_SCALE,
-} from '../constants.ts';
+import { MAX_OBJECTS, MAX_PLAYERS, MAX_PROJECTILES, POS_SCALE } from '../constants.ts';
 import { GamePhase, ObjType, ProjType } from '../types.ts';
 import { BinType } from './messages.ts';
 import { clamp, DecodeError, Reader, Writer } from './io.ts';
@@ -313,8 +308,8 @@ export function ownEquals(a: OwnState, b: OwnState): boolean {
   const x = a as unknown as Record<string, number>;
   const y = b as unknown as Record<string, number>;
   for (const f of OWN_FIELDS) {
-    const va = x[f.key]!;
-    const vb = y[f.key]!;
+    const va = x[f.key];
+    const vb = y[f.key];
     if (f.t === 'f32') {
       const tol = f.key === 'vx' || f.key === 'vy' ? OWN_VEL_TOL : OWN_POS_TOL;
       if (Math.abs(va - vb) > tol) return false;
@@ -345,7 +340,7 @@ export function encodeSnapshot(out: Uint8Array, s: Snapshot): number {
   w.u8(g.mode);
   w.u8(g.modeCount);
   for (let i = 0; i < s.playerCount; i++) {
-    const p = s.players[i]!;
+    const p = s.players[i];
     w.u8(p.slot);
     w.u16(p.flags);
     w.i16(q(p.x));
@@ -361,7 +356,7 @@ export function encodeSnapshot(out: Uint8Array, s: Snapshot): number {
     w.u8(p.variant);
   }
   for (let i = 0; i < s.objectCount; i++) {
-    const o = s.objects[i]!;
+    const o = s.objects[i];
     w.u16(o.uid & 0xffff);
     w.u8(o.type);
     w.i16(q(o.x));
@@ -372,7 +367,7 @@ export function encodeSnapshot(out: Uint8Array, s: Snapshot): number {
     w.u8(o.b);
   }
   for (let i = 0; i < s.projCount; i++) {
-    const p = s.projectiles[i]!;
+    const p = s.projectiles[i];
     w.u16(p.uid & 0xffff);
     w.u8(p.type);
     w.i16(q(p.x));
@@ -382,11 +377,11 @@ export function encodeSnapshot(out: Uint8Array, s: Snapshot): number {
     w.u8(p.owner);
     w.u8(p.a);
   }
-  for (let i = 0; i < g.modeCount; i++) w.u16(g.modeData[i]!);
+  for (let i = 0; i < g.modeCount; i++) w.u16(g.modeData[i]);
   if (s.hasOwn) {
     const o = s.own as unknown as Record<string, number>;
     for (const f of OWN_FIELDS) {
-      const v = o[f.key]!;
+      const v = o[f.key];
       switch (f.t) {
         case 'f32':
           w.f32(v);
@@ -404,11 +399,11 @@ export function encodeSnapshot(out: Uint8Array, s: Snapshot): number {
     }
   }
   for (let i = 0; i < s.eventCount; i++) {
-    const e = s.events[i]!;
+    const e = s.events[i];
     w.u16(e.id & 0xffff);
     w.u8(e.type);
     w.u8(e.len);
-    for (let j = 0; j < e.len; j++) w.u8(e.data[j]!);
+    for (let j = 0; j < e.len; j++) w.u8(e.data[j]);
   }
   return w.pos;
 }
@@ -443,7 +438,7 @@ export function decodeSnapshot(buf: Uint8Array, out: Snapshot): void {
   out.projCount = 0;
   out.eventCount = 0;
   for (let i = 0; i < playerCount; i++) {
-    const p = out.players[i]!;
+    const p = out.players[i];
     p.slot = r.u8();
     if (p.slot >= MAX_PLAYERS) throw new DecodeError('bad slot');
     p.flags = r.u16();
@@ -461,7 +456,7 @@ export function decodeSnapshot(buf: Uint8Array, out: Snapshot): void {
     p.variant = r.u8();
   }
   for (let i = 0; i < objectCount; i++) {
-    const o = out.objects[i]!;
+    const o = out.objects[i];
     o.uid = r.u16();
     o.type = r.u8();
     if (o.type < ObjType.WEAPON || o.type > ObjType.BALL) throw new DecodeError('bad object type');
@@ -473,7 +468,7 @@ export function decodeSnapshot(buf: Uint8Array, out: Snapshot): void {
     o.b = r.u8();
   }
   for (let i = 0; i < projCount; i++) {
-    const p = out.projectiles[i]!;
+    const p = out.projectiles[i];
     p.uid = r.u16();
     p.type = r.u8();
     if (p.type < ProjType.PELLET || p.type > ProjType.THROWN) {
@@ -507,7 +502,7 @@ export function decodeSnapshot(buf: Uint8Array, out: Snapshot): void {
     }
   }
   for (let i = 0; i < eventCount; i++) {
-    const e = out.events[i]!;
+    const e = out.events[i];
     e.id = r.u16();
     e.type = r.u8();
     e.len = r.u8();

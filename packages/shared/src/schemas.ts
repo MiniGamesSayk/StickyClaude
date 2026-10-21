@@ -127,7 +127,9 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
       code: z.string().min(1).max(8),
     })
     .strict(),
-  z.object({ t: z.literal('quick'), v: z.number().int(), name, look: lookSchema.optional() }).strict(),
+  z
+    .object({ t: z.literal('quick'), v: z.number().int(), name, look: lookSchema.optional() })
+    .strict(),
   z
     .object({
       t: z.literal('resume'),
@@ -147,9 +149,27 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
       shuffle: z.boolean().optional(),
     })
     .strict(),
-  z.object({ t: z.literal('kick'), slot: z.number().int().min(0).max(MAX_PLAYERS - 1) }).strict(),
+  z
+    .object({
+      t: z.literal('kick'),
+      slot: z
+        .number()
+        .int()
+        .min(0)
+        .max(MAX_PLAYERS - 1),
+    })
+    .strict(),
   z.object({ t: z.literal('look'), look: lookSchema }).strict(),
-  z.object({ t: z.literal('emote'), id: z.number().int().min(0).max(EMOTE_COUNT - 1) }).strict(),
+  z
+    .object({
+      t: z.literal('emote'),
+      id: z
+        .number()
+        .int()
+        .min(0)
+        .max(EMOTE_COUNT - 1),
+    })
+    .strict(),
   z
     .object({
       t: z.literal('tune'),

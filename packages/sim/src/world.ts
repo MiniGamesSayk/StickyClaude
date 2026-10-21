@@ -502,8 +502,8 @@ export function moverPosition(m: Mover, tick: number, out: { x: number; y: numbe
   if (i > m.n - 2) i = m.n - 2;
   let f = seg - i;
   f = f * f * (3 - 2 * f);
-  out.x = m.pathX[i]! + (m.pathX[i + 1]! - m.pathX[i]!) * f;
-  out.y = m.pathY[i]! + (m.pathY[i + 1]! - m.pathY[i]!) * f;
+  out.x = m.pathX[i] + (m.pathX[i + 1] - m.pathX[i]) * f;
+  out.y = m.pathY[i] + (m.pathY[i + 1] - m.pathY[i]) * f;
 }
 
 const scratchPos = { x: 0, y: 0 };
@@ -511,7 +511,7 @@ const scratchPos = { x: 0, y: 0 };
 /** Place les plateformes mobiles à leur position du tick courant (sans déplacement). */
 export function syncMovers(world: World): void {
   for (let i = 0; i < world.moverCount; i++) {
-    const m = world.movers[i]!;
+    const m = world.movers[i];
     moverPosition(m, world.tick, scratchPos);
     m.x = scratchPos.x;
     m.y = scratchPos.y;
@@ -534,14 +534,14 @@ export function loadArena(world: World, arena: ArenaData): void {
   for (const m of world.movers) m.n = 0;
   const n = Math.min(arena.movers.length, MAX_MOVERS);
   for (let i = 0; i < n; i++) {
-    const d = arena.movers[i]!;
-    const m = world.movers[i]!;
+    const d = arena.movers[i];
+    const m = world.movers[i];
     m.w = d.rect[2] * CELL;
     m.h = d.rect[3] * CELL;
     m.n = d.path.length;
     for (let j = 0; j < d.path.length; j++) {
-      m.pathX[j] = d.path[j]![0] * CELL;
-      m.pathY[j] = d.path[j]![1] * CELL;
+      m.pathX[j] = d.path[j][0] * CELL;
+      m.pathY[j] = d.path[j][1] * CELL;
     }
     m.periodTicks = Math.max(2, Math.round(d.period * TICK_HZ));
   }
@@ -551,7 +551,7 @@ export function loadArena(world: World, arena: ArenaData): void {
   world.spawnX = new Float64Array(spawnCount);
   world.spawnY = new Float64Array(spawnCount);
   for (let i = 0; i < spawnCount; i++) {
-    const s = arena.spawns.players[i]!;
+    const s = arena.spawns.players[i];
     world.spawnX[i] = (s[0] + 0.5) * CELL;
     world.spawnY[i] = (s[1] + 1) * CELL;
   }
@@ -561,7 +561,7 @@ export function loadArena(world: World, arena: ArenaData): void {
   world.weaponSpawnX = new Float64Array(wc);
   world.weaponSpawnY = new Float64Array(wc);
   for (let i = 0; i < wc; i++) {
-    const s = arena.spawns.weapons[i]!;
+    const s = arena.spawns.weapons[i];
     world.weaponSpawnX[i] = (s[0] + 0.5) * CELL;
     world.weaponSpawnY[i] = (s[1] + 1) * CELL;
   }
@@ -587,7 +587,8 @@ export function createWorld(arena: ArenaData, seed: number): World {
   const projectiles: Proj[] = [];
   for (let i = 0; i < MAX_PROJECTILES; i++) projectiles.push(createProj());
   const puddles: Puddle[] = [];
-  for (let i = 0; i < MAX_PUDDLES; i++) puddles.push({ active: false, x0: 0, x1: 0, y: 0, expire: 0 });
+  for (let i = 0; i < MAX_PUDDLES; i++)
+    puddles.push({ active: false, x0: 0, x1: 0, y: 0, expire: 0 });
   const marks: Mark[] = [];
   for (let i = 0; i < MAX_GHOST_MARKS; i++) {
     marks.push({ active: false, kind: 0, expire: 0, c0: -1, c1: -1, c2: -1, owner: -1 });
@@ -694,7 +695,7 @@ export function emit(
 
 /** Argument `k` (0 à 5) de l'événement `i`. */
 export function eventArg(world: World, i: number, k: number): number {
-  return world.events.v[i * EVENT_STRIDE + k]!;
+  return world.events.v[i * EVENT_STRIDE + k];
 }
 
 export function newUid(world: World): number {

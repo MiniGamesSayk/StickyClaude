@@ -56,8 +56,14 @@ export function resetCombatState(p: Player): void {
 }
 
 /** Place un joueur à un endroit précis, vivant et protégé `invuln` ticks. */
-export function spawnPlayerAt(world: World, slot: number, x: number, y: number, invuln: number): void {
-  const p = world.players[slot]!;
+export function spawnPlayerAt(
+  world: World,
+  slot: number,
+  x: number,
+  y: number,
+  invuln: number,
+): void {
+  const p = world.players[slot];
   p.active = true;
   p.x = x;
   p.y = y;
@@ -90,10 +96,10 @@ export function spawnPlayerAt(world: World, slot: number, x: number, y: number, 
  */
 export function pickSpawn(world: World, slot: number): number {
   const n = world.spawnCount;
-  const me = world.players[slot]!;
+  const me = world.players[slot];
   let others = 0;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const q = world.players[s]!;
+    const q = world.players[s];
     if (s !== slot && q.active && !q.dead && !q.ghost) others++;
   }
   if (others === 0) return (slot + me.respawns * 3) % n;
@@ -104,9 +110,9 @@ export function pickSpawn(world: World, slot: number): number {
     let d = Infinity;
     for (let s = 0; s < MAX_PLAYERS; s++) {
       if (s === slot) continue;
-      const q = world.players[s]!;
+      const q = world.players[s];
       if (!q.active || q.dead || q.ghost) continue;
-      const dd = Math.hypot(q.x - world.spawnX[i]!, q.y - 14 - world.spawnY[i]!);
+      const dd = Math.hypot(q.x - world.spawnX[i], q.y - 14 - world.spawnY[i]);
       if (dd < d) d = dd;
     }
     if (d > bestD) {
@@ -120,19 +126,19 @@ export function pickSpawn(world: World, slot: number): number {
 /** (Ré)apparition d'un joueur à un point d'apparition de l'arène. */
 export function spawnPlayer(world: World, slot: number): void {
   const idx = pickSpawn(world, slot);
-  spawnPlayerAt(world, slot, world.spawnX[idx]!, world.spawnY[idx]!, COMBAT.spawnInvulnTicks);
+  spawnPlayerAt(world, slot, world.spawnX[idx], world.spawnY[idx], COMBAT.spawnInvulnTicks);
 }
 
 /** Ajoute un joueur dans l'emplacement `slot` (première apparition). */
 export function addPlayer(world: World, slot: number): void {
-  const p = world.players[slot]!;
+  const p = world.players[slot];
   p.respawns = 0;
   p.prevInput = 0;
   spawnPlayer(world, slot);
 }
 
 export function removePlayer(world: World, slot: number): void {
-  const p = world.players[slot]!;
+  const p = world.players[slot];
   p.active = false;
   p.prevInput = 0;
   p.hasBomb = false;

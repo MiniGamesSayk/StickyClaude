@@ -31,9 +31,9 @@ export function step(world: World, inputs: ArrayLike<number>): void {
   const g = world.game;
   const frozen = g.phase === GamePhase.COUNTDOWN;
   for (let slot = 0; slot < MAX_PLAYERS; slot++) {
-    const p = world.players[slot]!;
+    const p = world.players[slot];
     if (!p.active) continue;
-    const raw = inputs[slot]! | 0;
+    const raw = inputs[slot] | 0;
     p.rewind = rewindOf(raw);
     if (p.dead) continue;
     const input = frozen ? 0 : raw & INPUT_MASK_USED;
@@ -47,7 +47,7 @@ export function step(world: World, inputs: ArrayLike<number>): void {
 
   if (!world.auth) {
     for (let slot = 0; slot < MAX_PLAYERS; slot++) {
-      const p = world.players[slot]!;
+      const p = world.players[slot];
       p.wantFire = false;
       p.wantThrow = false;
       p.wantPickup = false;
@@ -64,7 +64,7 @@ export function step(world: World, inputs: ArrayLike<number>): void {
     resolveActions(world);
   } else {
     for (let slot = 0; slot < MAX_PLAYERS; slot++) {
-      const p = world.players[slot]!;
+      const p = world.players[slot];
       p.wantFire = false;
       p.wantThrow = false;
       p.wantPickup = false;
@@ -87,7 +87,7 @@ const moverPos = { x: 0, y: 0 };
 
 function updateMovers(world: World): void {
   for (let i = 0; i < world.moverCount; i++) {
-    const m = world.movers[i]!;
+    const m = world.movers[i];
     moverPosition(m, world.tick, moverPos);
     m.dx = moverPos.x - m.x;
     m.dy = moverPos.y - m.y;
@@ -98,12 +98,12 @@ function updateMovers(world: World): void {
 
 /** Entraîne un joueur posé sur une plateforme mobile avec elle. */
 function carry(world: World, p: Player): void {
-  const m = world.movers[p.groundMover]!;
+  const m = world.movers[p.groundMover];
   moveX(world, p, m.dx);
   moveY(world, p, m.dy);
 }
 
 /** Hauteur courante de la boîte du joueur (debout ou accroupi). */
 export function playerHeight(world: World, slot: number): number {
-  return bodyHeight(world, world.players[slot]!);
+  return bodyHeight(world, world.players[slot]);
 }

@@ -26,7 +26,6 @@ export const MAX_GROUND_WEAPONS = 3;
 const CRATE_HP = 20;
 const CRATE_SIZE = 16;
 const BALLOON_SIZE = 14;
-const BALL_SIZE = 14;
 const TACK_W = 14;
 const TACK_H = 6;
 
@@ -40,7 +39,7 @@ const BALLOON_EXPLOSION: Explosion = {
 
 export function allocObj(world: World): Obj | null {
   for (let i = 0; i < world.objects.length; i++) {
-    const o = world.objects[i]!;
+    const o = world.objects[i];
     if (!o.active) return o;
   }
   return null;
@@ -99,7 +98,8 @@ export function spawnProps(world: World): void {
   for (const prop of world.arena.props) {
     const cx = (prop.at[0] + 0.5) * CELL;
     const by = (prop.at[1] + 1) * CELL;
-    if (prop.type === 'crate') spawnObj(world, ObjType.CRATE, cx, by, CRATE_SIZE, CRATE_SIZE, CRATE_HP, 0);
+    if (prop.type === 'crate')
+      spawnObj(world, ObjType.CRATE, cx, by, CRATE_SIZE, CRATE_SIZE, CRATE_HP, 0);
     else if (prop.type === 'balloon') {
       const o = spawnObj(world, ObjType.BALLOON, cx, by, BALLOON_SIZE, BALLOON_SIZE, 1, 0);
       if (o) o.life = 30 * 60;
@@ -125,7 +125,7 @@ export function randomWeapon(world: World): number {
     r -= weaponDef(id).weight;
     if (r < 0) return id;
   }
-  return SPAWNABLE_WEAPONS[0]!;
+  return SPAWNABLE_WEAPONS[0];
 }
 
 /** L'arme tenue tombe quand son porteur meurt. */
@@ -195,12 +195,7 @@ export function damageObject(world: World, o: Obj, dmg: number, byPlayer: number
 function overlapsPlayer(world: World, o: Obj, p: Player): boolean {
   const hw = world.params.width * 0.5;
   const h = bodyHeight(world, p);
-  return (
-    o.x + o.w / 2 > p.x - hw &&
-    o.x - o.w / 2 < p.x + hw &&
-    o.y > p.y - h &&
-    o.y - o.h < p.y
-  );
+  return o.x + o.w / 2 > p.x - hw && o.x - o.w / 2 < p.x + hw && o.y > p.y - h && o.y - o.h < p.y;
 }
 
 /** Physique et comportement des objets dynamiques (autorité). */
@@ -208,7 +203,7 @@ export function stepObjects(world: World): void {
   const P = world.params;
   const dt = 1 / 60;
   for (let i = 0; i < world.objects.length; i++) {
-    const o = world.objects[i]!;
+    const o = world.objects[i];
     if (!o.active) continue;
 
     if (o.life > 0) {
@@ -223,7 +218,7 @@ export function stepObjects(world: World): void {
     switch (o.type) {
       case ObjType.TACK: {
         for (let s = 0; s < MAX_PLAYERS; s++) {
-          const p = world.players[s]!;
+          const p = world.players[s];
           if (!p.active || p.dead || p.ghost || p.tackCd > 0) continue;
           if (!overlapsPlayer(world, o, p)) continue;
           p.tackCd = COMBAT.tackCooldownTicks;
@@ -261,9 +256,14 @@ export function stepObjects(world: World): void {
         if (o.b === 1) {
           const r = weaponDef(WeaponId.INK_MINE).triggerRadius;
           for (let s = 0; s < MAX_PLAYERS; s++) {
-            const p = world.players[s]!;
+            const p = world.players[s];
             if (!p.active || p.dead || p.ghost || p.invuln > 0) continue;
-            if (s !== o.owner && o.team >= 0 && world.team[s] === o.team && !world.rules.friendlyFire) {
+            if (
+              s !== o.owner &&
+              o.team >= 0 &&
+              world.team[s] === o.team &&
+              !world.rules.friendlyFire
+            ) {
               continue;
             }
             const cy = p.y - bodyHeight(world, p) * 0.5;
@@ -285,8 +285,10 @@ export function stepObjects(world: World): void {
         // Arme, caisse, boule : tombent, glissent, sont poussées par les joueurs.
         if (o.type === ObjType.CRATE || o.type === ObjType.BALL) pushByPlayers(world, o);
         gravityStep(world, o, dt);
-        if (o.type === ObjType.WEAPON && o.y > world.arena.size[1] * CELL + 3 * CELL) o.active = false;
-        if (o.type === ObjType.CRATE && o.y > world.arena.size[1] * CELL + 3 * CELL) o.active = false;
+        if (o.type === ObjType.WEAPON && o.y > world.arena.size[1] * CELL + 3 * CELL)
+          o.active = false;
+        if (o.type === ObjType.CRATE && o.y > world.arena.size[1] * CELL + 3 * CELL)
+          o.active = false;
       }
     }
   }
@@ -294,7 +296,7 @@ export function stepObjects(world: World): void {
 
 function pushByPlayers(world: World, o: Obj): void {
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!p.active || p.dead || p.ghost) continue;
     if (!overlapsPlayer(world, o, p)) continue;
     if (o.type === ObjType.BALL) {
@@ -334,7 +336,7 @@ function gravityStep(world: World, o: Obj, dt: number): void {
 /** Apparition programmée des armes (autorité) : un dessin au crayon, puis l'objet tombe. */
 export function stepWeaponSpawner(world: World): void {
   for (let i = 0; i < world.spawns.length; i++) {
-    const s = world.spawns[i]!;
+    const s = world.spawns[i];
     if (s.active && world.tick >= s.at) {
       s.active = false;
       spawnWeaponObj(world, s.weapon, weaponDef(s.weapon).ammo, s.x, s.y, 0, 0);
@@ -352,11 +354,11 @@ export function stepWeaponSpawner(world: World): void {
   g.weaponTimer = 360 + world.rng.int(240);
   if (countGroundWeapons(world) >= MAX_GROUND_WEAPONS) return;
   const idx = world.rng.int(world.weaponSpawnCount);
-  const x = world.weaponSpawnX[idx]!;
-  const y = world.weaponSpawnY[idx]!;
+  const x = world.weaponSpawnX[idx];
+  const y = world.weaponSpawnY[idx];
   const weapon = randomWeapon(world);
   for (let i = 0; i < world.spawns.length; i++) {
-    const s = world.spawns[i]!;
+    const s = world.spawns[i];
     if (s.active) continue;
     s.active = true;
     s.uid = newUid(world);
@@ -373,7 +375,7 @@ export function stepWeaponSpawner(world: World): void {
 export function stepHazards(world: World): void {
   const hw = world.params.width * 0.5;
   for (let s = 0; s < MAX_PLAYERS; s++) {
-    const p = world.players[s]!;
+    const p = world.players[s];
     if (!p.active || p.dead || p.ghost || p.hazardCd > 0) continue;
     const h = bodyHeight(world, p);
     const c0 = Math.floor((p.x - hw + 1) / CELL);

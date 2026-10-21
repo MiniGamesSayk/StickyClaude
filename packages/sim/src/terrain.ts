@@ -69,13 +69,13 @@ export function placeMark(
 ): boolean {
   let slot = -1;
   for (let i = 0; i < world.marks.length; i++) {
-    if (!world.marks[i]!.active) {
+    if (!world.marks[i].active) {
       slot = i;
       break;
     }
   }
   if (slot < 0) return false;
-  const m = world.marks[slot]!;
+  const m = world.marks[slot];
   m.c0 = -1;
   m.c1 = -1;
   m.c2 = -1;
@@ -109,7 +109,7 @@ function restore(world: World, i: number, type: number): void {
 /** Retire les traits et gouttes arrivés à expiration. */
 export function stepMarks(world: World): void {
   for (let i = 0; i < world.marks.length; i++) {
-    const m = world.marks[i]!;
+    const m = world.marks[i];
     if (!m.active || world.tick < m.expire) continue;
     const type = m.kind === GhostMark.LINE ? Cell.ONEWAY : Cell.HAZARD;
     restore(world, m.c0, type);
@@ -121,14 +121,20 @@ export function stepMarks(world: World): void {
 }
 
 /** Pose une flaque d'encre glissante au sol. */
-export function addPuddle(world: World, x: number, y: number, width: number, placeTick: number): void {
+export function addPuddle(
+  world: World,
+  x: number,
+  y: number,
+  width: number,
+  placeTick: number,
+): void {
+  // Un emplacement libre, sinon la flaque la plus ancienne.
   let slot = 0;
   let oldest = Infinity;
   for (let i = 0; i < world.puddles.length; i++) {
-    const p = world.puddles[i]!;
+    const p = world.puddles[i];
     if (!p.active) {
       slot = i;
-      oldest = -1;
       break;
     }
     if (p.expire < oldest) {
@@ -136,7 +142,7 @@ export function addPuddle(world: World, x: number, y: number, width: number, pla
       slot = i;
     }
   }
-  const p = world.puddles[slot]!;
+  const p = world.puddles[slot];
   p.active = true;
   p.x0 = x - width / 2;
   p.x1 = x + width / 2;
@@ -150,7 +156,7 @@ export const PUDDLE_GRIP = 0.22;
 
 export function stepPuddles(world: World): void {
   for (let i = 0; i < world.puddles.length; i++) {
-    const p = world.puddles[i]!;
+    const p = world.puddles[i];
     if (p.active && world.tick >= p.expire) p.active = false;
   }
 }
@@ -158,7 +164,7 @@ export function stepPuddles(world: World): void {
 /** Vrai si le point (x, y) — les pieds d'un joueur au sol — est dans une flaque. */
 export function inPuddle(world: World, x: number, y: number): boolean {
   for (let i = 0; i < world.puddles.length; i++) {
-    const p = world.puddles[i]!;
+    const p = world.puddles[i];
     if (p.active && x >= p.x0 && x <= p.x1 && Math.abs(y - p.y) <= 3) return true;
   }
   return false;

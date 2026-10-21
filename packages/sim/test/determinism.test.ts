@@ -134,7 +134,7 @@ describe('restauration d état (réconciliation)', () => {
     for (let s = 0; s < MAX_PLAYERS; s++) addPlayer(full, s);
     for (let t = 0; t < 500; t++) {
       gen.next(inputs);
-      for (let s = 0; s < MAX_PLAYERS; s++) inputs[s] = inputs[s]! & 0x1f;
+      for (let s = 0; s < MAX_PLAYERS; s++) inputs[s] = inputs[s] & 0x1f;
       step(full, inputs);
     }
     // Monde « client » : un seul joueur actif, restauré à partir de l'état exporté.
@@ -146,7 +146,7 @@ describe('restauration d état (réconciliation)', () => {
     const mine = new Uint16Array(MAX_PLAYERS);
     for (let t = 0; t < 2000; t++) {
       gen.next(inputs);
-      for (let s = 0; s < MAX_PLAYERS; s++) inputs[s] = inputs[s]! & 0x1f;
+      for (let s = 0; s < MAX_PLAYERS; s++) inputs[s] = inputs[s] & 0x1f;
       mine.fill(0);
       mine[3] = inputs[3]!;
       step(full, inputs);

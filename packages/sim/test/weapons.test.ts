@@ -1,6 +1,5 @@
 import {
   Cell,
-  CELL,
   COMBAT,
   GRID_W,
   ObjType,
@@ -37,7 +36,7 @@ function give(w: World, slot: number, weapon: number, ammo = weaponDef(weapon).a
 }
 
 function cellOf(w: World, cx: number, cy: number): number {
-  return w.cells[cy * GRID_W + cx]!;
+  return w.cells[cy * GRID_W + cx];
 }
 
 describe('les 12 armes sont des données', () => {
@@ -280,11 +279,11 @@ describe('bazooka à encre', () => {
     const dry = pl(w, 0).vx;
     // avec flaque
     const w2 = fightWorld();
-    w2.puddles[0]!.active = true;
-    w2.puddles[0]!.x0 = 200;
-    w2.puddles[0]!.x1 = 500;
-    w2.puddles[0]!.y = FLOOR;
-    w2.puddles[0]!.expire = 99999;
+    w2.puddles[0].active = true;
+    w2.puddles[0].x0 = 200;
+    w2.puddles[0].x1 = 500;
+    w2.puddles[0].y = FLOOR;
+    w2.puddles[0].expire = 99999;
     pl(w2, 0).x = 300;
     pl(w2, 0).vx = 190;
     ticks(w2, 6, 0);
@@ -349,7 +348,16 @@ describe('tache d encre (mine)', () => {
     // armement après 1 s
     ticks(w, 70, 0);
     expect(mine.b).toBe(1);
-    const snapOwner = Array.from({ length: 8 }, () => ({ uid: 0, type: 0, x: 0, y: 0, vx: 0, vy: 0, a: 0, b: 0 }));
+    const snapOwner = Array.from({ length: 8 }, () => ({
+      uid: 0,
+      type: 0,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      a: 0,
+      b: 0,
+    }));
     expect(fillObjects(w, snapOwner, 0)).toBe(1);
     expect(fillObjects(w, snapOwner, 1)).toBe(0);
     expect(fillObjects(w, snapOwner, -1)).toBe(1);
@@ -454,7 +462,9 @@ describe('ramasser, lancer, lâcher', () => {
     tick(w, PICKUP);
     expect(p.weapon).toBe(WeaponId.PISTOL);
     expect(p.ammo).toBe(8);
-    expect(w.objects.some((x) => x.active && x.type === ObjType.WEAPON && x.a === WeaponId.RULER)).toBe(true);
+    expect(
+      w.objects.some((x) => x.active && x.type === ObjType.WEAPON && x.a === WeaponId.RULER),
+    ).toBe(true);
   });
 
   it('lancer l arme tenue : un projectile qui blesse, puis redevient un objet', () => {
@@ -466,7 +476,9 @@ describe('ramasser, lancer, lâcher', () => {
     ticks(w, 40, 0);
     expect(pl(w, 1).hp).toBe(100 - COMBAT.throwDamage);
     ticks(w, 60, 0);
-    expect(w.objects.some((o) => o.active && o.type === ObjType.WEAPON && o.a === WeaponId.PISTOL)).toBe(true);
+    expect(
+      w.objects.some((o) => o.active && o.type === ObjType.WEAPON && o.a === WeaponId.PISTOL),
+    ).toBe(true);
   });
 
   it('lâcher (bas + ramasser) pose l arme aux pieds', () => {

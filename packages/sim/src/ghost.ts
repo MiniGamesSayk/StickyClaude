@@ -27,7 +27,11 @@ export function stepGhost(world: World, p: Player, slot: number, input: number):
   }
   if (!world.auth) return;
   const kind =
-    (pressed & Input.ATTACK) !== 0 ? GhostMark.LINE : (pressed & Input.BLOCK) !== 0 ? GhostMark.DROP : -1;
+    (pressed & Input.ATTACK) !== 0
+      ? GhostMark.LINE
+      : (pressed & Input.BLOCK) !== 0
+        ? GhostMark.DROP
+        : -1;
   if (kind < 0) return;
   const cx = Math.floor(p.ghostX / CELL);
   const cy = Math.floor(p.ghostY / CELL);

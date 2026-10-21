@@ -36,7 +36,7 @@ export function spawnProjectile(
   bounces: number,
 ): Proj | null {
   for (let i = 0; i < world.projectiles.length; i++) {
-    const p = world.projectiles[i]!;
+    const p = world.projectiles[i];
     if (p.active) continue;
     p.active = true;
     p.uid = newUid(world);
@@ -64,7 +64,7 @@ function steer(world: World, p: Proj, maxTurn: number): void {
   let bestD = HOMING_RANGE;
   for (let v = 0; v < MAX_PLAYERS; v++) {
     if (v === p.owner) continue;
-    const q = world.players[v]!;
+    const q = world.players[v];
     if (!q.active || q.dead || q.ghost) continue;
     if (isTeammate(world, p.owner, v)) continue;
     const d = Math.hypot(q.x - p.x, q.y - bodyHeight(world, q) * 0.5 - p.y);
@@ -74,7 +74,7 @@ function steer(world: World, p: Proj, maxTurn: number): void {
     }
   }
   if (best < 0) return;
-  const q = world.players[best]!;
+  const q = world.players[best];
   const tx = q.x - p.x;
   const ty = q.y - bodyHeight(world, q) * 0.5 - p.y;
   const cur = Math.atan2(p.vy, p.vx);
@@ -119,12 +119,13 @@ function endProjectile(world: World, p: Proj, hitX: number, hitY: number): void 
 export function stepProjectiles(world: World): void {
   const hw = world.params.width * 0.5;
   for (let i = 0; i < world.projectiles.length; i++) {
-    const p = world.projectiles[i]!;
+    const p = world.projectiles[i];
     if (!p.active) continue;
     const def = weaponDef(p.weapon);
     p.age++;
     if (p.type === ProjType.PLANE) steer(world, p, def.homing * DT);
-    if (p.type !== ProjType.PLANE) p.vy += (p.type === ProjType.THROWN ? world.params.gravity * 0.6 : def.gravity) * DT;
+    if (p.type !== ProjType.PLANE)
+      p.vy += (p.type === ProjType.THROWN ? world.params.gravity * 0.6 : def.gravity) * DT;
     if (p.type === ProjType.THROWN) p.vy = Math.min(p.vy, 600);
 
     const dx = p.vx * DT;
@@ -147,7 +148,7 @@ export function stepProjectiles(world: World): void {
     let bestT = 2;
     let bestPlayer = -1;
     for (let v = 0; v < MAX_PLAYERS; v++) {
-      const q = world.players[v]!;
+      const q = world.players[v];
       if (!q.active || q.dead || q.ghost || q.invuln > 0) continue;
       if (v === p.owner && p.age < SELF_SAFE_TICKS) continue;
       if ((p.hitMask & (1 << v)) !== 0) continue;
@@ -171,30 +172,28 @@ export function stepProjectiles(world: World): void {
     // Objets sur le trajet (caisses, ballons).
     let bestObj = -1;
     let bestObjT = bestPlayer >= 0 ? bestT : 2;
-    if (p.type !== ProjType.THROWN || true) {
-      for (let k = 0; k < world.objects.length; k++) {
-        const o = world.objects[k]!;
-        if (!o.active) continue;
-        if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON) continue;
-        const t = segmentBox(
-          p.x,
-          p.y,
-          p.x + ux * reach,
-          p.y + uy * reach,
-          o.x - o.w / 2 - RADIUS,
-          o.y - o.h - RADIUS,
-          o.x + o.w / 2 + RADIUS,
-          o.y + RADIUS,
-        );
-        if (t >= 0 && t < bestObjT) {
-          bestObjT = t;
-          bestObj = k;
-        }
+    for (let k = 0; k < world.objects.length; k++) {
+      const o = world.objects[k];
+      if (!o.active) continue;
+      if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON) continue;
+      const t = segmentBox(
+        p.x,
+        p.y,
+        p.x + ux * reach,
+        p.y + uy * reach,
+        o.x - o.w / 2 - RADIUS,
+        o.y - o.h - RADIUS,
+        o.x + o.w / 2 + RADIUS,
+        o.y + RADIUS,
+      );
+      if (t >= 0 && t < bestObjT) {
+        bestObjT = t;
+        bestObj = k;
       }
     }
 
     if (bestObj >= 0) {
-      const o = world.objects[bestObj]!;
+      const o = world.objects[bestObj];
       const hx = p.x + ux * reach * bestObjT;
       const hy = p.y + uy * reach * bestObjT;
       if (p.type === ProjType.ROCKET) {
@@ -210,7 +209,7 @@ export function stepProjectiles(world: World): void {
     }
 
     if (bestPlayer >= 0 && bestT <= 1) {
-      const q = world.players[bestPlayer]!;
+      const q = world.players[bestPlayer];
       const hx = p.x + ux * reach * bestT;
       const hy = p.y + uy * reach * bestT;
       const speed = Math.hypot(p.vx, p.vy);
@@ -250,7 +249,19 @@ export function stepProjectiles(world: World): void {
         cause = Cause.THROWN;
       }
       const dir = p.vx >= 0 ? 1 : -1;
-      queueHit(world, bestPlayer, p.owner, damage, dir * kbx, kby, def.stun, cause, flags, p.x, p.y);
+      queueHit(
+        world,
+        bestPlayer,
+        p.owner,
+        damage,
+        dir * kbx,
+        kby,
+        def.stun,
+        cause,
+        flags,
+        p.x,
+        p.y,
+      );
       p.hitMask |= 1 << bestPlayer;
       if (p.type === ProjType.ERASER) {
         p.x = hx;
@@ -300,7 +311,12 @@ export function stepProjectiles(world: World): void {
       else p.active = false;
       continue;
     }
-    if (p.y > world.arena.size[1] * 16 + 64 || p.y < -128 || p.x < -64 || p.x > world.arena.size[0] * 16 + 64) {
+    if (
+      p.y > world.arena.size[1] * 16 + 64 ||
+      p.y < -128 ||
+      p.x < -64 ||
+      p.x > world.arena.size[0] * 16 + 64
+    ) {
       p.active = false;
     }
   }

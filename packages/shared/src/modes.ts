@@ -24,20 +24,76 @@ export interface ModeInfo {
 }
 
 export const MODES: readonly ModeInfo[] = [
-  { id: ModeId.FFA, key: 'ffa', name: { fr: 'Chacun pour soi', en: 'Free for all' }, bonus: false, respawn: false, needs: null },
-  { id: ModeId.TEAMS, key: 'teams', name: { fr: 'Équipes', en: 'Teams' }, bonus: false, respawn: false, needs: null },
-  { id: ModeId.KOTH, key: 'koth', name: { fr: 'Roi de la colline', en: 'King of the hill' }, bonus: true, respawn: true, needs: 'koth' },
-  { id: ModeId.BALL, key: 'ball', name: { fr: 'Boulette-ball', en: 'Paper-ball' }, bonus: true, respawn: true, needs: 'ball' },
-  { id: ModeId.INK_RISE, key: 'ink-rise', name: { fr: 'Encre montante', en: 'Rising ink' }, bonus: true, respawn: false, needs: null },
-  { id: ModeId.POTATO, key: 'potato', name: { fr: 'Patate d’encre', en: 'Ink potato' }, bonus: true, respawn: false, needs: null },
-  { id: ModeId.MOON, key: 'moon', name: { fr: 'Gravité lunaire', en: 'Low gravity' }, bonus: true, respawn: false, needs: null },
-  { id: ModeId.SAME_WEAPON, key: 'same-weapon', name: { fr: 'Même arme pour tous', en: 'Same weapon' }, bonus: true, respawn: false, needs: null },
+  {
+    id: ModeId.FFA,
+    key: 'ffa',
+    name: { fr: 'Chacun pour soi', en: 'Free for all' },
+    bonus: false,
+    respawn: false,
+    needs: null,
+  },
+  {
+    id: ModeId.TEAMS,
+    key: 'teams',
+    name: { fr: 'Équipes', en: 'Teams' },
+    bonus: false,
+    respawn: false,
+    needs: null,
+  },
+  {
+    id: ModeId.KOTH,
+    key: 'koth',
+    name: { fr: 'Roi de la colline', en: 'King of the hill' },
+    bonus: true,
+    respawn: true,
+    needs: 'koth',
+  },
+  {
+    id: ModeId.BALL,
+    key: 'ball',
+    name: { fr: 'Boulette-ball', en: 'Paper-ball' },
+    bonus: true,
+    respawn: true,
+    needs: 'ball',
+  },
+  {
+    id: ModeId.INK_RISE,
+    key: 'ink-rise',
+    name: { fr: 'Encre montante', en: 'Rising ink' },
+    bonus: true,
+    respawn: false,
+    needs: null,
+  },
+  {
+    id: ModeId.POTATO,
+    key: 'potato',
+    name: { fr: 'Patate d’encre', en: 'Ink potato' },
+    bonus: true,
+    respawn: false,
+    needs: null,
+  },
+  {
+    id: ModeId.MOON,
+    key: 'moon',
+    name: { fr: 'Gravité lunaire', en: 'Low gravity' },
+    bonus: true,
+    respawn: false,
+    needs: null,
+  },
+  {
+    id: ModeId.SAME_WEAPON,
+    key: 'same-weapon',
+    name: { fr: 'Même arme pour tous', en: 'Same weapon' },
+    bonus: true,
+    respawn: false,
+    needs: null,
+  },
 ];
 
 export const BONUS_MODE_IDS: readonly number[] = MODES.filter((m) => m.bonus).map((m) => m.id);
 
 export function modeInfo(id: number): ModeInfo {
-  return MODES[id] ?? MODES[0]!;
+  return MODES[id] ?? MODES[0];
 }
 
 export const MODE_PARAMS = {
