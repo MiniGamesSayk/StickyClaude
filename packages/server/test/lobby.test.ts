@@ -265,8 +265,8 @@ describe('prêt, réglages, équipes', () => {
     expect(a.lastOf('lobby')!.lobby.settings.suddenDeathSec).toBe(120);
     expect(a.of('lobby').length).toBe(before + 1);
     // des arènes inconnues sont ignorées
-    h.settings(a, { arenas: ['test-tower', 'nope'] });
-    expect(a.lastOf('lobby')!.lobby.settings.arenas).toEqual(['test-tower']);
+    h.settings(a, { arenas: ['partition', 'nope'] });
+    expect(a.lastOf('lobby')!.lobby.settings.arenas).toEqual(['partition']);
     h.startMatch(a, [b!]);
     h.settings(a, { roundsToWin: 3 });
     expect(a.lastOf('error')?.code).toBe('in_game');
