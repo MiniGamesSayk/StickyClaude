@@ -59,11 +59,26 @@ describe('tentatives de triche : aucun message ne fixe un état', () => {
     const { h, code, b } = twoPlayers();
     h.advance(100);
     const before = worldState(h, code);
-    const types = ['ready', 'start', 'settings', 'teams', 'kick', 'look', 'emote', 'tune', 'leave', 'quick', 'join'];
+    const types = [
+      'ready',
+      'start',
+      'settings',
+      'teams',
+      'kick',
+      'look',
+      'emote',
+      'tune',
+      'leave',
+      'quick',
+      'join',
+    ];
     fc.assert(
       fc.property(
         fc.constantFrom(...types),
-        fc.dictionary(fc.string({ maxLength: 8 }), fc.oneof(fc.integer(), fc.string({ maxLength: 12 }), fc.boolean(), fc.constant(null))),
+        fc.dictionary(
+          fc.string({ maxLength: 8 }),
+          fc.oneof(fc.integer(), fc.string({ maxLength: 12 }), fc.boolean(), fc.constant(null)),
+        ),
         (t, body) => {
           const conn = h.connect('10.8.0.1');
           h.send(conn, { t, ...body });
@@ -86,7 +101,12 @@ describe('tentatives de triche : aucun message ne fixe un état', () => {
     h.settings(b, { roundsToWin: 3 });
     h.send(b, { t: 'teams', shuffle: true });
     h.send(b, { t: 'kick', slot: 0 });
-    expect(b.of('error').map((e) => e.code)).toEqual(['not_host', 'not_host', 'not_host', 'not_host']);
+    expect(b.of('error').map((e) => e.code)).toEqual([
+      'not_host',
+      'not_host',
+      'not_host',
+      'not_host',
+    ]);
     expect(h.room(code).settings.roundsToWin).toBe(5);
     expect(a.of('left')).toHaveLength(0);
   });
@@ -181,7 +201,12 @@ describe('abus et inondation', () => {
     const { h, code } = twoPlayers({ RECONNECT_GRACE_MS: '60000' });
     const attacker = h.connect('6.6.6.6');
     for (let i = 0; i < 15; i++) {
-      h.send(attacker, { t: 'resume', v: PROTOCOL_VERSION, token: i.toString(16).padStart(32, '0'), code });
+      h.send(attacker, {
+        t: 'resume',
+        v: PROTOCOL_VERSION,
+        token: i.toString(16).padStart(32, '0'),
+        code,
+      });
     }
     expect(attacker.of('error').some((e) => e.code === 'rate_limited')).toBe(true);
   });

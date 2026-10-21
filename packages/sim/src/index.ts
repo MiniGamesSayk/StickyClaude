@@ -12,3 +12,4 @@ export { phaseTicks, cancelActions } from './player.ts';
 export { GHOST_COOLDOWN_TICKS, GHOST_SPEED } from './ghost.ts';
 export { fire, throwHeld, pickupOrThrow } from './weapons.ts';
 export { spawnProjectile } from './projectiles.ts';
+export * from './reach.ts';

@@ -240,8 +240,10 @@ function assignSides(world: World): void {
 }
 
 function ballCenter(world: World): { x: number; y: number } {
-  const goals = world.arena.modes?.ball?.goals;
+  const ball = world.arena.modes?.ball;
+  const goals = ball?.goals;
   if (!goals) return { x: WORLD_W / 2, y: WORLD_H / 2 };
+  if (ball.spawn) return { x: (ball.spawn[0] + 0.5) * CELL, y: (ball.spawn[1] + 1) * CELL };
   const a = goals[0];
   const b = goals[1];
   return {

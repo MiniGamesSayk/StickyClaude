@@ -591,7 +591,8 @@ export class Room {
     const w = this.world;
     const g = w.game;
     const present = new Set<number>();
-    for (let s = 0; s < MAX_PLAYERS; s++) if (this.matchTeams[s]! >= 0) present.add(this.matchTeams[s]!);
+    for (let s = 0; s < MAX_PLAYERS; s++)
+      if (this.matchTeams[s]! >= 0) present.add(this.matchTeams[s]!);
     const podium = [...present].sort((a, b) => g.scores[b]! - g.scores[a]! || a - b);
     const stats: PlayerStats[] = [];
     for (let s = 0; s < MAX_PLAYERS; s++) {
@@ -771,7 +772,11 @@ export class Room {
   /** Fin du délai de reconnexion : éliminé pour la manche, retiré à la fin de la manche. */
   private expire(m: Member, now: number): void {
     const phase = this.phase;
-    if (phase === GamePhase.LOBBY || phase === GamePhase.MATCH_END || phase === GamePhase.ROUND_END) {
+    if (
+      phase === GamePhase.LOBBY ||
+      phase === GamePhase.MATCH_END ||
+      phase === GamePhase.ROUND_END
+    ) {
       this.removeMember(m, 'closed', now);
       return;
     }

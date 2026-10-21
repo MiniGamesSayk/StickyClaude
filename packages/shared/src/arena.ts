@@ -48,7 +48,11 @@ export interface ArenaData {
   props: PropData[];
   modes?: {
     koth?: { zone: [number, number, number, number] };
-    ball?: { goals: [[number, number, number, number], [number, number, number, number]] };
+    ball?: {
+      goals: [[number, number, number, number], [number, number, number, number]];
+      /** Cellule d'apparition de la boule (par défaut : entre les deux cages). */
+      spawn?: [number, number];
+    };
   };
   decor: DecorData[];
   suddenDeath: 'ink-rise' | 'tear-edges';

@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { Bot, harness } from './helpers.ts';
 import type { FakeConn, Harness } from './helpers.ts';
 
-function setup(env: Record<string, string> = {}, n = 3): { h: Harness; code: string; conns: FakeConn[] } {
+function setup(
+  env: Record<string, string> = {},
+  n = 3,
+): { h: Harness; code: string; conns: FakeConn[] } {
   const h = harness(env);
   const a = h.connect('10.0.0.1');
   const code = h.create(a, 'Alice');

@@ -343,7 +343,11 @@ describe('contenu des snapshots de partie', () => {
     mine.team = room.world.team[0]!;
     h.advance(8);
     const has = (c: FakeConn): boolean =>
-      c.snapshots().at(-1)!.objects.slice(0, c.snapshots().at(-1)!.objectCount).some((o) => o.type === ObjType.MINE);
+      c
+        .snapshots()
+        .at(-1)!
+        .objects.slice(0, c.snapshots().at(-1)!.objectCount)
+        .some((o) => o.type === ObjType.MINE);
     expect(has(a)).toBe(true);
     expect(has(b)).toBe(false);
     expect(has(spec)).toBe(true);

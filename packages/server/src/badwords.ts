@@ -87,10 +87,7 @@ const LEET: Record<string, string> = {
 };
 
 function normalize(s: string): string {
-  const folded = s
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase();
+  const folded = s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
   let out = '';
   for (const ch of folded) out += LEET[ch] ?? ch;
   return out;

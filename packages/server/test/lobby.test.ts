@@ -83,7 +83,15 @@ describe('créer et rejoindre', () => {
     const ok = h.connect('10.9.1.1');
     h.send(ok, { t: 'create', v: PROTOCOL_VERSION, name: 'Classe 5B' });
     expect(ok.lastOf('joined')).toBeDefined();
-    for (const [i, fine] of ['Scunthorpe', 'Technique', 'Fichier', 'Connecteur', 'Retardataire', 'Hancock', 'Classique'].entries()) {
+    for (const [i, fine] of [
+      'Scunthorpe',
+      'Technique',
+      'Fichier',
+      'Connecteur',
+      'Retardataire',
+      'Hancock',
+      'Classique',
+    ].entries()) {
       const c = h.connect(`10.9.2.${i}`);
       h.send(c, { t: 'create', v: PROTOCOL_VERSION, name: fine });
       expect(c.lastOf('error')?.code, fine).toBeUndefined();
@@ -146,7 +154,12 @@ describe('créer et rejoindre', () => {
     const look = a.lastOf('joined')!.lobby.players[0]!.look;
     expect(look).toEqual({ color: 0, stroke: 2, hat: 11, victory: 0 });
     h.send(a, { t: 'look', look: { hat: 99, stroke: 1 } });
-    expect(a.lastOf('lobby')!.lobby.players[0]!.look).toEqual({ color: 0, stroke: 1, hat: 11, victory: 0 });
+    expect(a.lastOf('lobby')!.lobby.players[0]!.look).toEqual({
+      color: 0,
+      stroke: 1,
+      hat: 11,
+      victory: 0,
+    });
   });
 });
 
@@ -230,7 +243,13 @@ describe('prêt, réglages, équipes', () => {
     const [b] = fill(h, code, 1);
     h.settings(b!, { roundsToWin: 3 });
     expect(b!.lastOf('error')?.code).toBe('not_host');
-    h.settings(a, { roundsToWin: 7, suddenDeathSec: 120, weapons: false, friendlyFire: true, isPublic: true });
+    h.settings(a, {
+      roundsToWin: 7,
+      suddenDeathSec: 120,
+      weapons: false,
+      friendlyFire: true,
+      isPublic: true,
+    });
     const s = a.lastOf('lobby')!.lobby.settings;
     expect(s.roundsToWin).toBe(7);
     expect(s.suddenDeathSec).toBe(120);
@@ -287,7 +306,14 @@ describe('salons publics et partie rapide', () => {
     h.create(b, 'Bob');
     const list = h.server.publicRooms();
     expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({ code: codeA, players: 1, maxPlayers: 8, mode: 'ffa', phase: 'lobby', host: 'Alice' });
+    expect(list[0]).toMatchObject({
+      code: codeA,
+      players: 1,
+      maxPlayers: 8,
+      mode: 'ffa',
+      phase: 'lobby',
+      host: 'Alice',
+    });
     h.settings(a, { isPublic: false });
     expect(h.server.publicRooms()).toHaveLength(0);
   });
@@ -371,7 +397,12 @@ describe('salons publics et partie rapide', () => {
 
 describe('limites', () => {
   it('applique MAX_ROOMS, MAX_CONNECTIONS et MAX_CONN_PER_IP', () => {
-    const h = harness({ MAX_ROOMS: '2', MAX_CONNECTIONS: '5', MAX_CONN_PER_IP: '3', CREATE_PER_MIN: '100' });
+    const h = harness({
+      MAX_ROOMS: '2',
+      MAX_CONNECTIONS: '5',
+      MAX_CONN_PER_IP: '3',
+      CREATE_PER_MIN: '100',
+    });
     const c1 = h.connect('1.1.1.1');
     const c2 = h.connect('1.1.1.2');
     h.create(c1);

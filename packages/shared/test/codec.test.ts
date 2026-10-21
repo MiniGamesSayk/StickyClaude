@@ -16,16 +16,29 @@ import {
   encodePong,
   encodeSnapshot,
   eventIdDiff,
+  createDecodedEvent,
+  decodeEventPayload,
+  encodeEventPayload,
+  EVENT_SPECS,
+  GamePhase,
   INPUT_PACKET_MAX,
   INPUT_PACKET_MIN,
+  MAX_EVENT_PAYLOAD,
+  MAX_MODE_DATA,
+  MAX_OBJECTS,
+  MAX_PROJECTILES,
   MAX_SNAPSHOT_EVENTS,
+  OBJ_BYTES,
+  ObjType,
   OWN_BYTES,
+  OWN_FIELDS,
+  ownEquals,
   PLAYER_BYTES,
-  readSlotPosPayload,
-  ReliableType,
+  PROJ_BYTES,
+  ProjType,
+  SimEvent,
   SNAPSHOT_HEADER_BYTES,
   SNAPSHOT_MAX_BYTES,
-  writeSlotPosPayload,
 } from '../src/index.ts';
 import type { Snapshot } from '../src/index.ts';
 
@@ -48,7 +61,7 @@ function sampleSnapshot(): Snapshot {
   for (let i = 0; i < 3; i++) {
     const p = s.players[i];
     p.slot = i * 2;
-    p.flags = 0x7f - i;
+    p.flags = 0xffff - i;
     p.x = 100.37 + i * 200;
     p.y = 528 - i;
     p.vx = -190.2 * i;
@@ -59,30 +72,69 @@ function sampleSnapshot(): Snapshot {
     p.ammo = 8;
     p.anim = 3;
     p.animProg = 300; // plafonné à 255
+    p.variant = 0x35;
   }
-  const o = s.own;
-  o.x = 512.123;
-  o.y = 528;
-  o.vx = 12.5;
-  o.vy = -300.25;
-  o.flags = 0b10101;
-  o.coyote = 5;
-  o.jumpBuffer = 2;
-  o.wallLock = 9;
-  o.wallCoyote = 3;
-  o.dropTimer = 4;
-  o.wallDir = -1;
-  o.groundMover = 1;
-  o.prevInput = 0x1234;
-  o.respawns = 65535;
+  s.game.phase = GamePhase.PLAYING;
+  s.game.phaseTick = 70000; // plafonné à 65535
+  s.game.round = 7;
+  s.game.mode = 3;
+  s.game.modeCount = 3;
+  s.game.modeData[0] = 1;
+  s.game.modeData[1] = 65535;
+  s.game.modeData[2] = 300;
+  s.objectCount = 2;
+  Object.assign(s.objects[0], {
+    uid: 65535,
+    type: ObjType.WEAPON,
+    x: 10.5,
+    y: 20.25,
+    vx: 0,
+    vy: -3,
+    a: 8,
+    b: 3,
+  });
+  Object.assign(s.objects[1], {
+    uid: 2,
+    type: ObjType.MINE,
+    x: 300,
+    y: 400,
+    vx: 1,
+    vy: 2,
+    a: 1,
+    b: 255,
+  });
+  s.projCount = 1;
+  Object.assign(s.projectiles[0], {
+    uid: 9,
+    type: ProjType.ROCKET,
+    x: 50,
+    y: 60,
+    vx: 320,
+    vy: -4,
+    owner: 255,
+    a: 8,
+  });
+  const o = s.own as unknown as Record<string, number>;
+  OWN_FIELDS.forEach((f, i) => {
+    o[f.key] =
+      f.t === 'f32'
+        ? 100.5 + i
+        : f.t === 'i8'
+          ? -1
+          : f.t === 'u8'
+            ? (i * 7) % 256
+            : (i * 1001) % 65536;
+  });
+  s.own.flags = 0b10101;
   s.eventCount = 2;
-  const n = writeSlotPosPayload(s.events[0].data, 4, 100.5, 200.25);
+  const n = encodeEventPayload(s.events[0].data, SimEvent.SPAWN, 4, [100.5, 200.25]);
   s.events[0].id = 65535;
-  s.events[0].type = ReliableType.SPAWN;
+  s.events[0].type = SimEvent.SPAWN;
   s.events[0].len = n;
+  const m = encodeEventPayload(s.events[1].data, SimEvent.EMOTE, 1, [3]);
   s.events[1].id = 0;
-  s.events[1].type = ReliableType.FELL;
-  s.events[1].len = 0;
+  s.events[1].type = SimEvent.EMOTE;
+  s.events[1].len = m;
   return s;
 }
 
@@ -95,7 +147,7 @@ describe('paquet d entrées', () => {
     decodeInput(buf.subarray(0, n), out);
     expect(out.tick).toBe(70000 & 0xffff);
     expect(out.ack).toBe(65534);
-    expect(out.interp).toBe(25);
+    expect(out.rewind).toBe(25);
     expect(out.count).toBe(4);
     expect(Array.from(out.masks)).toEqual([0xff, 0x12, 0, 0x8001]);
   });
@@ -158,7 +210,15 @@ describe('snapshot', () => {
     const s = sampleSnapshot();
     const buf = new Uint8Array(SNAPSHOT_MAX_BYTES);
     const n = encodeSnapshot(buf, s);
-    const expectedSize = SNAPSHOT_HEADER_BYTES + 3 * PLAYER_BYTES + OWN_BYTES + (4 + 5) + (4 + 0);
+    const expectedSize =
+      SNAPSHOT_HEADER_BYTES +
+      3 * PLAYER_BYTES +
+      2 * OBJ_BYTES +
+      PROJ_BYTES +
+      3 * 2 +
+      OWN_BYTES +
+      (4 + 5) +
+      (4 + 3);
     expect(n).toBe(expectedSize);
 
     const d = createSnapshot();
@@ -177,17 +237,73 @@ describe('snapshot', () => {
       expect(Math.abs(b.vx - a.vx)).toBeLessThanOrEqual(1 / 16 + 1e-9);
       expect(Math.abs(b.vy - a.vy)).toBeLessThanOrEqual(1 / 16 + 1e-9);
       expect(b.hp).toBe(a.hp);
+      expect(b.variant).toBe(0x35);
       expect(b.animProg).toBe(255);
     }
-    expect(d.own.x).toBeCloseTo(s.own.x, 3);
-    expect(d.own.vy).toBeCloseTo(s.own.vy, 3);
-    expect(d.own.wallDir).toBe(-1);
-    expect(d.own.respawns).toBe(65535);
-    expect(d.own.prevInput).toBe(0x1234);
+    expect(d.game).toMatchObject({
+      phase: GamePhase.PLAYING,
+      phaseTick: 65535,
+      round: 7,
+      mode: 3,
+      modeCount: 3,
+    });
+    expect(Array.from(d.game.modeData.subarray(0, 3))).toEqual([1, 65535, 300]);
+    expect(d.objectCount).toBe(2);
+    expect(d.objects[0]).toEqual({
+      uid: 65535,
+      type: ObjType.WEAPON,
+      x: 10.5,
+      y: 20.25,
+      vx: 0,
+      vy: -3,
+      a: 8,
+      b: 3,
+    });
+    expect(d.objects[1].b).toBe(255);
+    expect(d.projCount).toBe(1);
+    expect(d.projectiles[0]).toEqual({
+      uid: 9,
+      type: ProjType.ROCKET,
+      x: 50,
+      y: 60,
+      vx: 320,
+      vy: -4,
+      owner: 255,
+      a: 8,
+    });
+    expect(ownEquals(d.own, s.own)).toBe(true);
     expect(d.eventCount).toBe(2);
     expect(d.events[0].id).toBe(65535);
-    const pos = readSlotPosPayload(d.events[0].data, d.events[0].len);
-    expect(pos).toEqual({ slot: 4, x: 100.5, y: 200.25 });
+    const ev = createDecodedEvent();
+    decodeEventPayload(d.events[0].type, d.events[0].data, d.events[0].len, ev);
+    expect(ev.slot).toBe(4);
+    expect(Array.from(ev.a.subarray(0, ev.n))).toEqual([100.5, 200.25]);
+  });
+
+  it('le bloc own fait 69 octets et couvre tous les champs d état exact', () => {
+    expect(OWN_BYTES).toBe(69);
+    expect(OWN_FIELDS.map((f) => f.key)).toContain('atkBuffer');
+    expect(new Set(OWN_FIELDS.map((f) => f.key)).size).toBe(OWN_FIELDS.length);
+  });
+
+  it('tailles maximales : un snapshot plein tient dans SNAPSHOT_MAX_BYTES', () => {
+    const s = sampleSnapshot();
+    s.playerCount = 8;
+    s.objectCount = MAX_OBJECTS;
+    s.projCount = MAX_PROJECTILES;
+    s.game.modeCount = MAX_MODE_DATA;
+    s.eventCount = MAX_SNAPSHOT_EVENTS;
+    for (const e of s.events) {
+      e.len = MAX_EVENT_PAYLOAD;
+      e.type = SimEvent.KO;
+    }
+    for (let i = 0; i < 8; i++) s.players[i].slot = i;
+    for (const o of s.objects) o.type = ObjType.CRATE;
+    for (const p of s.projectiles) p.type = ProjType.PELLET;
+    const buf = new Uint8Array(SNAPSHOT_MAX_BYTES);
+    const n = encodeSnapshot(buf, s);
+    expect(n).toBe(SNAPSHOT_MAX_BYTES);
+    decodeSnapshot(buf.subarray(0, n), createSnapshot());
   });
 
   it('un snapshot sans bloc own est plus court', () => {
@@ -198,7 +314,15 @@ describe('snapshot', () => {
     const d = createSnapshot();
     decodeSnapshot(buf.subarray(0, n), d);
     expect(d.hasOwn).toBe(false);
-    expect(n).toBe(SNAPSHOT_HEADER_BYTES + 3 * PLAYER_BYTES + (4 + 5) + 4);
+    expect(n).toBe(
+      SNAPSHOT_HEADER_BYTES +
+        3 * PLAYER_BYTES +
+        2 * OBJ_BYTES +
+        PROJ_BYTES +
+        3 * 2 +
+        (4 + 5) +
+        (4 + 3),
+    );
   });
 
   it('rejette toutes les troncatures', () => {
@@ -228,13 +352,34 @@ describe('snapshot', () => {
     const b5 = buf.slice(0, n);
     b5[SNAPSHOT_HEADER_BYTES] = 8; // slot hors bornes
     expectDecodeError(() => decodeSnapshot(b5, d));
+    const b6 = buf.slice(0, n);
+    b6[9] = MAX_OBJECTS + 1;
+    expectDecodeError(() => decodeSnapshot(b6, d));
+    const b7 = buf.slice(0, n);
+    b7[10] = MAX_PROJECTILES + 1;
+    expectDecodeError(() => decodeSnapshot(b7, d));
+    const b8 = buf.slice(0, n);
+    b8[11] = 9; // phase inconnue
+    expectDecodeError(() => decodeSnapshot(b8, d));
+    const b9 = buf.slice(0, n);
+    b9[16] = MAX_MODE_DATA + 1;
+    expectDecodeError(() => decodeSnapshot(b9, d));
+    const b10 = buf.slice(0, n);
+    b10[SNAPSHOT_HEADER_BYTES + 3 * PLAYER_BYTES + 2] = 99; // type d'objet inconnu
+    expectDecodeError(() => decodeSnapshot(b10, d));
+    const b11 = buf.slice(0, n);
+    b11[SNAPSHOT_HEADER_BYTES + 3 * PLAYER_BYTES + 2 * OBJ_BYTES + 2] = 0; // type de projectile
+    expectDecodeError(() => decodeSnapshot(b11, d));
+    const b12 = buf.slice(0, n);
+    b12[SNAPSHOT_HEADER_BYTES + 11] = 9; // visée hors des 8 directions
+    expectDecodeError(() => decodeSnapshot(b12, d));
   });
 
   it('rejette un flottant non fini dans le bloc own', () => {
     const s = sampleSnapshot();
     const buf = new Uint8Array(SNAPSHOT_MAX_BYTES);
     const n = encodeSnapshot(buf, s);
-    const off = SNAPSHOT_HEADER_BYTES + 3 * PLAYER_BYTES;
+    const off = SNAPSHOT_HEADER_BYTES + 3 * PLAYER_BYTES + 2 * OBJ_BYTES + PROJ_BYTES + 3 * 2;
     new DataView(buf.buffer).setFloat32(off, NaN, true);
     expectDecodeError(() => decodeSnapshot(buf.subarray(0, n), createSnapshot()));
   });
@@ -310,12 +455,13 @@ describe('fuzzing', () => {
       y: fc.integer({ min: -4000 * 8, max: 4000 * 8 }).map((v) => v / 8),
       vx: fc.integer({ min: -4000 * 8, max: 4000 * 8 }).map((v) => v / 8),
       vy: fc.integer({ min: -4000 * 8, max: 4000 * 8 }).map((v) => v / 8),
-      aim: fc.integer({ min: 0, max: 255 }),
+      aim: fc.integer({ min: 0, max: 7 }),
       hp: fc.integer({ min: 0, max: 255 }),
       weapon: fc.integer({ min: 0, max: 255 }),
       ammo: fc.integer({ min: 0, max: 255 }),
       anim: fc.integer({ min: 0, max: 255 }),
       animProg: fc.integer({ min: 0, max: 255 }),
+      variant: fc.integer({ min: 0, max: 255 }),
     });
     fc.assert(
       fc.property(

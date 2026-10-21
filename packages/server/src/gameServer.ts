@@ -164,10 +164,7 @@ export class GameServer implements RoomIO {
     this.metrics.inputPackets++;
 
     // Accusé de réception des événements fiables (joueurs et spectateurs).
-    if (
-      eventIdDiff(pkt.ack, m.ackedEvent) > 0 &&
-      eventIdDiff(pkt.ack, room.reliable.lastId) <= 0
-    ) {
+    if (eventIdDiff(pkt.ack, m.ackedEvent) > 0 && eventIdDiff(pkt.ack, room.reliable.lastId) <= 0) {
       m.ackedEvent = pkt.ack;
     }
     if (m.slot < 0) return;
@@ -336,7 +333,11 @@ export class GameServer implements RoomIO {
     return name;
   }
 
-  private onCreate(c: ClientState, msg: Extract<ClientMessage, { t: 'create' }>, now: number): void {
+  private onCreate(
+    c: ClientState,
+    msg: Extract<ClientMessage, { t: 'create' }>,
+    now: number,
+  ): void {
     const name = this.checkEntry(c, msg.v, msg.name);
     if (name === null) return;
     // Seul le mode développement choisit l'arène du salon d'attente.
@@ -403,7 +404,11 @@ export class GameServer implements RoomIO {
   }
 
   /** Reconnexion avec le jeton de session, dans le délai de 20 s. */
-  private onResume(c: ClientState, msg: Extract<ClientMessage, { t: 'resume' }>, now: number): void {
+  private onResume(
+    c: ClientState,
+    msg: Extract<ClientMessage, { t: 'resume' }>,
+    now: number,
+  ): void {
     if (msg.v !== PROTOCOL_VERSION) return this.error(c, 'version');
     if (c.member) return this.error(c, 'already_joined');
     if (this.codeLimiter.blocked(c.conn.ip, now)) return this.error(c, 'rate_limited');
@@ -448,7 +453,8 @@ export class GameServer implements RoomIO {
   /** Salons publics, du plus rempli au moins rempli. */
   publicRooms(): PublicRoom[] {
     const out: PublicRoom[] = [];
-    for (const r of this.rooms.values()) if (r.settings.isPublic && r.hasRoom()) out.push(r.toPublic());
+    for (const r of this.rooms.values())
+      if (r.settings.isPublic && r.hasRoom()) out.push(r.toPublic());
     return out.sort((a, b) => b.players - a.players || a.code.localeCompare(b.code));
   }
 

@@ -48,12 +48,14 @@ export const arenaSchema = z
           }),
       )
       .max(8),
-    props: z.array(z.object({ type: z.string().max(20), at: cell }).strict()).max(64),
+    props: z
+      .array(z.object({ type: z.enum(['crate', 'balloon', 'tack']), at: cell }).strict())
+      .max(64),
     modes: z
       .object({
         koth: z.object({ zone: rect }).strict().optional(),
         ball: z
-          .object({ goals: z.tuple([rect, rect]) })
+          .object({ goals: z.tuple([rect, rect]), spawn: cell.optional() })
           .strict()
           .optional(),
       })
