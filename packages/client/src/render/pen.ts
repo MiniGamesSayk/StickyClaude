@@ -1,26 +1,29 @@
+import { Particle, ParticleContainer, Rectangle, Texture } from 'pixi.js';
 import type { Container } from 'pixi.js';
-import { Sprite, Texture } from 'pixi.js';
 import { rand2 } from './noise.ts';
+import { PEN_WIDTH, PenStyle } from './penStyle.ts';
 
 /**
- * Le stylo : tout ce qui se dessine à chaque image (stickmen, armes, effets) est fait de sprites
- * réutilisés. Un segment = un sprite « corps » étiré entre deux points + un sprite « bout »
- * arrondi à chaque extrémité. Les textures sont générées au démarrage sur un canvas (aucun
- * fichier image), blanches : la couleur vient de la teinte du sprite.
+ * Le stylo : tout ce qui se dessine à chaque image (stickmen, armes, effets) est fait de
+ * particules Pixi réutilisées, toutes prises dans **un seul atlas** généré au démarrage sur un
+ * canvas (aucun fichier image) : un `ParticleContainer` = un appel de dessin, sans hiérarchie de
+ * scène. Un segment = une particule « corps » étirée entre deux points + des particules « bout »
+ * arrondies aux jointures. Les textures sont blanches : la couleur vient de la teinte.
  *
- * Aucune allocation en régime établi : `begin()` remet le compteur à zéro, chaque appel prend
- * le sprite suivant du pool, `end()` masque ceux qui n'ont pas servi.
+ * Aucune allocation en régime établi : `begin()` vide la liste dessinée, chaque appel reprend la
+ * particule suivante du pool, la teinte est écrite directement (pas de `Color` intermédiaire).
  */
 
 export { PEN_WIDTH, PenStyle } from './penStyle.ts';
-import { PenStyle } from './penStyle.ts';
 
 export interface PenTextures {
   /** Corps de trait par style (long et fin, u le long du trait, v en travers). */
   body: Texture[];
   /** Bout arrondi par style. */
   cap: Texture[];
-  /** Anneau (cercle tracé), disque plein, éclat de papier, étoile à 4 branches. */
+  /** Anneau de tête par style : l'épaisseur du trait est celle du style (pour un rayon de 4,4). */
+  headRing: Texture[];
+  /** Anneau (cercle tracé), disque plein, éclat de papier. */
   ring: Texture;
   disc: Texture;
   scrap: Texture;
@@ -28,23 +31,22 @@ export interface PenTextures {
   blot: Texture[];
   /** Dégradé radial doux (flash, ombres). */
   glow: Texture;
-  /** Rectangle plein (aplats). */
+  /** Aplat blanc (rectangles). */
   white: Texture;
 }
 
-function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+/** Rayon de la tête du stickman (unités) : voir `skeleton.ts`. */
+const HEAD_R = 4.4;
+
+type Canvas2 = [HTMLCanvasElement, CanvasRenderingContext2D];
+
+function canvas(w: number, h: number): Canvas2 {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
   const ctx = c.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D indisponible');
   return [c, ctx];
-}
-
-function tex(c: HTMLCanvasElement): Texture {
-  const t = Texture.from(c);
-  t.source.scaleMode = 'linear';
-  return t;
 }
 
 /** Profil d'opacité en travers du trait : plein au centre, bord adouci. */
@@ -66,12 +68,10 @@ function makeBody(style: number): HTMLCanvasElement {
       const u = (x + 0.5) / W;
       let a: number;
       if (style === PenStyle.BALLPOINT) {
-        // pression légère qui varie le long du trait
         a = profile(v, 0.35) * (0.9 + 0.1 * Math.sin(u * 9 + 1.3));
       } else if (style === PenStyle.MARKER) {
         a = profile(v, 0.12) * 0.95;
       } else if (style === PenStyle.PENCIL) {
-        // grain : tirets de graphite orientés dans le sens du trait
         const grain = 0.55 + 0.45 * rand2(Math.floor(x / 2), y, 11);
         a = profile(v, 0.5) * grain;
       } else {
@@ -116,13 +116,13 @@ function makeCap(style: number): HTMLCanvasElement {
   return c;
 }
 
-function makeRing(): HTMLCanvasElement {
-  const S = 128;
-  const [c, ctx] = canvas(S, S);
+/** Anneau d'épaisseur `th` (fraction du diamètre). */
+function makeRing(size: number, th: number): HTMLCanvasElement {
+  const [c, ctx] = canvas(size, size);
   ctx.strokeStyle = '#fff';
-  ctx.lineWidth = S * 0.075;
+  ctx.lineWidth = size * th;
   ctx.beginPath();
-  ctx.arc(S / 2, S / 2, S / 2 - ctx.lineWidth, 0, Math.PI * 2);
+  ctx.arc(size / 2, size / 2, size / 2 - ctx.lineWidth / 2 - 0.5, 0, Math.PI * 2);
   ctx.stroke();
   return c;
 }
@@ -155,7 +155,6 @@ function makeBlot(variant: number): HTMLCanvasElement {
   const S = 128;
   const [c, ctx] = canvas(S, S);
   ctx.fillStyle = '#fff';
-  // corps : disque irrégulier
   ctx.beginPath();
   const n = 28;
   for (let i = 0; i <= n; i++) {
@@ -167,7 +166,6 @@ function makeBlot(variant: number): HTMLCanvasElement {
     else ctx.lineTo(x, y);
   }
   ctx.fill();
-  // gouttes autour
   for (let k = 0; k < 9; k++) {
     const a = rand2(k, variant, 6) * Math.PI * 2;
     const d = S * (0.26 + 0.2 * rand2(k, variant, 7));
@@ -175,7 +173,6 @@ function makeBlot(variant: number): HTMLCanvasElement {
     ctx.beginPath();
     ctx.arc(S / 2 + Math.cos(a) * d, S / 2 + Math.sin(a) * d, r, 0, Math.PI * 2);
     ctx.fill();
-    // traînée vers le centre
     ctx.lineWidth = r * 1.2;
     ctx.strokeStyle = '#fff';
     ctx.beginPath();
@@ -197,87 +194,135 @@ function makeGlow(): HTMLCanvasElement {
   return c;
 }
 
+function makeWhite(): HTMLCanvasElement {
+  const [c, ctx] = canvas(8, 8);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, 8, 8);
+  return c;
+}
+
+const PAD = 2;
+const ATLAS_W = 1024;
+
 let cached: PenTextures | null = null;
 
-/** Textures du stylo, créées une seule fois (demande un DOM). */
+/** Textures du stylo : un seul atlas (une source), créé une fois (demande un DOM). */
 export function penTextures(): PenTextures {
   if (cached) return cached;
+  const items: HTMLCanvasElement[] = [];
+  const add = (c: HTMLCanvasElement): number => items.push(c) - 1;
+  const body = [0, 1, 2, 3].map((s) => add(makeBody(s)));
+  const cap = [0, 1, 2, 3].map((s) => add(makeCap(s)));
+  const headRing = [0, 1, 2, 3].map((s) => {
+    const w = PEN_WIDTH[s];
+    return add(makeRing(64, w / (2 * HEAD_R + w)));
+  });
+  const ring = add(makeRing(128, 0.075));
+  const disc = add(makeDisc());
+  const scrap = add(makeScrap());
+  const blot = [0, 1, 2, 3].map((v) => add(makeBlot(v)));
+  const glow = add(makeGlow());
+  const white = add(makeWhite());
+
+  // rangement en étagères
+  const pos: { x: number; y: number }[] = [];
+  let x = PAD;
+  let y = PAD;
+  let shelf = 0;
+  for (const c of items) {
+    if (x + c.width + PAD > ATLAS_W) {
+      x = PAD;
+      y += shelf + PAD;
+      shelf = 0;
+    }
+    pos.push({ x, y });
+    x += c.width + PAD;
+    shelf = Math.max(shelf, c.height + PAD);
+  }
+  const height = y + shelf + PAD;
+  const [atlas, ctx] = canvas(ATLAS_W, height);
+  items.forEach((c, i) => {
+    ctx.drawImage(c, pos[i].x, pos[i].y);
+    if (i === white) {
+      // l'aplat étiré ne doit pas laisser transparaître la marge : on la remplit aussi
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(pos[i].x - 1, pos[i].y - 1, c.width + 2, c.height + 2);
+    }
+  });
+  const base = Texture.from(atlas);
+  base.source.scaleMode = 'linear';
+  const frame = (i: number): Texture =>
+    new Texture({
+      source: base.source,
+      frame: new Rectangle(pos[i].x, pos[i].y, items[i].width, items[i].height),
+    });
   cached = {
-    body: [0, 1, 2, 3].map((s) => tex(makeBody(s))),
-    cap: [0, 1, 2, 3].map((s) => tex(makeCap(s))),
-    ring: tex(makeRing()),
-    disc: tex(makeDisc()),
-    scrap: tex(makeScrap()),
-    blot: [0, 1, 2, 3].map((v) => tex(makeBlot(v))),
-    glow: tex(makeGlow()),
-    white: Texture.WHITE,
+    body: body.map(frame),
+    cap: cap.map(frame),
+    headRing: headRing.map(frame),
+    ring: frame(ring),
+    disc: frame(disc),
+    scrap: frame(scrap),
+    blot: blot.map(frame),
+    glow: frame(glow),
+    white: frame(white),
   };
   return cached;
 }
 
-/** Réserve de sprites réutilisés d'une image à l'autre. */
-export class SpritePool {
-  private readonly items: Sprite[] = [];
-  private used = 0;
-
-  constructor(readonly parent: Container) {}
-
-  begin(): void {
-    this.used = 0;
-  }
-
-  next(texture: Texture): Sprite {
-    let s = this.items[this.used];
-    if (!s) {
-      s = new Sprite(texture);
-      this.parent.addChild(s);
-      this.items.push(s);
-    } else if (s.texture !== texture) {
-      s.texture = texture;
-    }
-    this.used++;
-    s.visible = true;
-    return s;
-  }
-
-  end(): void {
-    for (let i = this.used; i < this.items.length; i++) this.items[i].visible = false;
-  }
-
-  /** Nombre de sprites réservés (mesures). */
-  get capacity(): number {
-    return this.items.length;
-  }
-
-  get inUse(): number {
-    return this.used;
-  }
-
-  clear(): void {
-    this.used = 0;
-    for (const s of this.items) s.visible = false;
-  }
+/** Couleur de particule : teinte BGR + opacité sur 8 bits (formule de Pixi, sans `Color`). */
+function packColor(rgb: number, alpha: number): number {
+  const bgr = ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff);
+  const a = alpha <= 0 ? 0 : alpha >= 1 ? 255 : (alpha * 255) | 0;
+  return bgr + (a << 24);
 }
 
 /** Stylo : segments, points, anneaux et disques, tous teintés et sans allocation. */
 export class Pen {
-  private readonly pool: SpritePool;
+  private readonly pool: Particle[] = [];
+  private readonly container: ParticleContainer;
   private readonly tx = penTextures();
+  /** Particules utilisées à cette image et à la précédente (les autres sont rendues transparentes). */
+  private used = 0;
+  private prevUsed = 0;
 
   constructor(parent: Container) {
-    this.pool = new SpritePool(parent);
+    this.container = new ParticleContainer({
+      dynamicProperties: { vertex: true, position: true, rotation: true, uvs: true, color: true },
+    });
+    parent.addChild(this.container);
   }
 
   begin(): void {
-    this.pool.begin();
+    this.used = 0;
   }
 
+  /**
+   * Les particules d'une image précédente qui ne servent plus deviennent transparentes. (On ne
+   * raccourcit jamais le tableau du conteneur : `length = 0` libère son stockage et le réalloue
+   * à chaque image.)
+   */
   end(): void {
-    this.pool.end();
+    for (let i = this.used; i < this.prevUsed; i++) this.pool[i].color = 0;
+    this.prevUsed = this.used;
   }
 
+  /** Nombre de particules dessinées à cette image (mesures). */
   get sprites(): number {
-    return this.pool.inUse;
+    return this.used;
+  }
+
+  private next(tex: Texture): Particle {
+    const i = this.used++;
+    let p = this.pool[i];
+    if (!p) {
+      p = new Particle(tex);
+      this.pool.push(p);
+      this.container.addParticle(p);
+    } else if (p.texture !== tex) {
+      p.texture = tex;
+    }
+    return p;
   }
 
   /** Segment de x0,y0 à x1,y1, d'épaisseur `w`, avec bouts arrondis. */
@@ -296,14 +341,16 @@ export class Pen {
     const dy = y1 - y0;
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len > 0.05) {
-      const s = this.pool.next(this.tx.body[style]);
-      s.anchor.set(0, 0.5);
-      s.position.set(x0, y0);
-      s.rotation = Math.atan2(dy, dx);
-      s.width = len;
-      s.height = w;
-      s.tint = color;
-      s.alpha = alpha;
+      const tex = this.tx.body[style];
+      const p = this.next(tex);
+      p.anchorX = 0;
+      p.anchorY = 0.5;
+      p.x = x0;
+      p.y = y0;
+      p.rotation = Math.atan2(dy, dx);
+      p.scaleX = len / tex.orig.width;
+      p.scaleY = w / tex.orig.height;
+      p.color = packColor(color, alpha);
     }
     if (caps) {
       this.cap(x0, y0, w, color, alpha, style);
@@ -311,18 +358,90 @@ export class Pen {
     }
   }
 
-  cap(x: number, y: number, w: number, color: number, alpha: number, style: number): void {
-    const s = this.pool.next(this.tx.cap[style]);
-    s.anchor.set(0.5, 0.5);
-    s.position.set(x, y);
-    s.rotation = 0;
-    s.width = w;
-    s.height = w;
-    s.tint = color;
-    s.alpha = alpha;
+  /**
+   * Segment (sans bouts) entre les points `a` et `b` d'un tableau de coordonnées (x, y, x, y…).
+   * Les coordonnées sont lues ici : les passer en arguments à `seg` ferait allouer à V8 une boîte
+   * par nombre calculé à chaque appel non inliné (le squelette en dessine des dizaines par image).
+   */
+  segAt(
+    pts: ArrayLike<number>,
+    a: number,
+    b: number,
+    w: number,
+    color: number,
+    alpha: number,
+    style: number,
+  ): void {
+    const x0 = pts[a * 2];
+    const y0 = pts[a * 2 + 1];
+    const dx = pts[b * 2] - x0;
+    const dy = pts[b * 2 + 1] - y0;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len <= 0.05) return;
+    const tex = this.tx.body[style];
+    const p = this.next(tex);
+    p.anchorX = 0;
+    p.anchorY = 0.5;
+    p.x = x0;
+    p.y = y0;
+    p.rotation = Math.atan2(dy, dx);
+    p.scaleX = len / tex.orig.width;
+    p.scaleY = w / tex.orig.height;
+    p.color = packColor(color, alpha);
   }
 
-  /** Chaîne de segments sur `n` points `pts[0..2n)`, éventuellement fermée. */
+  /** Bout arrondi au point `a` d'un tableau de coordonnées (voir `segAt`). */
+  capAt(
+    pts: ArrayLike<number>,
+    a: number,
+    w: number,
+    color: number,
+    alpha: number,
+    style: number,
+  ): void {
+    const tex = this.tx.cap[style];
+    const p = this.next(tex);
+    p.anchorX = 0.5;
+    p.anchorY = 0.5;
+    p.x = pts[a * 2];
+    p.y = pts[a * 2 + 1];
+    p.rotation = 0;
+    p.scaleX = w / tex.orig.width;
+    p.scaleY = w / tex.orig.height;
+    p.color = packColor(color, alpha);
+  }
+
+  cap(x: number, y: number, w: number, color: number, alpha: number, style: number): void {
+    this.sprite(this.tx.cap[style], x, y, w, w, 0, color, alpha);
+  }
+
+  /** Particule centrée en x, y, de taille w × h (unités de monde). */
+  private sprite(
+    tex: Texture,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    rotation: number,
+    color: number,
+    alpha: number,
+  ): void {
+    const p = this.next(tex);
+    p.anchorX = 0.5;
+    p.anchorY = 0.5;
+    p.x = x;
+    p.y = y;
+    p.rotation = rotation;
+    p.scaleX = w / tex.orig.width;
+    p.scaleY = h / tex.orig.height;
+    p.color = packColor(color, alpha);
+  }
+
+  /**
+   * Chaîne de segments sur `n` points `pts[0..2n)`, éventuellement fermée. C'est le chemin le plus
+   * chaud (armes, objets, décor) : segments et bouts sont écrits ici, sans appeler `seg` ni `cap`
+   * avec des nombres calculés (V8 en alloue une boîte par argument quand l'appel n'est pas inliné).
+   */
   poly(
     pts: ArrayLike<number>,
     n: number,
@@ -332,27 +451,74 @@ export class Pen {
     alpha: number,
     style: number,
   ): void {
-    for (let i = 0; i < n - 1; i++) {
-      this.seg(
-        pts[i * 2],
-        pts[i * 2 + 1],
-        pts[i * 2 + 2],
-        pts[i * 2 + 3],
-        w,
-        color,
-        alpha,
-        style,
-        false,
-      );
-      this.cap(pts[i * 2 + 2], pts[i * 2 + 3], w, color, alpha, style);
+    if (n <= 0) return;
+    const col = packColor(color, alpha);
+    const body = this.tx.body[style];
+    const capTex = this.tx.cap[style];
+    const bodyW = body.orig.width;
+    const bodyH = body.orig.height;
+    const capSx = w / capTex.orig.width;
+    const capSy = w / capTex.orig.height;
+    const segs = closed && n > 2 ? n : n - 1;
+    for (let i = 0; i < segs; i++) {
+      const j = i + 1 === n ? 0 : i + 1;
+      const x0 = pts[i * 2];
+      const y0 = pts[i * 2 + 1];
+      const x1 = pts[j * 2];
+      const y1 = pts[j * 2 + 1];
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0.05) {
+        const p = this.next(body);
+        p.anchorX = 0;
+        p.anchorY = 0.5;
+        p.x = x0;
+        p.y = y0;
+        p.rotation = Math.atan2(dy, dx);
+        p.scaleX = len / bodyW;
+        p.scaleY = w / bodyH;
+        p.color = col;
+      }
+      if (j !== 0) {
+        const c = this.next(capTex);
+        c.anchorX = 0.5;
+        c.anchorY = 0.5;
+        c.x = x1;
+        c.y = y1;
+        c.rotation = 0;
+        c.scaleX = capSx;
+        c.scaleY = capSy;
+        c.color = col;
+      }
     }
-    if (n > 0) this.cap(pts[0], pts[1], w, color, alpha, style);
-    if (closed && n > 2) {
-      this.seg(pts[n * 2 - 2], pts[n * 2 - 1], pts[0], pts[1], w, color, alpha, style, false);
-    }
+    const c0 = this.next(capTex);
+    c0.anchorX = 0.5;
+    c0.anchorY = 0.5;
+    c0.x = pts[0];
+    c0.y = pts[1];
+    c0.rotation = 0;
+    c0.scaleX = capSx;
+    c0.scaleY = capSy;
+    c0.color = col;
   }
 
-  /** Cercle tracé de centre x,y et de rayon `r` (l'épaisseur vient de la texture). */
+  /** Tête du stickman : un anneau dont l'épaisseur est celle du style de trait. */
+  headRing(
+    x: number,
+    y: number,
+    rx: number,
+    ry: number,
+    rotation: number,
+    color: number,
+    alpha: number,
+    style: number,
+  ): void {
+    const d = 2 * HEAD_R + PEN_WIDTH[style];
+    this.sprite(this.tx.headRing[style], x, y, d * rx, d * ry, rotation, color, alpha);
+  }
+
+  /** Cercle tracé de rayons rx, ry (l'épaisseur vient de la texture). */
   ring(
     x: number,
     y: number,
@@ -362,61 +528,26 @@ export class Pen {
     alpha: number,
     rotation = 0,
   ): void {
-    const s = this.pool.next(this.tx.ring);
-    s.anchor.set(0.5, 0.5);
-    s.position.set(x, y);
-    s.rotation = rotation;
-    s.width = rx * 2;
-    s.height = ry * 2;
-    s.tint = color;
-    s.alpha = alpha;
+    this.sprite(this.tx.ring, x, y, rx * 2, ry * 2, rotation, color, alpha);
   }
 
   /** Disque plein. */
   disc(x: number, y: number, rx: number, ry: number, color: number, alpha: number): void {
-    const s = this.pool.next(this.tx.disc);
-    s.anchor.set(0.5, 0.5);
-    s.position.set(x, y);
-    s.rotation = 0;
-    s.width = rx * 2;
-    s.height = ry * 2;
-    s.tint = color;
-    s.alpha = alpha;
+    this.sprite(this.tx.disc, x, y, rx * 2, ry * 2, 0, color, alpha);
   }
 
   /** Éclat de papier. */
   scrap(x: number, y: number, size: number, rotation: number, color: number, alpha: number): void {
-    const s = this.pool.next(this.tx.scrap);
-    s.anchor.set(0.5, 0.5);
-    s.position.set(x, y);
-    s.rotation = rotation;
-    s.width = size;
-    s.height = size * 0.8;
-    s.tint = color;
-    s.alpha = alpha;
+    this.sprite(this.tx.scrap, x, y, size, size * 0.8, rotation, color, alpha);
   }
 
   /** Rectangle plein, de coin haut-gauche x, y. */
   rect(x: number, y: number, w: number, h: number, color: number, alpha: number): void {
-    const s = this.pool.next(this.tx.white);
-    s.anchor.set(0, 0);
-    s.position.set(x, y);
-    s.rotation = 0;
-    s.width = w;
-    s.height = h;
-    s.tint = color;
-    s.alpha = alpha;
+    this.sprite(this.tx.white, x + w / 2, y + h / 2, w, h, 0, color, alpha);
   }
 
   /** Lueur radiale (flash). */
   glow(x: number, y: number, r: number, color: number, alpha: number): void {
-    const s = this.pool.next(this.tx.glow);
-    s.anchor.set(0.5, 0.5);
-    s.position.set(x, y);
-    s.rotation = 0;
-    s.width = r * 2;
-    s.height = r * 2;
-    s.tint = color;
-    s.alpha = alpha;
+    this.sprite(this.tx.glow, x, y, r * 2, r * 2, 0, color, alpha);
   }
 }

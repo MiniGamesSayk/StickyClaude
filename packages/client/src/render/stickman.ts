@@ -5,7 +5,6 @@ import {
   CELL,
   GRID_H,
   GRID_W,
-  INK_COLORS,
   PlayerFlag,
   PlayerState,
   weaponDef,
@@ -14,7 +13,7 @@ import {
 import { boilX, boilY } from './noise.ts';
 import { drawShape } from './draw.ts';
 import type { Boil } from './draw.ts';
-import { INK, legibleInk } from './palette.ts';
+import { INK } from './palette.ts';
 import { PEN_WIDTH, PenStyle } from './penStyle.ts';
 import type { Pen } from './pen.ts';
 import { HAT_SHAPES, PATTERN_SHAPES, PENCIL, TARGET, WEAPON_INK, WEAPON_SHAPES } from './shapes.ts';
@@ -30,6 +29,8 @@ export interface PaintEnv {
   cells: Uint8Array;
   /** Papier de la page (pour assombrir les encres trop pâles). */
   paper: number;
+  /** Les 12 encres de joueur, déjà assombries au besoin pour le papier de la page. */
+  inks: readonly number[];
   /** Hit-stop et tremblé coupés. */
   reducedMotion: boolean;
 }
@@ -67,17 +68,6 @@ const times = (w: number, phase: number): number => {
   return phase === 1 ? d.startup : phase === 2 ? d.active : d.recovery;
 };
 
-const HEAD_PTS = 9;
-const headCircle = (() => {
-  const a = new Float32Array(HEAD_PTS * 2);
-  for (let i = 0; i < HEAD_PTS; i++) {
-    a[i * 2] = Math.cos((i / HEAD_PTS) * Math.PI * 2 + 0.4);
-    a[i * 2 + 1] = Math.sin((i / HEAD_PTS) * Math.PI * 2 + 0.4);
-  }
-  return a;
-})();
-const headScratch = new Float32Array(HEAD_PTS * 2);
-
 function mix(a: number, b: number, t: number): number {
   const ar = (a >> 16) & 255;
   const ag = (a >> 8) & 255;
@@ -97,7 +87,7 @@ function footDrop(cells: Uint8Array, wx: number, wy: number): number {
   return c === Cell.SOLID || c === Cell.PAPER || c === Cell.ONEWAY ? 0 : 2.6;
 }
 
-/** Segment entre deux points du squelette (indices a et b). */
+/** Segment entre deux points du squelette (indices a et b), sans bouts : ils sont posés aux jointures. */
 function seg(
   pen: Pen,
   w: Float32Array,
@@ -108,8 +98,30 @@ function seg(
   color: number,
   al: number,
 ): void {
-  pen.seg(w[a * 2], w[a * 2 + 1], w[b * 2], w[b * 2 + 1], width, color, al, style);
+  pen.segAt(w, a, b, width, color, al, style);
 }
+
+/** Bouts arrondis aux jointures a, b et c (−1 : aucune). */
+function joints(
+  pen: Pen,
+  w: Float32Array,
+  style: number,
+  width: number,
+  color: number,
+  al: number,
+  a: number,
+  b: number,
+  c: number,
+): void {
+  pen.capAt(w, a, width, color, al, style);
+  if (b >= 0) pen.capAt(w, b, width, color, al, style);
+  if (c >= 0) pen.capAt(w, c, width, color, al, style);
+}
+
+/** Tremblés réutilisés (aucune allocation par image). */
+const NO_BOIL: Boil = { variant: 0, amp: 0, seed: 0 };
+const hatBoil: Boil = { variant: 0, amp: 0, seed: 0 };
+const weaponBoil: Boil = { variant: 0, amp: 0, seed: 0 };
 
 /** Peint les stickmen : squelette → points monde → traits (+ arme, accessoire, motif, nom). */
 export class StickmanPainter {
@@ -228,9 +240,7 @@ export class StickmanPainter {
 
     // Couleur et style
     const mannequin = p.mannequin;
-    let ink = mannequin
-      ? INK.graphite
-      : legibleInk(INK_COLORS[p.color % INK_COLORS.length], env.paper, 3);
+    let ink = mannequin ? INK.graphite : env.inks[p.color % env.inks.length];
     const style = mannequin ? PenStyle.PENCIL : p.stroke;
     const wd = PEN_WIDTH[style];
     let alpha = 1;
@@ -282,6 +292,10 @@ export class StickmanPainter {
       seg(pen, w, style, J.KNL, J.FTL, ow, white, 0.92);
       seg(pen, w, style, J.PEL, J.KNR, ow, white, 0.92);
       seg(pen, w, style, J.KNR, J.FTR, ow, white, 0.92);
+      joints(pen, w, style, ow, white, 0.92, J.NECK, J.PEL, J.SHL);
+      joints(pen, w, style, ow, white, 0.92, J.SHR, J.ELL, J.HNL);
+      joints(pen, w, style, ow, white, 0.92, J.ELR, J.HNR, J.KNL);
+      joints(pen, w, style, ow, white, 0.92, J.FTL, J.KNR, J.FTR);
       pen.disc(w[J.HEAD * 2], w[J.HEAD * 2 + 1], BODY.headR + 2.4, BODY.headR + 2.4, white, 0.92);
     }
     const far = wd * 0.9;
@@ -291,27 +305,24 @@ export class StickmanPainter {
     seg(pen, w, style, J.ELL, J.HNL, far, ink, farAlpha);
     seg(pen, w, style, J.PEL, J.KNL, far, ink, farAlpha);
     seg(pen, w, style, J.KNL, J.FTL, far, ink, farAlpha);
+    joints(pen, w, style, far, ink, farAlpha, J.ELL, J.HNL, J.KNL);
+    joints(pen, w, style, far, ink, farAlpha, J.FTL, -1, -1);
     // tronc
     seg(pen, w, style, J.NECK, J.PEL, wd * 1.12, ink, alpha);
     seg(pen, w, style, J.NECK, J.SHL, wd, ink, alpha);
     seg(pen, w, style, J.NECK, J.SHR, wd, ink, alpha);
+    joints(pen, w, style, wd, ink, alpha, J.NECK, J.PEL, J.SHL);
+    joints(pen, w, style, wd, ink, alpha, J.SHR, -1, -1);
     // côté proche
     seg(pen, w, style, J.PEL, J.KNR, wd, ink, alpha);
     seg(pen, w, style, J.KNR, J.FTR, wd, ink, alpha);
+    joints(pen, w, style, wd, ink, alpha, J.KNR, J.FTR, -1);
     // tête : cercle tracé, le sommet des cheveux n'existe pas (c'est un bonhomme-bâton)
     const hx = w[J.HEAD * 2];
     const hy = w[J.HEAD * 2 + 1];
     const tilt = v.rig.headTilt * facing;
-    const ct = Math.cos(tilt);
-    const st = Math.sin(tilt);
     const sx = 1 + (env.boil.amp > 0 ? boilX(v.id + 90, env.boil.variant) * 0.04 : 0);
-    for (let i = 0; i < HEAD_PTS; i++) {
-      const px = headCircle[i * 2] * BODY.headR * sx;
-      const py = headCircle[i * 2 + 1] * BODY.headR;
-      headScratch[i * 2] = hx + px * ct - py * st;
-      headScratch[i * 2 + 1] = hy + px * st + py * ct;
-    }
-    pen.poly(headScratch, HEAD_PTS, true, wd, ink, alpha, style);
+    pen.headRing(hx, hy, sx, 2 - sx, tilt, ink, alpha, style);
 
     // yeux (regard vers l'avant) : deux petits points
     const eyeX = hx + facing * 1.9;
@@ -321,6 +332,9 @@ export class StickmanPainter {
     // accessoire
     const hatShape = HAT_SHAPES[p.hat];
     if (hatShape) {
+      hatBoil.variant = env.boil.variant;
+      hatBoil.amp = env.boil.amp * 0.6;
+      hatBoil.seed = v.id + 120;
       drawShape(
         pen,
         hatShape,
@@ -335,17 +349,16 @@ export class StickmanPainter {
         ink,
         alpha,
         style,
-        {
-          variant: env.boil.variant,
-          amp: env.boil.amp * 0.6,
-          seed: v.id + 120,
-        },
+        hatBoil,
       );
     }
 
     // arme, côté proche, devant le corps
     const weapon = WEAPON_SHAPES[p.weapon];
     if (weapon && v.rig.holding) {
+      weaponBoil.variant = env.boil.variant;
+      weaponBoil.amp = env.boil.amp * 0.7;
+      weaponBoil.seed = v.id + 150;
       const wdef = weaponDef(p.weapon);
       const wink = WEAPON_INK[p.weapon] ?? INK.black;
       const col = wdef.kind === WeaponKind.MINE ? INK.night : wink;
@@ -363,22 +376,34 @@ export class StickmanPainter {
         col,
         alpha,
         PenStyle.BALLPOINT,
-        { variant: env.boil.variant, amp: env.boil.amp * 0.7, seed: v.id + 150 },
+        weaponBoil,
       );
     }
     // bras proche
     seg(pen, w, style, J.SHR, J.ELR, wd, ink, alpha);
     seg(pen, w, style, J.ELR, J.HNR, wd, ink, alpha);
+    joints(pen, w, style, wd, ink, alpha, J.ELR, J.HNR, -1);
 
     // badge de poitrine : motif (daltoniens) ou cible (mannequin)
     const bx = (w[J.NECK * 2] + w[J.PEL * 2]) / 2;
     const by = (w[J.NECK * 2 + 1] + w[J.PEL * 2 + 1]) / 2;
     if (p.mannequin) {
-      drawShape(pen, TARGET, bx, by, 1, 0, 0, 0, 3.4, 1.0, INK.red, alpha, PenStyle.BALLPOINT, {
-        variant: 0,
-        amp: 0,
-        seed: 0,
-      });
+      drawShape(
+        pen,
+        TARGET,
+        bx,
+        by,
+        1,
+        0,
+        0,
+        0,
+        3.4,
+        1.0,
+        INK.red,
+        alpha,
+        PenStyle.BALLPOINT,
+        NO_BOIL,
+      );
     } else {
       pen.disc(bx + facing * 2.3, by, 3.2, 3.2, 0xffffff, 0.9 * alpha);
       const pattern = PATTERN_SHAPES[(p.team >= 0 ? 5 + p.team : p.color) % PATTERN_SHAPES.length];
@@ -396,11 +421,7 @@ export class StickmanPainter {
         ink,
         alpha,
         PenStyle.BALLPOINT,
-        {
-          variant: 0,
-          amp: 0,
-          seed: 0,
-        },
+        NO_BOIL,
       );
     }
   }
@@ -411,7 +432,7 @@ export class StickmanPainter {
     v.dispX = p.x;
     v.dispY = p.y;
     v.hasDisp = true;
-    const ink = legibleInk(INK_COLORS[p.color % INK_COLORS.length], env.paper, 3);
+    const ink = env.inks[p.color % env.inks.length];
     const bob = Math.sin(env.timeMs / 220 + v.id) * 1.4;
     drawShape(
       pen,

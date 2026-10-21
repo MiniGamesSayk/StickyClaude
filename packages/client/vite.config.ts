@@ -41,5 +41,7 @@ export default defineConfig({
     target: 'es2022',
     // Une seule entrée : jamais l'éditeur (editor/index.html) dans la version de production.
     rollupOptions: { input: 'index.html' },
+    // NO_MINIFY=1 : noms de fonctions lisibles dans les profils (scripts/perf-check.mjs)
+    minify: process.env.NO_MINIFY ? false : undefined,
   },
 });

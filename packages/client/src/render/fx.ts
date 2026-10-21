@@ -3,6 +3,7 @@ import type { Container } from 'pixi.js';
 import { Sprite, Texture } from 'pixi.js';
 import { canvas2d } from './art.ts';
 import { drawShape } from './draw.ts';
+import { FlashLimiter } from './limiter.ts';
 import type { Boil } from './draw.ts';
 import { rand2 } from './noise.ts';
 import type { GameEvent } from '../net/client.ts';
@@ -28,8 +29,6 @@ const MAX_BLOTS = 48;
 const MAX_BUBBLES = 8;
 const MAX_DRAWINS = 6;
 const MAX_ROPES = 6;
-/** Au moins cet intervalle entre deux flashs (≤ 3 par seconde, analyse §1.11). */
-const FLASH_GAP_MS = 340;
 
 /** Mots des onomatopées : graphismes communs au français et à l'anglais. */
 export const Ono = { BAM: 0, POW: 1, CRAC: 2, ZIP: 3, SPLAT: 4 } as const;
@@ -167,7 +166,7 @@ export class FxSystem {
   private readonly cax = new Float32Array(MAX_ROPES);
   private readonly cay = new Float32Array(MAX_ROPES);
   private readonly clife = new Float32Array(MAX_ROPES);
-  private lastFlashAt = -1e9;
+  private readonly flashes = new FlashLimiter();
   private readonly tx: PenTextures;
   private readonly scratch = new Float32Array(160);
 
@@ -362,8 +361,7 @@ export class FxSystem {
 
   /** Éclat doré de parade parfaite, au plus 3 par seconde. */
   private flash(x: number, y: number, env: FxEnv): void {
-    if (env.nowMs - this.lastFlashAt < FLASH_GAP_MS) return;
-    this.lastFlashAt = env.nowMs;
+    if (!this.flashes.allow(env.nowMs)) return;
     this.ring(x, y, 4, 34, 0.26, INK.gold, true);
   }
 

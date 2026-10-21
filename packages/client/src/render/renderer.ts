@@ -101,6 +101,10 @@ export class Renderer {
 
   private arena: ArenaData | null = null;
   private paperColor = 0xf8f4e6;
+  /** Les 12 encres adaptées au papier courant (calculées une fois par arène). */
+  private inks: number[] = INK_COLORS.map((c) => c);
+  private readonly objBoil: Boil = { variant: 0, amp: 0, seed: 0 };
+  private frameNo = 0;
   private baseScale = 1;
   private pageRes = 1;
   private pageWorld: World | null = null;
@@ -111,7 +115,7 @@ export class Renderer {
   private readonly framePts = new Float32Array(MAX_FRAME_POINTS * 2);
   private readonly view = new Float32Array(4);
   private readonly markCells: number[] = [];
-  private readonly pos = new Map<number, { x: number; y: number }>();
+  private readonly pos = new Map<number, { x: number; y: number; frame: number }>();
   private fxEnv!: FxEnv;
   private winners = 0;
   /** Image courante : instant, durée, tremblé. */
@@ -123,7 +127,17 @@ export class Renderer {
   /** Cadre imposé à la caméra (aperçu de l'accueil) ; null = cadrage automatique. */
   private cameraOverride: { x: number; y: number; zoom: number } | null = null;
   /** Mesures (affichage du débit, tests). */
-  stats = { sprites: 0, particles: 0, ragdolls: 0, fps: 60 };
+  stats = {
+    sprites: 0,
+    particles: 0,
+    ragdolls: 0,
+    fps: 60,
+    /** Amplitude du tremblé des traits (0 = coupé) et mouvement réduit. */
+    boil: 0,
+    reduced: false,
+    level: 2,
+    dpr: 1,
+  };
 
   async init(host: HTMLElement, options?: Partial<RenderOptions>): Promise<void> {
     if (options) this.options = { ...this.options, ...options };
@@ -169,7 +183,10 @@ export class Renderer {
     this.fx = new FxSystem(this.hooks(), this.blotLayer, onoLayer, tx);
     this.fxEnv = {
       nowMs: 0,
-      playerPos: (slot) => this.pos.get(slot) ?? null,
+      playerPos: (slot) => {
+        const e = this.pos.get(slot);
+        return e !== undefined && e.frame === this.frameNo ? e : null;
+      },
       colorOf: (slot) => this.colorOf(slot),
       reducedMotion: false,
       density: 1,
@@ -289,6 +306,7 @@ export class Renderer {
   setArena(arena: ArenaData, animate = false): void {
     this.arena = arena;
     this.paperColor = themeOf(arena.theme).paper;
+    this.inks = INK_COLORS.map((c) => legibleInk(c, this.paperColor, 3));
     this.buildPage(arena);
     this.terrain.setArena(arena);
     this.pageWorld = null;
@@ -380,7 +398,7 @@ export class Renderer {
   }
 
   private legible(inkIndex: number): number {
-    return legibleInk(INK_COLORS[inkIndex % INK_COLORS.length], this.paperColor, 3);
+    return this.inks[inkIndex % this.inks.length];
   }
 
   // --- Image ---------------------------------------------------------------------------------
@@ -418,6 +436,7 @@ export class Renderer {
       boil: this.boil,
       cells: world.cells,
       paper: this.paperColor,
+      inks: this.inks,
       reducedMotion: reduced,
     };
 
@@ -461,6 +480,10 @@ export class Renderer {
       this.playerPen.sprites + this.fxPen.sprites + this.objectPen.sprites + this.projPen.sprites;
     this.stats.particles = this.fx.activeParticles;
     this.stats.ragdolls = this.ragdolls.count;
+    this.stats.boil = this.boil.amp;
+    this.stats.reduced = reduced;
+    this.stats.level = this.quality.level;
+    this.stats.dpr = this.app.renderer.resolution;
   }
 
   private syncTerrain(world: World): void {
@@ -856,7 +879,10 @@ export class Renderer {
     const t = this.nowMs / 1000;
     for (let i = 0; i < scene.objectCount; i++) {
       const o = scene.objects[i];
-      const boil = { variant: this.boil.variant, amp: this.boil.amp * 0.6, seed: o.uid * 17 };
+      const boil = this.objBoil;
+      boil.variant = this.boil.variant;
+      boil.amp = this.boil.amp * 0.6;
+      boil.seed = o.uid * 17;
       if (o.type === ObjType.WEAPON) {
         const shape = WEAPON_SHAPES[o.a];
         if (!shape) continue;
@@ -937,7 +963,10 @@ export class Renderer {
     for (let i = 0; i < scene.projCount; i++) {
       const p = scene.projectiles[i];
       const ang = Math.atan2(p.vy, p.vx);
-      const boil = { variant: this.boil.variant, amp: this.boil.amp * 0.5, seed: p.uid * 11 };
+      const boil = this.objBoil;
+      boil.variant = this.boil.variant;
+      boil.amp = this.boil.amp * 0.5;
+      boil.seed = p.uid * 11;
       let trail = 0xffffff;
       let size = 2.2;
       if (p.type === ProjType.THROWN) {
@@ -999,7 +1028,7 @@ export class Renderer {
   private drawPlayers(scene: Scene, paint: PaintEnv): void {
     const pen = this.playerPen;
     const t = this.nowMs;
-    this.pos.clear();
+    this.frameNo++;
     const roundDone =
       scene.game.phase === GamePhase.ROUND_END || scene.game.phase === GamePhase.MATCH_END;
     for (let pi = 0; pi < scene.playerCount; pi++) {
@@ -1026,7 +1055,7 @@ export class Renderer {
       const q = this.drawable(p, x, y);
       if (p.state === PlayerState.GHOST) {
         this.painter.drawGhost(pen, q, paint);
-        this.pos.set(p.slot, { x, y });
+        this.setPos(p.slot, x, y);
         const label = this.labels.get(p.name, 11, 0x44507f, true);
         label.position.set(x, y - 14);
         label.alpha = 0.8;
@@ -1034,9 +1063,20 @@ export class Renderer {
       }
       this.painter.draw(pen, q, paint);
       const d = this.painter.displayed(p.slot);
-      this.pos.set(p.slot, d ?? { x, y });
+      this.setPos(p.slot, d ? d.x : x, d ? d.y : y);
       this.drawOverhead(p, paint);
     }
+  }
+
+  private setPos(slot: number, x: number, y: number): void {
+    let e = this.pos.get(slot);
+    if (!e) {
+      e = { x, y, frame: this.frameNo };
+      this.pos.set(slot, e);
+    }
+    e.x = x;
+    e.y = y;
+    e.frame = this.frameNo;
   }
 
   private readonly scratchPlayer: DrawPlayer = {

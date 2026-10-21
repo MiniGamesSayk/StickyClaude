@@ -3,7 +3,8 @@
 //
 //   node scripts/check-bundle.mjs [--dir packages/client/dist] [--limit 400000]
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { extname, join, relative, resolve, sep } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 const args = Object.fromEntries(
@@ -12,7 +13,9 @@ const args = Object.fromEntries(
     return acc;
   }, []),
 );
-const dir = resolve(args.dir ?? 'packages/client/dist');
+const dir = resolve(
+  args.dir ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'client', 'dist'),
+);
 const limit = Number(args.limit ?? 400_000);
 const COUNTED = new Set(['.js', '.mjs', '.css', '.woff2', '.woff', '.html', '.svg']);
 
