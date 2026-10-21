@@ -83,7 +83,7 @@ export default tseslint.config(
   },
   {
     // Scripts Playwright : une partie du code s'exécute dans la page.
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'e2e/**/*.mjs'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 );

@@ -32,7 +32,12 @@ const [vw, vh] = (args.size ?? '320x180').split('x').map(Number);
 const TELEPORT_SPEED = 1500;
 
 const browser = await chromium.launch({
-  executablePath: args.chrome ?? process.env.CHROME ?? '/usr/bin/chromium',
+  executablePath:
+    args.chrome ??
+    process.env.CHROME ??
+    (process.platform === 'win32'
+      ? 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+      : '/usr/bin/chromium'),
   headless: true,
   args: [
     '--use-angle=swiftshader',
