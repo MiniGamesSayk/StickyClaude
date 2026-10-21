@@ -14,6 +14,8 @@ export interface ServerConfig {
   /** Essais de code de salon (échecs) par minute et par IP. */
   codeTriesPerMin: number;
   roomIdleTtlSec: number;
+  /** Intervalle des pings WebSocket (ms) ; déconnexion après 3 pings sans réponse. */
+  heartbeatMs: number;
   /** Outils de développement : réglage en direct des constantes, enregistrement exposé. */
   devTools: boolean;
   /** Origine publique autorisée pour le WebSocket (ex. https://stickyclaude.sayk.fr). */
@@ -51,6 +53,7 @@ export function loadConfig(
     createPerMin: int(env.CREATE_PER_MIN, 3, 1, 100_000),
     codeTriesPerMin: int(env.CODE_TRIES_PER_MIN, 10, 1, 100_000),
     roomIdleTtlSec: int(env.ROOM_IDLE_TTL_SEC, 300, 0, 86_400),
+    heartbeatMs: int(env.HEARTBEAT_MS, 10_000, 20, 600_000),
     devTools: env.DEV_TOOLS === '1',
     publicOrigin: env.PUBLIC_ORIGIN ?? '',
     allowNoOrigin: env.ALLOW_NO_ORIGIN === '1',

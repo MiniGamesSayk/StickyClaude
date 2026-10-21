@@ -231,6 +231,29 @@ describe('WebSocket', () => {
   });
 });
 
+describe('heartbeat', () => {
+  it('déconnecte un client qui ne répond plus aux pings, pas un client normal', async () => {
+    const cfg = loadConfig({ PORT: '0', HEARTBEAT_MS: '50', STATIC_DIR: staticDir }, staticDir);
+    const hb = await startServer(cfg);
+    try {
+      const url = `ws://127.0.0.1:${hb.port}/ws`;
+      const normal = new TestClient(url);
+      await normal.open();
+      const silent = new WebSocket(url, { autoPong: false });
+      let closedWith: number | null = null;
+      silent.on('close', (code) => (closedWith = code));
+      silent.on('error', () => {});
+      await new Promise<void>((r) => silent.once('open', () => r()));
+      await sleep(400);
+      expect(closedWith).not.toBeNull();
+      expect(normal.closedWith).toBeNull();
+      normal.stop();
+    } finally {
+      await hb.stop();
+    }
+  });
+});
+
 describe('Origin en production', () => {
   it('accepte uniquement l origine publique', async () => {
     const cfg = loadConfig(

@@ -21,6 +21,7 @@ import {
   decodeSnapshot,
   encodeInput,
   encodePing,
+  eventIdDiff,
   Input,
   PROTOCOL_VERSION,
   Rng,
@@ -141,6 +142,8 @@ class FakeClient {
   marginSum = 0;
   marginCount = 0;
   label = 0;
+  /** Dernier événement fiable reçu (acquitté dans chaque paquet d'entrées, comme un vrai client). */
+  private lastEvent = 0;
   private readonly snap = createSnapshot();
   private readonly buf = new Uint8Array(32);
   private readonly rng: Rng;
@@ -182,6 +185,7 @@ class FakeClient {
         this.code = m.code;
         this.slot = m.slot;
         this.label = m.tick + LEAD;
+        this.lastEvent = m.ev;
       } else if (m.t === 'error') {
         this.onError(new Error(`erreur serveur : ${m.code}`));
       }
@@ -191,6 +195,10 @@ class FakeClient {
       decodeSnapshot(data, this.snap);
       this.snapshots++;
       this.lastSnap = this.snap;
+      for (let i = 0; i < this.snap.eventCount; i++) {
+        const id = this.snap.events[i].id;
+        if (eventIdDiff(id, this.lastEvent) === 1) this.lastEvent = id;
+      }
       if (this.measuring && this.snap.margin < 100) {
         this.marginSum += this.snap.margin;
         this.marginCount++;
@@ -221,7 +229,7 @@ class FakeClient {
     }
     this.label++;
     const masks = [this.mask, this.mask, this.mask, this.mask];
-    const n = encodeInput(this.buf, this.label, 0, 25, masks, 4);
+    const n = encodeInput(this.buf, this.label, this.lastEvent, 25, masks, 4);
     this.ws.send(this.buf.slice(0, n));
     if (++this.pings % 120 === 0) {
       const p = encodePing(this.buf, Math.floor(performance.now()));

@@ -14,8 +14,13 @@ const POS_TOL = 0.02;
 const VEL_TOL = 0.05;
 /** Écart visuel maximal lissé ; au-delà, le surplus est appliqué d'un coup (téléportation). */
 const SMOOTH_MAX = 4 * CELL;
-/** Constante de temps du lissage visuel des corrections (≈ 100 ms pour disparaître). */
+/**
+ * Lissage visuel des corrections : constante de temps de 40 ms pour un petit écart (disparaît en
+ * ≈ 100 ms), allongée de 2 ms par unité d'écart pour qu'une grosse correction (blocage réseau)
+ * se résorbe en glissant plutôt qu'en sautant.
+ */
 const SMOOTH_TAU_MS = 40;
+const SMOOTH_TAU_PER_UNIT_MS = 2;
 
 export const ReconcileResult = {
   /** Snapshot trop ancien, ou pas d'entrée d'historique correspondante. */
@@ -167,7 +172,8 @@ export class Predictor {
 
   /** Fait décroître le décalage visuel (à appeler à chaque image). */
   decaySmoothing(dtMs: number): void {
-    const k = Math.exp(-dtMs / SMOOTH_TAU_MS);
+    const tau = SMOOTH_TAU_MS + SMOOTH_TAU_PER_UNIT_MS * Math.hypot(this.smoothX, this.smoothY);
+    const k = Math.exp(-dtMs / tau);
     this.smoothX *= k;
     this.smoothY *= k;
     if (Math.abs(this.smoothX) < 0.01) this.smoothX = 0;

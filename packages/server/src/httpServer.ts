@@ -30,7 +30,8 @@ const MIME: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-const HEARTBEAT_MS = 10_000;
+/** Déconnexion après 3 pings WebSocket sans réponse (30 s avec l'intervalle par défaut de 10 s). */
+const HEARTBEAT_MAX_MISSED = 3;
 
 class WsConnection implements Connection {
   constructor(
@@ -179,7 +180,7 @@ export function startServer(
 
   const server = createServer(handler);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1024, perMessageDeflate: false });
-  const alive = new WeakMap<WebSocket, boolean>();
+  const missed = new WeakMap<WebSocket, number>();
   let nextId = 1;
 
   const reject = (socket: Duplex, status: string): void => {
@@ -198,8 +199,8 @@ export function startServer(
         ws.close(1013, 'server busy');
         return;
       }
-      alive.set(ws, true);
-      ws.on('pong', () => alive.set(ws, true));
+      missed.set(ws, 0);
+      ws.on('pong', () => missed.set(ws, 0));
       ws.on('message', (data: RawData, isBinary: boolean) => {
         const bytes = toBytes(data);
         game.onMessage(conn, isBinary ? bytes : Buffer.from(bytes).toString('utf8'), isBinary);
@@ -211,14 +212,15 @@ export function startServer(
 
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {
-      if (alive.get(ws) === false) {
+      const n = missed.get(ws) ?? 0;
+      if (n >= HEARTBEAT_MAX_MISSED) {
         ws.terminate();
         continue;
       }
-      alive.set(ws, false);
+      missed.set(ws, n + 1);
       ws.ping();
     }
-  }, HEARTBEAT_MS);
+  }, cfg.heartbeatMs);
   heartbeat.unref();
 
   const loop = startLoop(game, cfg.tickHz, (lag) =>

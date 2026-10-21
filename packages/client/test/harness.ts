@@ -224,7 +224,7 @@ export class TestWorld {
   /** Crée un salon avec `n` clients (le premier crée, les autres rejoignent). */
   populate(n: number, opts: NetOptions, arena?: string): Probe[] {
     const first = this.addClient('P0xx', opts, undefined, arena);
-    this.net.runUntil(this.net.nowMs + 1000);
+    for (let i = 0; i < 100 && !first.client.code; i++) this.net.runUntil(this.net.nowMs + 100);
     const joined = first.client.code;
     if (!joined) throw new Error('le salon n a pas été créé');
     const out = [first];

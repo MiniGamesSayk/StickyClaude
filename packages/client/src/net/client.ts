@@ -32,6 +32,8 @@ const MAX_INITIAL_CATCHUP_TICKS = 120;
 const MAX_PACKETS_PER_UPDATE = 3;
 /** Avance supplémentaire maximale due à des images rares (en ticks). */
 const MAX_FRAME_LEAD_TICKS = 8;
+/** Vitesse maximale de variation de la latence utilisée (ms de latence par ms réelle). */
+const OWD_SLEW = 0.05;
 /** Plage du retard d'interpolation adaptatif (ms). */
 const INTERP_MIN_MS = 100;
 const INTERP_MAX_MS = 300;
@@ -183,6 +185,8 @@ export class GameClient {
   private readonly keptValid = new Uint8Array(MAX_PLAYERS);
   private lastViewAt = Number.NaN;
   private frameMs = 0;
+  /** Latence aller utilisée pour viser le tick d'entrée : l'estimation brute, mais lissée. */
+  private owdUsed = 0;
   private caughtUp = false;
   private readonly queued: string[] = [];
 
@@ -402,8 +406,15 @@ export class GameClient {
       // Avec peu d'images par seconde, plusieurs ticks sont simulés d'un coup : le plus ancien
       // doit lui aussi arriver à temps, d'où une avance de plus d'une durée d'image.
       const frameLead = Math.min(MAX_FRAME_LEAD_TICKS, Math.max(0, this.frameMs / TICK_MS - 1));
+      // La latence estimée peut bouger d'un coup (pong retardé par un blocage TCP) : on la suit
+      // lentement pour que l'horloge de prédiction n'accélère pas brutalement. Si elle est trop
+      // basse, la marge renvoyée par le serveur augmente l'avance plus vite que cela.
+      const owd = this.clock.owdMs;
+      if (!this.caughtUp) this.owdUsed = owd;
+      else
+        this.owdUsed += Math.max(-OWD_SLEW * dtMs, Math.min(OWD_SLEW * dtMs, owd - this.owdUsed));
       const desired =
-        this.clock.serverTick(now) + this.clock.owdMs / TICK_MS + this.leadTicks + frameLead;
+        this.clock.serverTick(now) + this.owdUsed / TICK_MS + this.leadTicks + frameLead;
       this.lastDesired = desired;
       let target = Math.floor(desired);
       // Premier rattrapage : on simule tout l'écart. Ensuite, après une longue interruption
