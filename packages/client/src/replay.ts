@@ -1,5 +1,4 @@
 import {
-  createGameSnap,
   getArena,
   MAX_OBJECTS,
   MAX_PROJECTILES,
@@ -9,9 +8,9 @@ import {
 } from '@stickyclaude/shared';
 import type { Recording } from '@stickyclaude/shared';
 import { ReplayCursor } from '@stickyclaude/sim';
-import { createObjView, createProjView } from './net/interpolation.ts';
+import { createScene } from './app/scene.ts';
 import type { Renderer } from './render/renderer.ts';
-import type { DrawPlayer, Scene } from './render/renderer.ts';
+import type { Scene } from './render/types.ts';
 
 /**
  * Relecture visuelle d'un enregistrement d'entrées (`?replay=/chemin.json`), en local, sans
@@ -37,10 +36,8 @@ export async function startReplay(
     if (e.key === '[') speed = Math.max(0.125, speed / 2);
     if (e.key === ']') speed = Math.min(8, speed * 2);
   });
-  const players: DrawPlayer[] = [];
-  const objects = Array.from({ length: MAX_OBJECTS }, createObjView);
-  const projectiles = Array.from({ length: MAX_PROJECTILES }, createProjView);
-  const game = createGameSnap();
+  const first = cursor.world;
+  const scene: Scene = createScene(first);
   renderer.ticker.add((t) => {
     if (!paused) acc += t.deltaMS * speed;
     while (acc >= TICK_MS) {
@@ -51,39 +48,40 @@ export async function startReplay(
       }
     }
     const w = cursor.world;
-    players.length = 0;
+    scene.world = w;
+    let np = 0;
     w.players.forEach((p, slot) => {
       if (!p.active || p.dead) return;
-      players.push({
-        slot,
-        x: p.ghost ? p.ghostX : p.x,
-        y: p.ghost ? p.ghostY : p.y,
-        vx: p.vx,
-        vy: p.vy,
-        facing: p.facing,
-        crouching: p.crouching,
-        flags: (p.facing > 0 ? PlayerFlag.FACING_RIGHT : 0) | PlayerFlag.ALIVE,
-        state: p.ghost ? PlayerState.GHOST : p.state,
-        animProg: p.stateTicks,
-        variant: 0,
-        hp: p.hp,
-        weapon: p.weapon,
-        ammo: p.ammo,
-        aim: p.aim,
-        self: false,
-        name: '',
-        color: slot,
-        team: -1,
-        stroke: 0,
-        hat: 0,
-        victory: 0,
-        mannequin: false,
-      });
+      const d = scene.players[np++];
+      d.slot = slot;
+      d.x = p.ghost ? p.ghostX : p.x;
+      d.y = p.ghost ? p.ghostY : p.y;
+      d.vx = p.vx;
+      d.vy = p.vy;
+      d.facing = p.facing;
+      d.crouching = p.crouching;
+      d.flags = (p.facing > 0 ? PlayerFlag.FACING_RIGHT : 0) | PlayerFlag.ALIVE;
+      d.state = p.ghost ? PlayerState.GHOST : p.state;
+      d.animProg = p.stateTicks;
+      d.variant = 0;
+      d.hp = p.hp;
+      d.weapon = p.weapon;
+      d.ammo = p.ammo;
+      d.aim = p.aim;
+      d.self = false;
+      d.name = '';
+      d.color = slot;
+      d.team = -1;
+      d.stroke = 0;
+      d.hat = 0;
+      d.victory = 0;
+      d.mannequin = false;
     });
+    scene.playerCount = np;
     let n = 0;
     for (const o of w.objects) {
       if (!o.active || n >= MAX_OBJECTS) continue;
-      const v = objects[n++];
+      const v = scene.objects[n++];
       v.uid = o.uid;
       v.type = o.type;
       v.x = o.x;
@@ -93,10 +91,11 @@ export async function startReplay(
       v.a = o.a;
       v.b = o.b;
     }
+    scene.objectCount = n;
     let m = 0;
     for (const p of w.projectiles) {
       if (!p.active || m >= MAX_PROJECTILES) continue;
-      const v = projectiles[m++];
+      const v = scene.projectiles[m++];
       v.uid = p.uid;
       v.type = p.type;
       v.x = p.x;
@@ -106,24 +105,12 @@ export async function startReplay(
       v.owner = p.owner < 0 ? 255 : p.owner;
       v.a = p.weapon;
     }
-    game.phase = w.game.phase;
-    game.mode = w.game.mode;
-    const scene: Scene = {
-      world: w,
-      players,
-      objects,
-      objectCount: n,
-      projectiles,
-      projCount: m,
-      moverTick: w.tick,
-      remoteTick: w.tick,
-      params: w.params,
-      game,
-      ghost: { x: 0, y: 0, visible: false },
-      debug: false,
-      teamColors: null,
-      winners: 0,
-    };
+    scene.projCount = m;
+    scene.moverTick = w.tick;
+    scene.remoteTick = w.tick;
+    scene.params = w.params;
+    scene.game.phase = w.game.phase;
+    scene.game.mode = w.game.mode;
     renderer.render(scene);
     onInfo(
       `Relecture · tick ${w.tick}/${rec.ticks} · manche ${w.game.round} · ×${speed}${paused ? ' (pause)' : ''}`,

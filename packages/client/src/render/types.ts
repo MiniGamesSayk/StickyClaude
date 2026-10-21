@@ -38,7 +38,9 @@ export interface DrawPlayer {
 
 export interface Scene {
   world: World;
+  /** Réserve de joueurs : seuls les `playerCount` premiers sont à dessiner. */
   players: DrawPlayer[];
+  playerCount: number;
   objects: ObjView[];
   objectCount: number;
   projectiles: ProjView[];

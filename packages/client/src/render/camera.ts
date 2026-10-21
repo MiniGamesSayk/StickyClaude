@@ -78,6 +78,13 @@ export class Camera {
     this.targetY = (y0 + y1) / 2;
   }
 
+  /** Cadre imposé (aperçu du stickman de l'accueil), sans tenir compte des limites de zoom. */
+  setTarget(x: number, y: number, zoom: number): void {
+    this.targetX = x;
+    this.targetY = y;
+    this.targetZoom = zoom;
+  }
+
   /** Cadre toute la page (salon d'attente, menus). */
   frameAll(): void {
     this.targetX = WORLD_W / 2;

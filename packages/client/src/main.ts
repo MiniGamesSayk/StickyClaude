@@ -1,5 +1,5 @@
 import './style.css';
-import { startApp } from './game.ts';
+import { startApp } from './app/app.ts';
 
 startApp().catch((err: unknown) => {
   console.error(err);

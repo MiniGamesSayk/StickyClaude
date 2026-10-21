@@ -1,0 +1,67 @@
+import type { JSX } from 'preact';
+import { TRAINING_OBJECTIVES } from '../app/solo.ts';
+import { actions, training } from '../app/store.ts';
+import { t } from '../i18n/index.ts';
+import type { MessageKey } from '../i18n/index.ts';
+import { Button, CheckMark } from './components.tsx';
+
+const KEY: Record<string, MessageKey> = {
+  run: 'train.run',
+  jump: 'train.jump',
+  double: 'train.double',
+  wall: 'train.wall',
+  drop: 'train.drop',
+  crouch: 'train.crouch',
+  punch: 'train.punch',
+  combo: 'train.combo',
+  charged: 'train.charged',
+  kick: 'train.kick',
+  block: 'train.block',
+  parry: 'train.parry',
+  pickup: 'train.pickup',
+  shoot: 'train.shoot',
+  throw: 'train.throw',
+  emote: 'train.emote',
+};
+
+/** Le carnet d'entraînement : la liste d'objectifs, cochés à mesure. */
+export function Training(): JSX.Element {
+  const list = training.value ?? [];
+  const done = list.filter((o) => o.done).length;
+  return (
+    <>
+      <aside class="notebook" aria-label={t('train.title')}>
+        <div class="card">
+          <h2>
+            {t('train.title')} · {done}/{TRAINING_OBJECTIVES.length}
+          </h2>
+          <p class="hint">{t('train.hint')}</p>
+          <ul class="goals">
+            {list.map((o) => (
+              <li key={o.id} class={o.done ? 'done' : ''}>
+                <span class="box">{o.done && <CheckMark />}</span>
+                <span class="txt">
+                  {t(KEY[o.id] ?? 'train.jump')}
+                  {o.goal > 1 && !o.done
+                    ? ` (${t('train.progress', { n: o.progress, goal: o.goal })})`
+                    : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {done === TRAINING_OBJECTIVES.length && <p role="status">{t('train.all_done')}</p>}
+          <div class="row">
+            <Button small secondary onClick={() => actions.resetTraining()}>
+              {t('train.reset')}
+            </Button>
+          </div>
+        </div>
+      </aside>
+      <div class="bottomleft">
+        <Button secondary onClick={() => actions.quitSolo()}>
+          {t('train.quit')}
+        </Button>
+      </div>
+    </>
+  );
+}

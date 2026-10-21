@@ -51,7 +51,7 @@ import type { DrawPlayer } from '../render/types.ts';
  */
 
 const W = 1024;
-const H = 1260;
+const H = 1100;
 
 function player(over: Partial<DrawPlayer>): DrawPlayer {
   return {
@@ -160,19 +160,24 @@ async function main(): Promise<void> {
     penTextures(),
   );
 
-  const ev = (type: number, slot: number, ...a: number[]): GameEvent => ({ tick: 0, type, slot, a });
+  const ev = (type: number, slot: number, ...a: number[]): GameEvent => ({
+    tick: 0,
+    type,
+    slot,
+    a,
+  });
   const script: GameEvent[][] = [
-    [ev(SimEvent.HIT, 1, 120, 1070, 0, 22, 5)],
-    [ev(SimEvent.BLOCKED, 1, 230, 1070, 0, 1)],
-    [ev(SimEvent.EXPLOSION, 0, 340, 1070, 56, 0)],
-    [ev(SimEvent.TERRAIN, 0, 22, 66, 14)],
-    [ev(SimEvent.SHOT, 2, 470, 1058, 560, 1050, 4)],
+    [ev(SimEvent.HIT, 1, 120, 900, 0, 22, 5)],
+    [ev(SimEvent.BLOCKED, 1, 230, 900, 0, 1)],
+    [ev(SimEvent.EXPLOSION, 0, 340, 900, 56, 0)],
+    [ev(SimEvent.TERRAIN, 0, 22, 56, 14)],
+    [ev(SimEvent.SHOT, 2, 470, 888, 560, 880, 4)],
     [ev(SimEvent.EMOTE, 0, 0)],
-    [ev(SimEvent.GOAL, 0, 0, 560, 1080)],
-    [ev(SimEvent.WEAPON_SPAWN, 0, 640, 1085, 4, 1)],
-    [ev(SimEvent.STAMP, 0, 760, 1090)],
-    [ev(SimEvent.CRATE_BREAK, 0, 860, 1090)],
-    [ev(SimEvent.KO, 3, 920, 1040, 255, 1, 120, -160)],
+    [ev(SimEvent.GOAL, 0, 0, 560, 910)],
+    [ev(SimEvent.WEAPON_SPAWN, 0, 640, 915, 4, 1)],
+    [ev(SimEvent.STAMP, 0, 760, 920)],
+    [ev(SimEvent.CRATE_BREAK, 0, 860, 920)],
+    [ev(SimEvent.KO, 3, 920, 870, 255, 1, 120, -160)],
   ];
 
   const boil: Boil = { variant: 0, amp: 0.55, seed: 0 };
@@ -181,6 +186,7 @@ async function main(): Promise<void> {
   let scriptIdx = 0;
   const label = (t: string, x: number, y: number, size = 11, color: number = INK.night): void => {
     const l = labels.get(t, size, color, false);
+    l.anchor.set(0, 0.5);
     l.position.set(x, y);
   };
   const heading = (t: string, y: number): void => {
@@ -209,7 +215,13 @@ async function main(): Promise<void> {
       const x = 90 + i * 110;
       painter.draw(
         pen,
-        player({ slot: 10 + i, x, y: 120, stroke: i, color: i === 0 ? 0 : i === 1 ? 1 : i === 2 ? 3 : 4 }),
+        player({
+          slot: 10 + i,
+          x,
+          y: 120,
+          stroke: i,
+          color: i === 0 ? 0 : i === 1 ? 1 : i === 2 ? 3 : 4,
+        }),
         env,
       );
       label(STROKE_NAMES[i].fr, x - 28, 128, 11);
@@ -232,8 +244,14 @@ async function main(): Promise<void> {
     const row1: [string, Partial<DrawPlayer>][] = [
       ['repos', {}],
       ['course', { state: PlayerState.RUN, vx: 190 }],
-      ['saut', { state: PlayerState.JUMP, vy: -200, flags: PlayerFlag.ALIVE | PlayerFlag.FACING_RIGHT }],
-      ['chute', { state: PlayerState.FALL, vy: 300, flags: PlayerFlag.ALIVE | PlayerFlag.FACING_RIGHT }],
+      [
+        'saut',
+        { state: PlayerState.JUMP, vy: -200, flags: PlayerFlag.ALIVE | PlayerFlag.FACING_RIGHT },
+      ],
+      [
+        'chute',
+        { state: PlayerState.FALL, vy: 300, flags: PlayerFlag.ALIVE | PlayerFlag.FACING_RIGHT },
+      ],
       ['mur', { state: PlayerState.WALL_SLIDE, flags: PlayerFlag.ALIVE | PlayerFlag.FACING_RIGHT }],
       ['accroupi', { state: PlayerState.CROUCH, crouching: true }],
       ['charge', { state: PlayerState.CHARGE, variant: 40 }],
@@ -279,7 +297,11 @@ async function main(): Promise<void> {
       base({ ...o, victory: victory > 0 ? victory - 1 : 0 }, 20 + i, x, 430);
       label(n, x - 26, 438, 11);
     });
-    painter.drawGhost(pen, player({ slot: 40, x: 810, y: 420, state: PlayerState.GHOST, color: 6, self: true }), env);
+    painter.drawGhost(
+      pen,
+      player({ slot: 40, x: 810, y: 420, state: PlayerState.GHOST, color: 6, self: true }),
+      env,
+    );
     label('fantôme', 786, 438, 11);
 
     // 3. Accessoires et motifs
@@ -297,7 +319,22 @@ async function main(): Promise<void> {
       if (!s) continue;
       const x = 40 + ((i - 1) % 7) * 100;
       const y = 622 + Math.floor((i - 1) / 7) * 54;
-      drawShape(pen, s, 0, 0, 1, x - s.cx, y - s.cy, 0, 1, 2, WEAPON_INK[i] ?? INK.black, 1, PenStyle.BALLPOINT, boil);
+      drawShape(
+        pen,
+        s,
+        0,
+        0,
+        1,
+        x - s.cx,
+        y - s.cy,
+        0,
+        1,
+        2,
+        WEAPON_INK[i] ?? INK.black,
+        1,
+        PenStyle.BALLPOINT,
+        boil,
+      );
       label(WEAPONS[i].name.fr.slice(0, 18), x - 28, y + 14, 9);
     }
     const objs = [ObjType.CRATE, ObjType.BALLOON, ObjType.TACK, ObjType.MINE, ObjType.BALL];
@@ -305,12 +342,43 @@ async function main(): Promise<void> {
       const x = 760 + i * 52;
       const shape = OBJECT_SHAPES[t];
       if (!shape) return;
-      drawShape(pen, shape, x, 690, 1, 0, 0, 0, 1, 2, t === ObjType.BALLOON ? 0xe5579a : t === ObjType.CRATE ? 0x7a4a2b : INK.black, 1, PenStyle.BALLPOINT, boil);
+      drawShape(
+        pen,
+        shape,
+        x,
+        690,
+        1,
+        0,
+        0,
+        0,
+        1,
+        2,
+        t === ObjType.BALLOON ? 0xe5579a : t === ObjType.CRATE ? 0x7a4a2b : INK.black,
+        1,
+        PenStyle.BALLPOINT,
+        boil,
+      );
     });
     label('caisse · ballon · punaise · mine · boule', 700, 702, 9);
     [ProjType.PELLET, ProjType.PLANE, ProjType.ROCKET, ProjType.ERASER].forEach((t, i) => {
       const s = PROJECTILE_SHAPES[t];
-      if (s) drawShape(pen, s, 770 + i * 50, 640, 1, 0, 0, 0, 1, 1.9, INK.black, 1, PenStyle.BALLPOINT, boil);
+      if (s)
+        drawShape(
+          pen,
+          s,
+          770 + i * 50,
+          640,
+          1,
+          0,
+          0,
+          0,
+          1,
+          1.9,
+          INK.black,
+          1,
+          PenStyle.BALLPOINT,
+          boil,
+        );
     });
     label('boulette · avion · roquette · gomme', 700, 654, 9);
 
@@ -318,13 +386,33 @@ async function main(): Promise<void> {
     PATTERN_SHAPES.forEach((s, i) => {
       const x = 52 + i * 78;
       pen.disc(x, 760, 9, 9, 0xffffff, 0.9);
-      drawShape(pen, s, x, 760, 1, 0, 0, 0, 2.4, 1.2, legibleInk(INK_COLORS[i], paper, 3), 1, PenStyle.BALLPOINT, { variant: 0, amp: 0, seed: 0 });
+      drawShape(
+        pen,
+        s,
+        x,
+        760,
+        1,
+        0,
+        0,
+        0,
+        2.4,
+        1.2,
+        legibleInk(INK_COLORS[i], paper, 3),
+        1,
+        PenStyle.BALLPOINT,
+        { variant: 0, amp: 0, seed: 0 },
+      );
     });
     label('motifs de poitrine (daltoniens), agrandis ×2,4', 24, 780, 11);
     HAT_SHAPES.forEach(() => undefined);
 
     // 6. Effets
-    label('Effets : coup, parade parfaite, explosion, terrain, tir, emote, but, arme dessinée, tampon, caisse, KO', 24, 808, 12);
+    label(
+      'Effets : coup, parade parfaite, explosion, terrain, tir, emote, but, arme dessinée, tampon, caisse, KO',
+      24,
+      808,
+      12,
+    );
     if (now - scriptAt > 1500) {
       scriptAt = now;
       for (const e of script[scriptIdx % script.length]) fx.add(e, fxEnv);
@@ -335,14 +423,14 @@ async function main(): Promise<void> {
       }
     }
     // le « KO » a besoin d'un corps affiché
-    painter.draw(pen, player({ slot: 0, x: 120, y: 1070, color: 0 }), env);
-    painter.draw(pen, player({ slot: 1, x: 150, y: 1070, color: 1, hp: 60 }), env);
+    painter.draw(pen, player({ slot: 0, x: 120, y: 900, color: 0 }), env);
+    painter.draw(pen, player({ slot: 1, x: 150, y: 900, color: 1, hp: 60 }), env);
     ragdolls.step(dt, cells);
     ragdolls.draw(pen, boil);
     fx.draw(fxPen, labels, dt, fxEnv, boil);
 
     // 7. Terrain et décor : miniatures des papiers
-    label('Papiers (un par thème)', 24, 1112, 14);
+    label('Papiers (un par thème)', 24, 960, 14);
 
     pen.end();
     fxPen.end();
@@ -357,7 +445,7 @@ async function main(): Promise<void> {
     const s = new Sprite(thumb);
     s.width = 80;
     s.height = 45;
-    s.position.set(24 + (i % 12) * 82, 1136 + Math.floor(i / 12) * 66);
+    s.position.set(24 + (i % 12) * 82, 984 + Math.floor(i / 12) * 66);
     root.addChild(s);
     const l = new Container();
     root.addChild(l);

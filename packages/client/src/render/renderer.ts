@@ -120,6 +120,8 @@ export class Renderer {
   private boil: Boil = { variant: 0, amp: 0, seed: 0 };
   private lastBoilVariant = -1;
   private ownSlot = -1;
+  /** Cadre imposé à la caméra (aperçu de l'accueil) ; null = cadrage automatique. */
+  private cameraOverride: { x: number; y: number; zoom: number } | null = null;
   /** Mesures (affichage du débit, tests). */
   stats = { sprites: 0, particles: 0, ragdolls: 0, fps: 60 };
 
@@ -267,6 +269,17 @@ export class Renderer {
     this.colorOf = fn;
   }
 
+  /** Impose un cadre à la caméra (aperçu du stickman), ou rend le cadrage automatique. */
+  setCameraOverride(o: { x: number; y: number; zoom: number } | null): void {
+    this.cameraOverride = o;
+    this.camera.snap();
+  }
+
+  /** Joue une emote d'animation (6 salut, 7 danse, 8 rire) sur un joueur affiché. */
+  playEmote(slot: number, id: number): void {
+    this.painter.setEmote(slot, id, this.nowMs || performance.now());
+  }
+
   /** Emplacement du joueur local (le contour blanc, la flèche hors cadre). */
   setSelf(slot: number): void {
     this.ownSlot = slot;
@@ -339,11 +352,17 @@ export class Renderer {
     };
   }
 
-  private lastPlayers: readonly DrawPlayer[] = [];
+  private lastScene: Scene | null = null;
 
   private spawnRagdoll(slot: number, x: number, y: number, vx: number, vy: number): void {
     if (y > WORLD_H + 20) return;
-    const p = this.lastPlayers.find((q) => q.slot === slot);
+    let p: DrawPlayer | undefined;
+    const sc = this.lastScene;
+    if (sc) {
+      for (let i = 0; i < sc.playerCount; i++) {
+        if (sc.players[i].slot === slot) p = sc.players[i];
+      }
+    }
     const joints = this.painter.jointsOf(slot);
     const r = this.ragdolls.acquire();
     const color = this.legible(p?.mannequin ? 9 : (p?.color ?? slot));
@@ -387,7 +406,7 @@ export class Renderer {
     this.boil.amp = boilOn ? 0.55 : 0;
     this.fxEnv.nowMs = t0;
     this.fxEnv.reducedMotion = reduced;
-    this.lastPlayers = scene.players;
+    this.lastScene = scene;
 
     const world = scene.world;
     this.syncTerrain(world);
@@ -473,9 +492,13 @@ export class Renderer {
       scene.game.phase === GamePhase.COUNTDOWN ||
       scene.game.phase === GamePhase.PLAYING ||
       scene.game.phase === GamePhase.ROUND_END;
-    if (playing) {
+    if (this.cameraOverride) {
+      const o = this.cameraOverride;
+      this.camera.setTarget(o.x, o.y, o.zoom);
+    } else if (playing) {
       let n = 0;
-      for (const p of scene.players) {
+      for (let i = 0; i < scene.playerCount; i++) {
+        const p = scene.players[i];
         if (n >= MAX_FRAME_POINTS) break;
         if (p.state === PlayerState.DEAD) continue;
         this.framePts[n * 2] = p.x;
@@ -979,7 +1002,8 @@ export class Renderer {
     this.pos.clear();
     const roundDone =
       scene.game.phase === GamePhase.ROUND_END || scene.game.phase === GamePhase.MATCH_END;
-    for (const p of scene.players) {
+    for (let pi = 0; pi < scene.playerCount; pi++) {
+      const p = scene.players[pi];
       this.painter.setVictory(p.slot, roundDone && (scene.winners & (1 << p.slot)) !== 0, t);
       if (p.state === PlayerState.DEAD) {
         this.painter.forget(p.slot);
@@ -1106,7 +1130,8 @@ export class Renderer {
     const ox = this.worldLayer.position.x;
     const oy = this.worldLayer.position.y;
     const m = 22;
-    for (const p of scene.players) {
+    for (let pi = 0; pi < scene.playerCount; pi++) {
+      const p = scene.players[pi];
       if (p.state === PlayerState.DEAD) continue;
       const wx = p.x;
       const wy = p.y - 14;
