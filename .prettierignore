@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+package-lock.json
+docs/ANALYSE.md
+docs/PROMPTS_SONNET.md
+recordings

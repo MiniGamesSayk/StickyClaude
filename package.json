@@ -1,0 +1,46 @@
+{
+  "name": "stickyclaude",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Jeu de combat de stickmen en ligne (2 à 8 joueurs), thème encre et carnet.",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "packages/sim",
+    "packages/server",
+    "packages/client"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w @stickyclaude/server\" \"npm run dev -w @stickyclaude/client\"",
+    "build": "npm run build -w @stickyclaude/client && npm run build -w @stickyclaude/server",
+    "start": "node packages/server/dist/index.js",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "tsc -p tsconfig.json && npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "simulate": "tsx scripts/simulate.ts",
+    "loadtest": "tsx scripts/loadtest.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.19.0",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^10.0.6",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.13.0",
+    "fast-check": "^4.10.2",
+    "globals": "^17.13.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5",
+    "ws": "^8.18.3"
+  }
+}

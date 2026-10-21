@@ -1,0 +1,16 @@
+{
+  "name": "@stickyclaude/sim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simulation déterministe et pure (monde, joueurs, déplacements), partagée client/serveur.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@stickyclaude/shared": "0.1.0"
+  }
+}
