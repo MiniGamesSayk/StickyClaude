@@ -130,6 +130,7 @@ async function main(): Promise<void> {
   const world = createWorld(getArena('maths-quadrille') as ArenaData, 1);
   const cells = new Uint8Array(world.cells.length);
   const paper = THEMES[arena.theme].paper;
+  const inks = INK_COLORS.map((c) => legibleInk(c, paper, 3));
 
   const fxEnv: FxEnv = {
     nowMs: 0,
@@ -202,7 +203,7 @@ async function main(): Promise<void> {
     last = now;
     boil.variant = boilVariant(now);
     fxEnv.nowMs = now;
-    const env: PaintEnv = { timeMs: now, dtS: dt, boil, cells, paper, reducedMotion: false };
+    const env: PaintEnv = { timeMs: now, dtS: dt, boil, cells, paper, inks, reducedMotion: false };
     pen.begin();
     fxPen.begin();
     labels.begin();

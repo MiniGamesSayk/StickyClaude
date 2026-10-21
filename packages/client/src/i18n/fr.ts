@@ -180,6 +180,8 @@ export const fr = {
   'train.hint': 'Coche chaque objectif. Les mannequins ne meurent pas.',
   'train.reset': 'Tout recommencer',
   'train.quit': 'Quitter l’entraînement',
+  'train.open': 'Ouvrir le carnet',
+  'train.close': 'Fermer le carnet',
   'train.done': 'Objectif accompli !',
   'train.all_done': 'Carnet terminé, bravo !',
   'train.progress': '{n} / {goal}',

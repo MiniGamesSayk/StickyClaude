@@ -1,4 +1,5 @@
 import type { JSX } from 'preact';
+import { useState } from 'preact/hooks';
 import { TRAINING_OBJECTIVES } from '../app/solo.ts';
 import { actions, training } from '../app/store.ts';
 import { t } from '../i18n/index.ts';
@@ -24,14 +25,34 @@ const KEY: Record<string, MessageKey> = {
   emote: 'train.emote',
 };
 
-/** Le carnet d'entraînement : la liste d'objectifs, cochés à mesure. */
-export function Training(): JSX.Element {
+/**
+ * Le carnet d'entraînement : la liste d'objectifs, cochés à mesure. Sur téléphone il est replié
+ * en une ligne (le prochain objectif) pour ne pas cacher les commandes tactiles ni le terrain.
+ */
+export function Training(p: { touch?: boolean }): JSX.Element {
   const list = training.value ?? [];
   const done = list.filter((o) => o.done).length;
+  const [open, setOpen] = useState(!p.touch);
+  const next = list.find((o) => !o.done);
+  const label = (o: { id: string }): string => t(KEY[o.id] ?? 'train.jump');
   return (
     <>
-      <aside class="notebook" aria-label={t('train.title')}>
-        <div class="card">
+      <aside class={`notebook${p.touch ? ' compact' : ''}`} aria-label={t('train.title')}>
+        {p.touch && (
+          <button
+            type="button"
+            class="notebook-toggle"
+            aria-expanded={open}
+            aria-label={open ? t('train.close') : t('train.open')}
+            onClick={() => setOpen(!open)}
+          >
+            <b>
+              {done}/{TRAINING_OBJECTIVES.length}
+            </b>
+            <span>{next ? label(next) : t('train.all_done')}</span>
+          </button>
+        )}
+        <div class="card" hidden={!open}>
           <h2>
             {t('train.title')} · {done}/{TRAINING_OBJECTIVES.length}
           </h2>
@@ -41,7 +62,7 @@ export function Training(): JSX.Element {
               <li key={o.id} class={o.done ? 'done' : ''}>
                 <span class="box">{o.done && <CheckMark />}</span>
                 <span class="txt">
-                  {t(KEY[o.id] ?? 'train.jump')}
+                  {label(o)}
                   {o.goal > 1 && !o.done
                     ? ` (${t('train.progress', { n: o.progress, goal: o.goal })})`
                     : ''}
@@ -57,11 +78,13 @@ export function Training(): JSX.Element {
           </div>
         </div>
       </aside>
-      <div class="bottomleft">
-        <Button secondary onClick={() => actions.quitSolo()}>
-          {t('train.quit')}
-        </Button>
-      </div>
+      {!p.touch && (
+        <div class="bottomleft">
+          <Button secondary onClick={() => actions.quitSolo()}>
+            {t('train.quit')}
+          </Button>
+        </div>
+      )}
     </>
   );
 }

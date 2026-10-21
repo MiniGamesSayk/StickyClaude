@@ -21,6 +21,7 @@ import { useState } from 'preact/hooks';
 import { profile } from '../app/options.ts';
 import { actions, hud, lobby, selfSlot } from '../app/store.ts';
 import { pick, t } from '../i18n/index.ts';
+import { touchActive } from './device.ts';
 import { LookEditor } from './Home.tsx';
 import { Button, Check, hex, Select } from './components.tsx';
 import { teamLabel } from './format.ts';
@@ -29,7 +30,8 @@ import { teamLabel } from './format.ts';
 export function LobbyPanel(): JSX.Element | null {
   const lob = lobby.value;
   const self = selfSlot.value;
-  const [collapsed, setCollapsed] = useState(false);
+  // Sur téléphone le panneau démarre replié : il ne cache plus le terrain ni le joystick.
+  const [collapsed, setCollapsed] = useState(touchActive());
   if (!lob) return null;
   const isHost = self >= 0 && lob.host === self;
   const inLobby = lob.phase === GamePhase.LOBBY;
@@ -58,7 +60,7 @@ export function LobbyPanel(): JSX.Element | null {
   }
 
   return (
-    <aside class="panel" aria-label={t('lobby.code')}>
+    <aside class={`panel${collapsed ? ' collapsed' : ''}`} aria-label={t('lobby.code')}>
       <div class="card">
         <div class="lobby-title">
           <span class="code" aria-label={t('lobby.code')}>
@@ -156,7 +158,7 @@ export function LobbyPanel(): JSX.Element | null {
         <p class="status" role="status">
           {status}
         </p>
-        {!collapsed && inLobby && self >= 0 && (
+        {inLobby && self >= 0 && (
           <div class="row">
             {isHost ? (
               <Button class="grow" onClick={() => actions.start()}>

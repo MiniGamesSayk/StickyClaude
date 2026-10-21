@@ -66,6 +66,8 @@ export const TRAINING_OBJECTIVES: readonly ObjectiveDef[] = [
 ];
 
 const KEY = 'stickyclaude.training';
+/** Résultat « rien d'accompli » : un seul tableau, jamais d'allocation par tick. */
+const NONE: string[] = [];
 const RUN_GOAL_UNITS = 700;
 const CROUCH_GOAL_TICKS = 30;
 
@@ -143,18 +145,18 @@ export class TrainingTracker {
 
   /** À appeler à chaque tick avec l'état du joueur 0. */
   tick(state: number, grounded: boolean, x: number, atkKind: number, combos: number): string[] {
-    const out: string[] = [];
+    let out = NONE;
     this.lastAttackKind = atkKind;
     if (!Number.isNaN(this.lastX) && grounded && state === PlayerState.RUN) {
       this.runUnits += Math.abs(x - this.lastX);
-      if (this.runUnits >= RUN_GOAL_UNITS && this.bump('run')) out.push('run');
+      if (this.runUnits >= RUN_GOAL_UNITS && this.bump('run')) out = ['run'];
     }
     this.lastX = x;
     if (state === PlayerState.CROUCH) {
       this.crouchTicks++;
-      if (this.crouchTicks >= CROUCH_GOAL_TICKS && this.bump('crouch')) out.push('crouch');
+      if (this.crouchTicks >= CROUCH_GOAL_TICKS && this.bump('crouch')) out = ['crouch'];
     } else this.crouchTicks = 0;
-    if (combos >= 3 && this.bump('combo')) out.push('combo');
+    if (combos >= 3 && this.bump('combo')) out = out === NONE ? ['combo'] : [...out, 'combo'];
     return out;
   }
 
@@ -230,6 +232,8 @@ export interface SoloDeps {
   onObjectives: (list: Objective[], justDone: string[]) => void;
   /** Gros impacts subis par le joueur (vibration). */
   onHit?: (strength: number) => void;
+  /** Graine de la simulation (tests) ; par défaut tirée de l'horloge. */
+  seed?: number;
 }
 
 /** Pas fixe de 60 Hz, rattrapage borné. */
@@ -256,7 +260,7 @@ export class SoloSource implements RenderSource {
   constructor(private readonly deps: SoloDeps) {
     this.audio = deps.audio ?? nullAudio;
     this.arena = getArena(LOBBY_ARENA_ID) as ArenaData;
-    this.seed = (Date.now() ^ 0x5eed) >>> 0;
+    this.seed = deps.seed ?? (Date.now() ^ 0x5eed) >>> 0;
     this.world = createWorld(this.arena, this.seed);
     this.world.auth = true;
     this.world.rules.weapons = true;

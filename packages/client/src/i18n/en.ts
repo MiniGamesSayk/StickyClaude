@@ -171,6 +171,8 @@ export const en: Record<MessageKey, string> = {
   'train.hint': 'Tick every goal. Dummies never die.',
   'train.reset': 'Start over',
   'train.quit': 'Leave training',
+  'train.open': 'Open the notebook',
+  'train.close': 'Close the notebook',
   'train.done': 'Goal reached!',
   'train.all_done': 'Notebook complete, well done!',
   'train.progress': '{n} / {goal}',

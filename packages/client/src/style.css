@@ -452,6 +452,15 @@ input.code {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
 }
+.panel {
+  z-index: 6; /* au-dessus des commandes tactiles quand il est déplié */
+}
+.panel.collapsed {
+  bottom: auto;
+}
+.panel.collapsed .card {
+  height: auto;
+}
 .panel .card {
   height: 100%;
   align-content: start;
@@ -647,6 +656,10 @@ input.code {
   height: 1.6rem;
   display: block;
   overflow: visible;
+}
+html[data-touch='on'] .hud-self {
+  left: 50%;
+  transform: translateX(-50%);
 }
 .hud-self {
   position: absolute;
@@ -881,6 +894,7 @@ table.table td {
 .notebook {
   pointer-events: auto;
   position: absolute;
+  z-index: 6; /* le carnet déplié passe au-dessus des commandes tactiles */
   top: max(8px, var(--safe-top));
   right: max(8px, var(--safe-right));
   width: min(19rem, 46vw);
@@ -890,6 +904,37 @@ table.table td {
   padding: 0.6rem 0.8rem;
   gap: 0.3rem;
   max-height: calc(100dvh - 90px);
+}
+.notebook .card[hidden] {
+  display: none;
+}
+/* Sur téléphone : une ligne en haut à gauche (le prochain objectif), dépliable d'un toucher. */
+.notebook.compact {
+  right: auto;
+  left: max(8px, var(--safe-left));
+  width: min(22rem, 58vw);
+  display: grid;
+  gap: 6px;
+}
+.notebook-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.3rem 0.7rem;
+  border: 2.5px solid var(--ink);
+  border-radius: 12px 16px 13px 17px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+}
+.notebook-toggle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .goals {
   list-style: none;

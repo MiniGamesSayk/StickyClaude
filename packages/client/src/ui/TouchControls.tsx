@@ -93,11 +93,15 @@ function Stick(): JSX.Element {
   );
 }
 
-/** Plein écran (si le navigateur le permet). */
+/** Plein écran (si le navigateur le permet et si l'on vient d'un geste du joueur). */
 export function enterFullscreen(): void {
   try {
     const el = document.documentElement;
-    if (!document.fullscreenElement && el.requestFullscreen) void el.requestFullscreen();
+    if (document.fullscreenElement || !el.requestFullscreen) return;
+    if (navigator.userActivation && !navigator.userActivation.isActive) return;
+    el.requestFullscreen().catch(() => {
+      /* refusé : sans importance */
+    });
   } catch {
     /* refusé : sans importance */
   }

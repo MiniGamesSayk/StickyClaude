@@ -246,7 +246,11 @@ export class Online {
         if (this.client !== c) return;
         const rr = this.d.renderer;
         // la page se tourne entre deux manches, puis la nouvelle arène se dessine
-        if (r.round > 0) rr.turnPage();
+        if (r.round > 0) {
+          rr.turnPage();
+          this.audio.cue('page_turn');
+        }
+        this.audio.newRound();
         rr.setArena(arena, r.round > 0);
         rr.reset();
         this.winners = 0;
@@ -268,6 +272,8 @@ export class Online {
         }
         lastScores.value = m;
         this.roundBanner(m);
+        if (m.winner >= 0) this.audio.cue('victory', 0.8);
+        this.audio.duck(3.5);
       },
       onResults: (m) => {
         if (this.client !== c) return;
@@ -321,10 +327,6 @@ export class Online {
     });
     this.client = c;
     previous?.close();
-    (window as unknown as { __stickyclaude: unknown }).__stickyclaude = {
-      client: c,
-      renderer: this.d.renderer,
-    };
     action(c);
   }
 

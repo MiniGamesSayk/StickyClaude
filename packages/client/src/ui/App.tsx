@@ -1,9 +1,8 @@
 import { GamePhase } from '@stickyclaude/shared';
 import type { JSX } from 'preact';
-import { isTouchDevice } from '../input/touch.ts';
-import { options } from '../app/options.ts';
 import { banner, hud, lobby, mode, net, overlay, podium, round, screen } from '../app/store.ts';
 import { t } from '../i18n/index.ts';
+import { touchActive } from './device.ts';
 import { Customize, Home } from './Home.tsx';
 import { Hud, Podium } from './Hud.tsx';
 import { LobbyPanel } from './Lobby.tsx';
@@ -11,12 +10,6 @@ import { OptionsModal } from './Options.tsx';
 import { ConnectionOverlay, CreditsModal, HelpModal, PauseModal } from './Overlays.tsx';
 import { TouchControls } from './TouchControls.tsx';
 import { Training } from './Training.tsx';
-
-/** Les contrôles tactiles sont-ils actifs ? */
-export function touchActive(): boolean {
-  const o = options.value.touch;
-  return o === 'on' || (o === 'auto' && isTouchDevice());
-}
 
 /** Racine de l'interface : l'écran courant, la fenêtre ouverte, les messages de connexion. */
 export function App(): JSX.Element {
@@ -62,7 +55,7 @@ export function App(): JSX.Element {
         {m === 'solo' && (
           <>
             <Hud solo />
-            <Training />
+            <Training touch={touch} />
           </>
         )}
         {touch && ov === null && <TouchControls />}

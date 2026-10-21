@@ -1,3 +1,4 @@
+import type { SfxName } from '../audio/engine.ts';
 import type { GameEvent } from '../net/client.ts';
 import type { Scene } from '../render/types.ts';
 
@@ -24,12 +25,21 @@ export interface AudioSink {
   local(type: number, x: number, y: number, arg: number): void;
   /** Pas de course : à appeler à chaque image où le joueur local court. */
   footstep(x: number, speed: number): void;
+  /** Effet d'interface, de décompte ou de transition (nom d'un effet du manifeste). */
+  cue(name: SfxName, vol?: number): void;
+  /** Nouvelle manche : la tension de la précédente retombe. */
+  newRound(): void;
+  /** Atténue la musique quelques secondes. */
+  duck(seconds: number): void;
 }
 
 export const nullAudio: AudioSink = {
   event: () => undefined,
   local: () => undefined,
   footstep: () => undefined,
+  cue: () => undefined,
+  newRound: () => undefined,
+  duck: () => undefined,
 };
 
 /** Retour tactile : gros impacts (manette, téléphone). */

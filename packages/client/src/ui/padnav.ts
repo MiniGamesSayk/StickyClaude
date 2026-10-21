@@ -6,7 +6,7 @@ import type { PadNav } from '../input/gamepad.ts';
  */
 
 const FOCUSABLE =
-  'button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [role="radio"]:not(:disabled)';
+  'button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]:not(.skip), [role="radio"]:not(:disabled)';
 
 function visible(el: HTMLElement): boolean {
   const r = el.getBoundingClientRect();

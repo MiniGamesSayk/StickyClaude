@@ -1,8 +1,10 @@
 import { effect } from '@preact/signals';
-import { getArena, INK_COLORS } from '@stickyclaude/shared';
+import { GamePhase, getArena, INK_COLORS, TICK_HZ } from '@stickyclaude/shared';
+import { COUNTDOWN_TICKS } from '@stickyclaude/sim';
 import type { ArenaData, Look } from '@stickyclaude/shared';
 import { h, render } from 'preact';
 import { AudioEngine } from '../audio/engine.ts';
+import type { Mood } from '../audio/engine.ts';
 import { NetGraph } from '../dev/netgraph.ts';
 import { setLang, t } from '../i18n/index.ts';
 import { loadLayoutMap } from '../input/bindings.ts';
@@ -12,7 +14,8 @@ import { loadFonts } from '../render/fonts.ts';
 import { Renderer } from '../render/renderer.ts';
 import { startReplay } from '../replay.ts';
 import { padNavigate } from '../ui/padnav.ts';
-import { App, touchActive } from '../ui/App.tsx';
+import { App } from '../ui/App.tsx';
+import { touchActive } from '../ui/device.ts';
 import { enterFullscreen } from '../ui/TouchControls.tsx';
 import { Online } from './online.ts';
 import { options, profile } from './options.ts';
@@ -24,9 +27,11 @@ import {
   actions,
   EMPTY_HUD,
   hud,
+  lobby,
   mode,
   net,
   overlay,
+  podium,
   roster,
   say,
   screen,
@@ -246,6 +251,21 @@ export async function startApp(): Promise<void> {
   // --- Clavier : emotes, pause, graphe réseau -----------------------------------------------------------
 
   window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
+  const clickable = 'button, [role="radio"], [role="tab"], select, summary, a[href]';
+  document.addEventListener(
+    'pointerover',
+    (e) => {
+      if (e.target instanceof Element && e.target.closest(clickable)) audio.cue('ui_hover', 0.45);
+    },
+    true,
+  );
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (e.target instanceof Element && e.target.closest(clickable)) audio.cue('ui_click', 0.7);
+    },
+    true,
+  );
   window.addEventListener('keydown', (e) => {
     audio.unlock();
     const tg = e.target;
@@ -280,22 +300,75 @@ export async function startApp(): Promise<void> {
   // --- Boucle de rendu ---------------------------------------------------------------------------------
 
   const sessionKeep = (): void => online.pulse(performance.now(), fps);
+  /** Ambiance musicale selon l'écran et la phase de la partie. */
+  const moodOf = (): [Mood, number] => {
+    if (mode.value === 'menu') return ['menu', 0];
+    if (mode.value === 'solo') return ['training', 0];
+    const h = hud.value;
+    if (!h.inMatch || h.phase === GamePhase.LOBBY) return ['menu', 0];
+    return ['combat', h.round];
+  };
+  let moodAt = 0;
+  let padFocus = false;
+  let lastCount = -1;
+  let wentGo = false;
   renderer.ticker.add((tk) => {
     const now = performance.now();
     const dt = now - lastNow;
     lastNow = now;
     fps += (tk.FPS - fps) * 0.05;
-    // manette dans les menus : croix et A pour naviguer
-    if (mode.value === 'menu' || overlay.value !== null || (online.client && !online.active)) {
-      const nav = input.gamepad.navigate(now);
-      if (nav) padNavigate(nav);
+    // Manette : dans les menus, la croix et A naviguent ; en jeu, Start ouvre la pause (dans le
+    // salon, il donne la main au panneau : croix et A, puis B ou Start pour revenir au jeu).
+    // `navigate` est appelé à chaque image pour garder à jour la détection des appuis.
+    const lobbyOpen =
+      mode.value === 'online' && online.active && lobby.value?.phase === GamePhase.LOBBY;
+    if (!lobbyOpen) padFocus = false;
+    const menuMode =
+      mode.value === 'menu' ||
+      overlay.value !== null ||
+      (online.client !== null && !online.active) ||
+      podium.value !== null ||
+      padFocus;
+    const nav = input.gamepad.navigate(now);
+    if (nav) {
+      if (menuMode) {
+        if (padFocus && overlay.value === null && (nav.menu || nav.back)) {
+          padFocus = false;
+          (document.activeElement as HTMLElement | null)?.blur();
+        } else padNavigate(nav);
+      } else if (nav.menu) {
+        if (lobbyOpen) {
+          padFocus = true;
+          padNavigate({ dx: 0, dy: 1, confirm: false, back: false, menu: false });
+        } else overlay.value = 'pause';
+      }
     }
-    const playing = mode.value !== 'menu' && overlay.value === null;
+    const playing =
+      mode.value !== 'menu' && overlay.value === null && !padFocus && podium.value === null;
     const mask = playing ? input.sample() : 0;
     if (!playing) input.sample();
     source.update(mask, now, dt);
     renderer.render(source.scene);
+    if (now - moodAt > 250) {
+      moodAt = now;
+      const [mood, rd] = moodOf();
+      audio.setMood(mood, rd);
+    }
     if (mode.value === 'online') {
+      // décompte 3-2-1-Go : un tic par chiffre, un sifflement au départ
+      const h = hud.value;
+      if (h.phase === GamePhase.COUNTDOWN) {
+        const left = Math.ceil((COUNTDOWN_TICKS - h.phaseTick) / TICK_HZ);
+        if (left !== lastCount && left > 0) audio.cue('count_tick');
+        lastCount = left;
+        wentGo = false;
+      } else {
+        if (h.phase === GamePhase.PLAYING && lastCount > 0 && !wentGo) {
+          audio.cue('count_go');
+          wentGo = true;
+        }
+        if (h.phase !== GamePhase.PLAYING) lastCount = -1;
+      }
       sessionKeep();
       graph?.update(now);
     } else if (now - hudAt > 250) {
@@ -306,14 +379,26 @@ export async function startApp(): Promise<void> {
 
   // --- Démarrage -------------------------------------------------------------------------------------------
 
+  // Le code du lien (?salon=) est connu avant le premier rendu : le champ « Rejoindre » le reprend.
+  const salon = params.get('salon');
+  if (salon) urlCode.value = salon.toUpperCase();
+  const name = params.get('name');
+  if (name) profile.value = { ...profile.value, name };
+
   showMenu();
   const html = document.documentElement;
   html.lang = options.value.lang;
   render(h(App, {}), document.getElementById('ui') as HTMLElement);
+  // Prise pour les tests (E2E, mesures de performance) : ne sert pas au jeu lui-même.
   (window as unknown as { __stickyclaude: unknown }).__stickyclaude = {
     renderer,
     online,
     actions,
+    net,
+    overlay,
+    get client() {
+      return online.client;
+    },
     get source() {
       return source;
     },
@@ -324,10 +409,6 @@ export async function startApp(): Promise<void> {
     if (mode.value === 'menu' && !document.hidden) void online.refreshRooms();
   }, 3000);
 
-  const salon = params.get('salon');
-  if (salon) urlCode.value = salon.toUpperCase();
-  const name = params.get('name');
-  if (name) profile.value = { ...profile.value, name };
   if (params.get('solo') === '1') {
     actions.solo();
   } else if (params.get('auto') === '1') {
