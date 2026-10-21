@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StickyClaude · éditeur d'arènes (dev)</title>
+    <style>
+      :root {
+        --paper: #f6f1e3;
+        --ink: #1b2a5e;
+        font-family: 'Patrick Hand', 'Comic Sans MS', 'Segoe Print', sans-serif;
+        color: var(--ink);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #e7dfc8;
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr) 320px;
+        gap: 10px;
+        padding: 10px;
+        height: 100vh;
+        overflow: hidden;
+      }
+      aside,
+      main {
+        overflow: auto;
+        min-height: 0;
+      }
+      aside {
+        background: var(--paper);
+        border: 2px solid var(--ink);
+        border-radius: 6px 12px 8px 10px;
+        padding: 10px;
+        display: grid;
+        gap: 6px;
+        align-content: start;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 14px;
+        margin: 8px 0 2px;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+        font-size: 14px;
+        color: var(--ink);
+      }
+      button {
+        cursor: pointer;
+        padding: 4px 8px;
+        border: 2px solid var(--ink);
+        border-radius: 5px 8px 6px 9px;
+        background: #fffdf6;
+        text-align: left;
+      }
+      button.on {
+        background: var(--ink);
+        color: #fff;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 3px 6px;
+        border: 2px solid var(--ink);
+        border-radius: 4px;
+        background: #fffdf6;
+      }
+      textarea {
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        height: 140px;
+        resize: vertical;
+      }
+      canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: #f6f1e3;
+        border: 2px solid var(--ink);
+        touch-action: none;
+        cursor: crosshair;
+      }
+      .ok {
+        color: #1f9d55;
+      }
+      .ko {
+        color: #d6322e;
+      }
+      ul {
+        margin: 2px 0;
+        padding-left: 16px;
+        font-size: 13px;
+      }
+      .hint {
+        font-size: 12px;
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <aside id="tools"></aside>
+    <main>
+      <canvas id="canvas" width="1024" height="576"></canvas>
+      <div id="status" class="hint"></div>
+    </main>
+    <aside id="side"></aside>
+    <script type="module" src="/src/editor/main.ts"></script>
+  </body>
+</html>

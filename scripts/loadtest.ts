@@ -1,6 +1,11 @@
 // Test de charge : de faux clients (entrées réalistes à 60 Hz) contre un serveur construit.
 //
 //   npm run loadtest -- --rooms 25 --players 8 --duration 120
+//   npm run loadtest -- --no-combat     (déplacements seuls, sans lancer de partie)
+//
+// Par défaut les salons lancent des parties en boucle (réglages courts : 3 manches à gagner, mort
+// subite à 20 s) et les faux clients se battent : coups, parades, ramassages. Armes, projectiles,
+// explosions, terrain détruit, modes bonus et fantômes sont donc tous actifs pendant la mesure.
 //
 // Par défaut le script construit puis lance `packages/server/dist/index.js` (en production, avec
 // --max-old-space-size=320, épinglé sur 1 cœur si `taskset` existe). Avec `--url ws://hôte:port/ws`
@@ -37,6 +42,7 @@ const opt = (name: string, def: string): string => {
 };
 const flag = (name: string): boolean => argv.includes(`--${name}`);
 
+const COMBAT = !flag('no-combat');
 const ROOMS = Number(opt('rooms', '25'));
 const PLAYERS = Number(opt('players', '8'));
 const DURATION = Number(opt('duration', '120'));
@@ -151,6 +157,14 @@ class FakeClient {
   private hold = 0;
   private pings = 0;
   measuring = false;
+  /** Salon : emplacement de l'hôte, phase de partie, dernier lancement demandé (ms). */
+  host = -1;
+  phase = 0;
+  private lastStartAt = 0;
+  private configured = false;
+  private ready = false;
+  /** Messages d'erreur attendus pendant les parties (pas prêt, manche en cours…) : ignorés. */
+  matches = 0;
 
   constructor(
     readonly id: number,
@@ -186,8 +200,22 @@ class FakeClient {
         this.slot = m.slot;
         this.label = m.tick + LEAD;
         this.lastEvent = m.ev;
+        this.host = m.lobby.host;
+        this.phase = m.lobby.phase;
+      } else if (m.t === 'lobby') {
+        this.host = m.lobby.host;
+        this.phase = m.lobby.phase;
+        // « Prêt » est redemandé après chaque partie, jamais en boucle (chaque réponse provoque
+        // un nouveau message de salon pour tout le monde).
+        if (m.lobby.phase !== 0) this.ready = false;
+        if (COMBAT) this.lobbyAct(m.lobby.phase, m.lobby.players.length);
+      } else if (m.t === 'round') {
+        this.lastEvent = m.ev;
+      } else if (m.t === 'results') {
+        this.matches++;
       } else if (m.t === 'error') {
-        this.onError(new Error(`erreur serveur : ${m.code}`));
+        const benign = ['not_ready', 'not_enough_players', 'in_game', 'not_host'];
+        if (!benign.includes(m.code)) this.onError(new Error(`erreur serveur : ${m.code}`));
       }
       return;
     }
@@ -214,6 +242,31 @@ class FakeClient {
     this.ws.send(JSON.stringify(m));
   }
 
+  /** Salon d'attente : l'hôte règle et lance la partie, les autres se déclarent prêts. */
+  private lobbyAct(phase: number, players: number): void {
+    if (phase !== 0 || this.slot < 0 || players < this.playersWanted) return;
+    if (this.slot === this.host) {
+      const now = performance.now();
+      if (!this.configured) {
+        this.configured = true;
+        this.sendJson({
+          t: 'settings',
+          settings: { roundsToWin: 3, suddenDeathSec: 20, bonusEvery: 3 },
+        });
+      }
+      if (now - this.lastStartAt > 800) {
+        this.lastStartAt = now;
+        this.sendJson({ t: 'start' });
+      }
+    } else if (!this.ready) {
+      this.ready = true;
+      this.sendJson({ t: 'ready', ready: true });
+    }
+  }
+
+  /** Nombre de joueurs attendus dans le salon avant de lancer (renseigné par le programme). */
+  playersWanted = 2;
+
   /** Une entrée par tick, comme un vrai client ; ping toutes les 2 s environ. */
   tick(): void {
     if (!this.joined || this.ws.readyState !== WebSocket.OPEN) return;
@@ -225,6 +278,11 @@ class FakeClient {
       else if (r < 0.8) m |= Input.LEFT;
       if (this.rng.float() < 0.35) m |= Input.JUMP;
       if (this.rng.float() < 0.1) m |= Input.DOWN;
+      if (COMBAT) {
+        if (this.rng.float() < 0.5) m |= Input.ATTACK;
+        else if (this.rng.float() < 0.15) m |= Input.BLOCK;
+        if (this.rng.float() < 0.15) m |= Input.PICKUP;
+      }
       this.mask = m;
     }
     this.label++;
@@ -258,6 +316,8 @@ interface ServerMetrics {
   inputPackets: number;
   tickOverruns: number;
   invalidMessages: number;
+  matchesStarted: number;
+  matchesCompleted: number;
 }
 
 async function metrics(base: string, reset = false): Promise<ServerMetrics> {
@@ -283,6 +343,7 @@ interface WorkerStats {
   marginCount: number;
   lateSignals: number;
   loopLagP99Ms: number;
+  matches: number;
   errors: string[];
 }
 
@@ -322,6 +383,17 @@ async function runWorker(d: WorkerData): Promise<void> {
   }
   for (let t = 0; t < 500 && clients.some((c) => !c.joined); t++) await sleep(20);
   if (clients.some((c) => !c.joined)) throw new Error(`clients non joints (${errors.join('; ')})`);
+  for (const c of clients) c.playersWanted = d.players;
+  // Les salons sont complets : chaque hôte lance sa première partie (les suivantes s'enchaînent).
+  if (COMBAT) {
+    for (const c of clients) {
+      if (c.slot === c.host)
+        c.sendJson({ t: 'settings', settings: { roundsToWin: 3, suddenDeathSec: 20 } });
+      else c.sendJson({ t: 'ready', ready: true });
+    }
+    await sleep(300);
+    for (const c of clients) if (c.slot === c.host) c.sendJson({ t: 'start' });
+  }
 
   const loopLag = monitorEventLoopDelay({ resolution: 10 });
   loopLag.enable();
@@ -364,6 +436,7 @@ async function runWorker(d: WorkerData): Promise<void> {
         marginCount: clients.reduce((s, c) => s + c.marginCount, 0),
         lateSignals: clients.reduce((s, c) => s + c.lateSignals, 0),
         loopLagP99Ms: Math.max(0, loopLag.percentile(99) / 1e6 - 10),
+        matches: clients.reduce((s, c) => s + c.matches, 0),
         errors,
       };
       for (const c of clients) c.ws.terminate();
@@ -522,6 +595,11 @@ async function main(): Promise<void> {
     console.log(
       `\nSalons ${m1.rooms}, joueurs ${m1.players}, marge d'entrée moyenne ${margin.toFixed(1)} ticks`,
     );
+    console.log(
+      COMBAT
+        ? `Combat actif : ${m1.matchesStarted} parties lancées, ${m1.matchesCompleted} terminées (podium)`
+        : 'Déplacements seuls (--no-combat)',
+    );
     console.log('─'.repeat(100));
     for (const [name, value, budget, pass] of rows) {
       console.log(`${pass ? '✓' : '✗'} ${name.padEnd(46)} ${value.padEnd(34)} ${budget}`);
@@ -531,7 +609,11 @@ async function main(): Promise<void> {
       `retard de boucle des threads générateurs (p99, pire) : ${genLag.toFixed(2)} ms ${genLag > 10 ? '⚠ le générateur sature, mesures peu fiables' : ''}`,
     );
     if (errors.length > 0) console.log(`erreurs client : ${errors.join('; ')}`);
-    ok = rows.every((r) => r[3]) && errors.length === 0;
+    // Avec le combat, les parties doivent réellement tourner (sinon la mesure ne vaut rien).
+    const fighting = !COMBAT || m1.matchesStarted >= ROOMS;
+    if (!fighting)
+      console.log(`✗ seulement ${m1.matchesStarted} parties lancées pour ${ROOMS} salons`);
+    ok = rows.every((r) => r[3]) && errors.length === 0 && fighting;
     console.log(ok ? '\n✓ budgets tenus' : '\n✗ budgets dépassés');
   } finally {
     for (const w of workers) void w.terminate();
