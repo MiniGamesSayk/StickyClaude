@@ -19,7 +19,7 @@ Sur le VPS, en tant que `sayk` :
 
 ```bash
 ssh sayk@163.5.141.47
-games list                      # le jeu n'y est pas encore
+games list                      # le jeu n'y est pas encore (en SSH non interactif : export PATH=$HOME/apps/bin:$PATH)
 ```
 
 **1. Enregistrer le jeu** : clone le dépôt, construit l'image (`deploy/Dockerfile`), génère le `docker-compose.yml`, le lance et ajoute le sous-domaine à Caddy.
