@@ -318,13 +318,30 @@ const objBall = shape(
   [true, false, false, false],
 );
 
-/** Forme au sol d'un objet : caisse, ballon, punaise, mine, boule. */
+/** Contour d'un cœur (courbe paramétrique), dessiné d'une seule ligne, pointe en bas sur le sol. */
+function heartOutline(): number[] {
+  const pts: number[] = [];
+  const n = 24;
+  const k = 0.36;
+  for (let i = 0; i < n; i++) {
+    const t = (i / n) * Math.PI * 2;
+    const x = 16 * Math.sin(t) ** 3;
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    pts.push(x * k, -(y + 17) * k);
+  }
+  return pts;
+}
+
+const objHeart = shape([heartOutline(), [-3.6, -8.4, -2.4, -9.6]], [true, false]);
+
+/** Forme au sol d'un objet : caisse, ballon, punaise, mine, boule, cœur. */
 export const OBJECT_SHAPES: Readonly<Record<number, Shape>> = {
   [ObjType.CRATE]: objCrate,
   [ObjType.BALLOON]: objBalloon,
   [ObjType.TACK]: objTack,
   [ObjType.MINE]: objMine,
   [ObjType.BALL]: objBall,
+  [ObjType.HEART]: objHeart,
 };
 
 // --- Projectiles (centre en 0,0, dirigés vers +x) -----------------------------------------------

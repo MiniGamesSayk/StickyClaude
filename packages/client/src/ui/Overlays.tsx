@@ -1,5 +1,5 @@
 import type { JSX } from 'preact';
-import { actions, mode, net, overlay } from '../app/store.ts';
+import { actions, mode, net, overlay, testingLevel } from '../app/store.ts';
 import { t } from '../i18n/index.ts';
 import { Button, Modal } from './components.tsx';
 
@@ -76,7 +76,7 @@ export function PauseModal(): JSX.Element {
           else actions.leave();
         }}
       >
-        {t('pause.leave')}
+        {m === 'solo' && testingLevel.value ? t('cr.back') : t('pause.leave')}
       </Button>
     </Modal>
   );

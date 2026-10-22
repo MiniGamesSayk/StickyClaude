@@ -57,8 +57,17 @@ export function hasHeadroom(world: World, p: Player): boolean {
 export function wallContact(world: World, p: Player, pref: number): number {
   const hw = world.params.width * 0.5;
   const t = p.y - bodyHeight(world, p);
-  const left = rectBlocked(world, p.x - hw - 0.5, t, p.x - hw, p.y);
-  const right = rectBlocked(world, p.x + hw, t, p.x + hw + 0.5, p.y);
+  let left = rectBlocked(world, p.x - hw - 0.5, t, p.x - hw, p.y);
+  let right = rectBlocked(world, p.x + hw, t, p.x + hw + 0.5, p.y);
+  // les plateformes mobiles sont pleines : on s'y accroche aussi
+  if (p.dropTimer === 0) {
+    for (let i = 0; i < world.moverCount; i++) {
+      const m = world.movers[i];
+      if (t >= m.y + m.h - EPS || p.y <= m.y + EPS) continue;
+      if (Math.abs(p.x - hw - (m.x + m.w)) <= 0.5) left = true;
+      if (Math.abs(m.x - (p.x + hw)) <= 0.5) right = true;
+    }
+  }
   if (left && right) return pref;
   return left ? -1 : right ? 1 : 0;
 }
@@ -105,21 +114,33 @@ interface Pos {
   y: number;
 }
 
-/** Déplace une boîte (centre `x`, bas `y`, demi-largeur `hw`, hauteur `h`) en x. Vrai si un mur l'arrête. */
-export function moveBoxX(world: World, e: Pos, hw: number, h: number, dx: number): boolean {
+/**
+ * Déplace une boîte (centre `x`, bas `y`, demi-largeur `hw`, hauteur `h`) en x. Vrai si un mur ou
+ * une plateforme mobile l'arrête. Les plateformes mobiles sont pleines (côtés et dessous) ;
+ * `ignoreMovers` les ignore (traversée vers le bas).
+ */
+export function moveBoxX(
+  world: World,
+  e: Pos,
+  hw: number,
+  h: number,
+  dx: number,
+  ignoreMovers = false,
+): boolean {
   if (dx === 0) return false;
   const top = e.y - h;
   const r0 = Math.floor((top + EPS) / CELL);
   const r1 = Math.floor((e.y - EPS) / CELL);
+  let stop = dx > 0 ? Infinity : -Infinity;
   if (dx > 0) {
     const edge = e.x + hw;
     const c0 = Math.floor((edge - EPS) / CELL) + 1;
     const c1 = Math.floor((edge + dx - EPS) / CELL);
-    for (let c = c0; c <= c1; c++) {
+    scan: for (let c = c0; c <= c1; c++) {
       for (let r = r0; r <= r1; r++) {
         if (isBlocking(cellAt(world, c, r))) {
-          e.x = c * CELL - hw;
-          return true;
+          stop = c * CELL - hw;
+          break scan;
         }
       }
     }
@@ -127,14 +148,32 @@ export function moveBoxX(world: World, e: Pos, hw: number, h: number, dx: number
     const edge = e.x - hw;
     const c0 = Math.floor((edge + EPS) / CELL) - 1;
     const c1 = Math.floor((edge + dx + EPS) / CELL);
-    for (let c = c0; c >= c1; c--) {
+    scan: for (let c = c0; c >= c1; c--) {
       for (let r = r0; r <= r1; r++) {
         if (isBlocking(cellAt(world, c, r))) {
-          e.x = (c + 1) * CELL + hw;
-          return true;
+          stop = (c + 1) * CELL + hw;
+          break scan;
         }
       }
     }
+  }
+  if (!ignoreMovers) {
+    for (let i = 0; i < world.moverCount; i++) {
+      const m = world.movers[i];
+      // seulement si la boîte recouvre la plateforme en hauteur (posé dessus : on glisse)
+      if (top >= m.y + m.h - EPS || e.y <= m.y + EPS) continue;
+      if (dx > 0) {
+        const lim = m.x - hw;
+        if (e.x <= lim + EPS && e.x + dx > lim && lim < stop) stop = lim;
+      } else {
+        const lim = m.x + m.w + hw;
+        if (e.x >= lim - EPS && e.x + dx < lim && lim > stop) stop = lim;
+      }
+    }
+  }
+  if (stop !== Infinity && stop !== -Infinity) {
+    e.x = stop;
+    return true;
   }
   e.x += dx;
   return false;
@@ -153,6 +192,7 @@ export function moveBoxY(
   dy: number,
   dropTimer: number,
 ): number {
+  const rr0 = e.x + hw;
   if (dy === 0) return 0;
   const cl = Math.floor((e.x - hw + EPS) / CELL);
   const cr = Math.floor((e.x + hw - EPS) / CELL);
@@ -192,13 +232,29 @@ export function moveBoxY(
   const top = e.y - h;
   const r0 = Math.floor((top + EPS) / CELL) - 1;
   const r1 = Math.floor((top + dy + EPS) / CELL);
-  for (let r = r0; r >= r1; r--) {
+  let ceil = -Infinity;
+  scan: for (let r = r0; r >= r1; r--) {
     for (let c = cl; c <= cr; c++) {
       if (isBlocking(cellAt(world, c, r))) {
-        e.y = (r + 1) * CELL + h;
-        return -1;
+        ceil = (r + 1) * CELL;
+        break scan;
       }
     }
+  }
+  // le dessous d'une plateforme mobile arrête aussi la montée
+  if (dropTimer === 0) {
+    const l = e.x - hw;
+    for (let i = 0; i < world.moverCount; i++) {
+      const m = world.movers[i];
+      const under = m.y + m.h;
+      if (l < m.x + m.w - EPS && rr0 > m.x + EPS && top >= under - EPS && top + dy < under) {
+        if (under > ceil) ceil = under;
+      }
+    }
+  }
+  if (ceil !== -Infinity) {
+    e.y = ceil + h;
+    return -1;
   }
   e.y += dy;
   return 0;
@@ -206,7 +262,7 @@ export function moveBoxY(
 
 /** Déplace un joueur en x. Retourne vrai si un mur a arrêté le mouvement. */
 export function moveX(world: World, p: Player, dx: number): boolean {
-  return moveBoxX(world, p, world.params.width * 0.5, bodyHeight(world, p), dx);
+  return moveBoxX(world, p, world.params.width * 0.5, bodyHeight(world, p), dx, p.dropTimer > 0);
 }
 
 /** Déplace un joueur en y (voir `moveBoxY`). */

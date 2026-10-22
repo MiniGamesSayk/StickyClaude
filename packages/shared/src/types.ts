@@ -107,6 +107,8 @@ export const ObjType = {
   TACK: 4,
   MINE: 5,
   BALL: 6,
+  /** Cœur : rend des points de vie à qui le touche. */
+  HEART: 7,
 } as const;
 export type ObjTypeId = (typeof ObjType)[keyof typeof ObjType];
 
@@ -156,6 +158,8 @@ export const SimEvent = {
   STAMP: 23,
   GRAPPLE: 24,
   CRATE_BREAK: 25,
+  /** Soin : joueur (slot) · x y · points de vie rendus. */
+  HEAL: 26,
   GOAL: 28,
   SUDDEN_DEATH: 29,
   /** Début d'une attaque (son, effet) : uniquement local au client pour son propre joueur. */
@@ -203,6 +207,7 @@ export const EVENT_SPECS: Readonly<Record<number, string>> = {
   [SimEvent.GRAPPLE]: 'ppi',
   [SimEvent.CRATE_BREAK]: 'pp',
   /** équipe · x y */
+  [SimEvent.HEAL]: 'ppi',
   [SimEvent.GOAL]: 'ipp',
   /** sorte (0 encre, 1 déchirure) */
   [SimEvent.SUDDEN_DEATH]: 'i',

@@ -250,6 +250,12 @@ export class StickmanPainter {
 
     // Ombre au sol
     if ((p.flags & PlayerFlag.GROUNDED) !== 0) pen.disc(ox, oy + 0.4, 7, 1.7, INK.night, 0.13);
+    // Son propre personnage : lueur de sa couleur d'encre, plus un anneau au sol, pour le
+    // retrouver d'un coup d'œil parmi les autres
+    if (p.self && !mannequin) {
+      pen.glow(ox, oy - 13, 25, ink, 0.26);
+      pen.disc(ox, oy + 0.6, 11, 2.6, ink, 0.34);
+    }
 
     this.paintBody(pen, v, p, w, ink, alpha, style, wd, env);
     this.headTopY = w[J.HEAD * 2 + 1] - BODY.headR - 2;

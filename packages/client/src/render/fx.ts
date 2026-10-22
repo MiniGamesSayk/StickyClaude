@@ -511,6 +511,13 @@ export class FxSystem {
         this.spray(PK.SPARK, 6, x, y, 80, 4, 0.3, color, env);
         break;
       }
+      case SimEvent.HEAL: {
+        const x = a[0] ?? 0;
+        const y = a[1] ?? 0;
+        this.ring(x, y, 4, 24, 0.35, INK.red, false);
+        this.spray(PK.SPARK, 8, x, y, 70, 5, 0.5, 0xff8fa3, env, 0, -1, 1.2);
+        break;
+      }
       case SimEvent.PICKUP: {
         const p = env.playerPos(a[0] ?? 0);
         if (p) this.ring(p.x, p.y - 16, 3, 14, 0.2, INK.blue, false);

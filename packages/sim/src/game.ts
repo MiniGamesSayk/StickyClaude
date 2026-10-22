@@ -255,6 +255,8 @@ export function beginRound(world: World, arena: ArenaData, mode: number): void {
   g.inkY = WORLD_H;
   g.tear = 0;
   g.weaponTimer = 6 * TICK_HZ + world.rng.int(4 * TICK_HZ);
+  // premier cœur : 15 s après le début du combat, puis au rythme du nombre de joueurs
+  g.healTimer = 15 * TICK_HZ;
   g.modeData.fill(0);
   g.commonWeapon = 0;
   applyModeParams(world, mode);
@@ -352,6 +354,7 @@ export function returnToLobby(world: World, lobbyArena: ArenaData): void {
   g.tear = 0;
   g.modeData.fill(0);
   g.weaponTimer = 4 * TICK_HZ;
+  g.healTimer = 0;
   applyModeParams(world, ModeId.FFA);
   world.inMatch.fill(0);
   for (let s = 0; s < MAX_PLAYERS; s++) {

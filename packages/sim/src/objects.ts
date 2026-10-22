@@ -22,7 +22,31 @@ import type { Obj, Player, World } from './world.ts';
 export const WEAPON_LIFE_TICKS = 20 * 60;
 /** Délai entre le début du dessin d'une arme et son apparition (0,8 s). */
 export const WEAPON_DRAW_TICKS = 48;
-export const MAX_GROUND_WEAPONS = 3;
+
+/**
+ * Objets au sol, proportionnels au nombre de joueurs en lice : plus il y a de monde, plus il y a
+ * d'armes et de cœurs en même temps, et plus ils apparaissent souvent.
+ */
+export function maxGroundWeapons(players: number): number {
+  return Math.max(2, Math.ceil(players * 0.6));
+}
+export function maxGroundHearts(players: number): number {
+  return Math.max(1, Math.ceil(players / 4));
+}
+/** Délai moyen (ticks) entre deux apparitions : 10 s à 2 ou 4 joueurs, 5 s à 8. */
+export function itemInterval(players: number): number {
+  return Math.min(600, Math.max(240, Math.round(2400 / Math.max(2, players))));
+}
+/** Joueurs en lice (hors fantômes et absents). */
+export function playersInPlay(world: World): number {
+  let n = 0;
+  for (let s = 0; s < MAX_PLAYERS; s++) {
+    const p = world.players[s];
+    if (p.active && !p.ghost) n++;
+  }
+  return n;
+}
+const HEART_SIZE = 12;
 const CRATE_HP = 20;
 const CRATE_SIZE = 16;
 const BALLOON_SIZE = 14;
@@ -109,6 +133,12 @@ export function spawnProps(world: World): void {
   }
 }
 
+export function countGroundHearts(world: World): number {
+  let n = 0;
+  for (const o of world.objects) if (o.active && o.type === ObjType.HEART) n++;
+  return n;
+}
+
 export function countGroundWeapons(world: World): number {
   let n = 0;
   for (const o of world.objects) if (o.active && o.type === ObjType.WEAPON) n++;
@@ -168,7 +198,10 @@ export function triggerMine(world: World, o: Obj): void {
 export function breakCrate(world: World, o: Obj): void {
   o.active = false;
   emit(world, SimEvent.CRATE_BREAK, 0, o.x, o.y - o.h / 2);
-  if (world.rules.weapons && countGroundWeapons(world) < MAX_GROUND_WEAPONS + 1) {
+  if (
+    world.rules.weapons &&
+    countGroundWeapons(world) < maxGroundWeapons(playersInPlay(world)) + 1
+  ) {
     if (world.rng.float() < 0.5) {
       const w = randomWeapon(world);
       spawnWeaponObj(world, w, weaponDef(w).ammo, o.x, o.y - 4, 0, -100);
@@ -281,6 +314,12 @@ export function stepObjects(world: World): void {
         }
         break;
       }
+      case ObjType.HEART: {
+        gravityStep(world, o, dt);
+        if (o.y > world.arena.size[1] * CELL + 3 * CELL) o.active = false;
+        else if (world.game.phase === GamePhase.PLAYING) healByContact(world, o);
+        break;
+      }
       default: {
         // Arme, caisse, boule : tombent, glissent, sont poussées par les joueurs.
         if (o.type === ObjType.CRATE || o.type === ObjType.BALL) pushByPlayers(world, o);
@@ -343,16 +382,20 @@ export function stepWeaponSpawner(world: World): void {
     }
   }
   const g = world.game;
-  if (!world.rules.weapons || world.weaponSpawnCount === 0) return;
+  if (world.weaponSpawnCount === 0) return;
   const phase = g.phase;
   if (phase !== GamePhase.PLAYING && phase !== GamePhase.LOBBY) return;
+  const players = playersInPlay(world);
+  if (phase === GamePhase.PLAYING) stepHearts(world, players);
+  if (!world.rules.weapons) return;
   if (g.mode === 7) return; // même arme pour tous : rien d'autre n'apparaît
   if (g.weaponTimer > 0) {
     g.weaponTimer--;
     return;
   }
-  g.weaponTimer = 360 + world.rng.int(240);
-  if (countGroundWeapons(world) >= MAX_GROUND_WEAPONS) return;
+  const interval = itemInterval(players);
+  g.weaponTimer = interval + world.rng.int(Math.round(interval * 0.4));
+  if (countGroundWeapons(world) >= maxGroundWeapons(players)) return;
   const idx = world.rng.int(world.weaponSpawnCount);
   const x = world.weaponSpawnX[idx];
   const y = world.weaponSpawnY[idx];
@@ -368,6 +411,44 @@ export function stepWeaponSpawner(world: World): void {
     s.at = world.tick + WEAPON_DRAW_TICKS;
     emit(world, SimEvent.WEAPON_SPAWN, 0, x, y, weapon, s.uid);
     break;
+  }
+}
+
+/** Apparition des cœurs de soin (combat seulement), au rythme et en nombre proportionnels aux joueurs. */
+function stepHearts(world: World, players: number): void {
+  const g = world.game;
+  if (g.healTimer > 0) {
+    g.healTimer--;
+    return;
+  }
+  const interval = itemInterval(players);
+  g.healTimer = Math.round(interval * 1.5) + world.rng.int(Math.round(interval * 0.6));
+  if (countGroundHearts(world) >= maxGroundHearts(players)) return;
+  const idx = world.rng.int(world.weaponSpawnCount);
+  const o = spawnObj(
+    world,
+    ObjType.HEART,
+    world.weaponSpawnX[idx],
+    world.weaponSpawnY[idx],
+    HEART_SIZE,
+    HEART_SIZE,
+    0,
+    0,
+  );
+  if (o) o.life = COMBAT.heartLifeTicks;
+}
+
+/** Un cœur touché soigne le joueur (s'il est blessé : sinon il reste pour un autre). */
+function healByContact(world: World, o: Obj): void {
+  for (let s = 0; s < MAX_PLAYERS; s++) {
+    const p = world.players[s];
+    if (!p.active || p.dead || p.ghost || p.hp >= COMBAT.maxHp) continue;
+    if (!overlapsPlayer(world, o, p)) continue;
+    const gained = Math.min(COMBAT.healAmount, COMBAT.maxHp - p.hp);
+    p.hp += gained;
+    o.active = false;
+    emit(world, SimEvent.HEAL, s, o.x, o.y - o.h / 2, gained);
+    return;
   }
 }
 

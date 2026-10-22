@@ -44,7 +44,7 @@ export interface MovementParams {
 }
 
 export const DEFAULT_MOVEMENT: Readonly<MovementParams> = {
-  width: 12.8, // 0,8 cellule
+  width: 9, // boîte au plus près du dessin (tête ±4,4) : ≈ 0,56 cellule
   height: 28.8, // 1,8 cellule
   crouchHeight: 17.6, // 1,1 cellule
 

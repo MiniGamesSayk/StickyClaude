@@ -1020,8 +1020,8 @@ table.table td {
   position: absolute;
   bottom: max(14px, var(--safe-bottom));
   left: max(18px, var(--safe-left));
-  width: calc(10rem * var(--touch-size));
-  height: calc(10rem * var(--touch-size));
+  width: calc(10rem * var(--stick-size, 1));
+  height: calc(10rem * var(--stick-size, 1));
   border-radius: 50%;
   border: 2.5px dashed rgba(27, 42, 94, 0.5);
   background: rgba(251, 247, 234, 0.35);
@@ -1034,9 +1034,9 @@ table.table td {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: calc(4rem * var(--touch-size));
-  height: calc(4rem * var(--touch-size));
-  margin: calc(-2rem * var(--touch-size)) 0 0 calc(-2rem * var(--touch-size));
+  width: calc(4rem * var(--stick-size, 1));
+  height: calc(4rem * var(--stick-size, 1));
+  margin: calc(-2rem * var(--stick-size, 1)) 0 0 calc(-2rem * var(--stick-size, 1));
   border-radius: 50%;
   border: 2.5px solid var(--ink);
   background: rgba(251, 247, 234, 0.8);
@@ -1045,7 +1045,7 @@ table.table td {
   position: absolute;
   bottom: max(14px, var(--safe-bottom));
   right: max(18px, var(--safe-right));
-  width: calc(14rem * var(--touch-size));
+  width: calc(14.4rem * var(--touch-size));
   height: calc(10rem * var(--touch-size));
 }
 .tbtns.swap {
@@ -1083,6 +1083,12 @@ table.table td {
 .tbtn.block {
   right: calc(8.6rem * var(--touch-size));
   bottom: calc(5.2rem * var(--touch-size));
+}
+.tbtn.crouch {
+  right: calc(10.2rem * var(--touch-size));
+  bottom: calc(0.4rem * var(--touch-size));
+  width: calc(4rem * var(--touch-size));
+  height: calc(4rem * var(--touch-size));
 }
 .tbtn.pickup {
   right: calc(1.4rem * var(--touch-size));

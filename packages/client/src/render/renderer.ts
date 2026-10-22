@@ -473,6 +473,7 @@ export class Renderer {
     this.drawObjects(scene);
     this.drawPlayers(scene, paint);
     this.drawProjectiles(scene);
+    if (scene.debug) this.drawHitboxes(scene);
     this.ragdolls.step(this.dtS, world.cells);
     this.ragdolls.draw(this.ragPen, this.boil);
     this.fx.draw(this.fxPen, this.labels, this.dtS, this.fxEnv, this.boil);
@@ -964,10 +965,50 @@ export class Renderer {
         color = INK.night;
         alpha = o.a === 1 ? 0.55 : 0.95;
       } else if (o.type === ObjType.BALL) color = INK.black;
+      else if (o.type === ObjType.HEART) color = INK.red;
       const sway = o.type === ObjType.BALLOON ? Math.sin(t * 2 + o.uid) * 0.1 : 0;
-      drawShape(pen, shape, o.x, o.y, 1, 0, 0, sway, 1, 2, color, alpha, PenStyle.BALLPOINT, boil);
+      // le cœur bat et se balance légèrement : il se repère de loin
+      const beat = o.type === ObjType.HEART ? 1 + Math.sin(t * 6 + o.uid) * 0.08 : 1;
+      const bob = o.type === ObjType.HEART ? -Math.abs(Math.sin(t * 2.4 + o.uid)) * 2.2 : 0;
+      if (o.type === ObjType.HEART) pen.disc(o.x, o.y - 6, 9, 9, 0xff8fa3, 0.28);
+      drawShape(
+        pen,
+        shape,
+        o.x,
+        o.y + bob,
+        beat,
+        0,
+        0,
+        sway,
+        1,
+        2,
+        color,
+        alpha,
+        PenStyle.BALLPOINT,
+        boil,
+      );
+      if (o.type === ObjType.HEART) pen.disc(o.x, o.y + bob - 6.5, 3.4, 3, 0xff8fa3, 0.55);
       if (o.type === ObjType.BALLOON) pen.disc(o.x - 2.2, o.y - 18, 1.3, 2, 0xffffff, 0.55);
       if (o.type === ObjType.CRATE) pen.rect(o.x - 7.4, o.y - 15.4, 14.8, 14.8, 0xb98a5a, 0.5);
+    }
+  }
+
+  /** Mode de débogage (F3) : la boîte de collision de chaque joueur, telle que la simulation la voit. */
+  private drawHitboxes(scene: Scene): void {
+    const pen = this.projPen;
+    const hw = scene.params.width * 0.5;
+    for (let i = 0; i < scene.playerCount; i++) {
+      const p = scene.players[i];
+      if (p.state === PlayerState.DEAD) continue;
+      const h = p.crouching ? scene.params.crouchHeight : scene.params.height;
+      const l = p.x - hw;
+      const r = p.x + hw;
+      const t = p.y - h;
+      const col = p.self ? 0x1f9d55 : 0xd6322e;
+      pen.seg(l, t, r, t, 0.8, col, 0.9, PenStyle.BALLPOINT, false);
+      pen.seg(r, t, r, p.y, 0.8, col, 0.9, PenStyle.BALLPOINT, false);
+      pen.seg(r, p.y, l, p.y, 0.8, col, 0.9, PenStyle.BALLPOINT, false);
+      pen.seg(l, p.y, l, t, 0.8, col, 0.9, PenStyle.BALLPOINT, false);
     }
   }
 
@@ -1127,6 +1168,22 @@ export class Renderer {
     return this.scratchPlayer;
   }
 
+  /** Flèche qui rebondit au-dessus du personnage du joueur local, dans sa couleur d'encre. */
+  private drawSelfMarker(pen: Pen, x: number, y: number, p: DrawPlayer): void {
+    const t = this.nowMs / 1000;
+    const bob = Math.sin(t * 5) * 1.6;
+    const tip = y - 2 + bob;
+    const col = INK_COLORS[p.color % INK_COLORS.length];
+    // pointe en bas : contour sombre, puis remplissage de la couleur du joueur
+    const dark = [x - 6.4, tip - 9.6, x + 6.4, tip - 9.6, x, tip];
+    pen.poly(dark, 3, true, 3.4, INK.night, 0.95, PenStyle.BALLPOINT);
+    for (let k = 0; k <= 5; k++) {
+      const yy = tip - 9 + k * 1.5;
+      const half = 5.4 * (1 - k / 6.2);
+      pen.seg(x - half, yy, x + half, yy, 1.8, col, 1, PenStyle.BALLPOINT, false);
+    }
+  }
+
   /** Nom, barre de vie et munitions au-dessus du stickman. */
   private drawOverhead(p: DrawPlayer, paint: PaintEnv): void {
     const pen = this.playerPen;
@@ -1165,7 +1222,9 @@ export class Renderer {
     if (p.name !== '') {
       const label = this.labels.get(p.name, p.self ? 12 : 11, this.labelColor(p), true);
       label.position.set(vis.headX, y - 1);
+      y -= 15;
     }
+    if (p.self && !p.mannequin) this.drawSelfMarker(pen, vis.headX, y, p);
   }
 
   private labelColor(p: DrawPlayer): number {
