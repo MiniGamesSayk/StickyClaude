@@ -130,6 +130,8 @@ export interface OwnState {
   grappleTicks: number;
   status: number;
   stunImmune: number;
+  dashTicks: number;
+  dashCd: number;
   prevInput: number;
   respawns: number;
   respawnTimer: number;
@@ -178,6 +180,8 @@ export const OWN_FIELDS: readonly { key: OwnKey; t: FieldType }[] = [
   { key: 'grappleTicks', t: 'u8' },
   { key: 'status', t: 'u8' },
   { key: 'stunImmune', t: 'u8' },
+  { key: 'dashTicks', t: 'u8' },
+  { key: 'dashCd', t: 'u8' },
   { key: 'prevInput', t: 'u16' },
   { key: 'respawns', t: 'u16' },
   { key: 'respawnTimer', t: 'u16' },

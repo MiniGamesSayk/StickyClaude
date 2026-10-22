@@ -294,6 +294,7 @@ export const fr = {
   'train.double': 'Fais un double saut',
   'train.wall': 'Saute contre un mur (saut mural)',
   'train.drop': 'Descends d’une plateforme (↓)',
+  'train.dash': 'Fais un dash (Maj)',
   'train.crouch': 'Accroupis-toi une demi-seconde',
   'train.punch': 'Frappe un mannequin',
   'train.combo': 'Enchaîne 3 coups',
@@ -404,13 +405,14 @@ export const fr = {
   'act.attack': 'Attaquer / tirer',
   'act.block': 'Parer',
   'act.pickup': 'Ramasser / lancer',
+  'act.dash': 'Dash',
 
   // Aide et crédits
   'help.title': 'Comment jouer',
   'help.goal':
     'Le dernier debout gagne la manche ; le premier à plusieurs manches gagne la partie.',
   'help.move':
-    'Bouger : flèches ou WASD/ZQSD, manette, joystick. Sauter deux fois = double saut ; contre un mur = saut mural.',
+    'Bouger : flèches ou WASD/ZQSD, manette, joystick. Sauter deux fois = double saut ; contre un mur = saut mural. Dash (Maj, LB) : ruée horizontale de 0,15 s, recharge 0,75 s.',
   'help.fight':
     'Attaquer : 3 coups enchaînés, maintenir pour charger ; ↑ + attaque : coup vers le haut ; ↓ + attaque : coup accroupi (au sol) ou plongeant (en l’air). Parer : un seul coup encaissé, il étourdit l’attaquant 0,4 s, puis 0,5 s de recharge ; juste après l’appui = parade parfaite. La visée suit la souris (ou le joystick).',
   'help.weapons':
@@ -432,6 +434,7 @@ export const fr = {
   'touch.attack': 'Coup',
   'touch.block': 'Parade',
   'touch.pickup': 'Prendre',
+  'touch.dash': 'Dash',
   'touch.emote': 'Emotes',
   'touch.menu': 'Menu',
   'touch.rotate': 'Tourne ton téléphone en mode paysage pour jouer.',

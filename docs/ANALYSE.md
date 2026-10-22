@@ -122,6 +122,7 @@ Modes bonus v1 :
 |---|---|---|---|
 | Déplacer / viser | ZQSD ou WASD (selon la disposition) / flèches | Stick gauche ou croix | Joystick virtuel à gauche |
 | Sauter | Espace | A / Croix | Bouton |
+| Dash | Maj (gauche ou droite) | LB / RB | Bouton |
 | Attaquer / tirer | J (ou clic gauche) | X / Carré, gâchette droite | Bouton |
 | Parer | E (ou clic droit) | B / Rond, gâchette gauche | Bouton |
 | Ramasser / lancer | L | Y / Triangle | Bouton |

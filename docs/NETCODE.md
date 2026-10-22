@@ -33,7 +33,7 @@ Ce document décrit le protocole réseau **tel qu'il est implémenté** (version
      4 entrées (redondance)                                 step(world) : passes 1 et 2, puis à 30 Hz par client :
                       ◄──────────────────────────────────── SNAPSHOT (≈ 280 o)
                                                               joueurs, objets, projectiles, état de partie,
-                                                              état exact du destinataire (69 o), événements fiables
+                                                              état exact du destinataire (71 o), événements fiables
    compare snapshot.own et la phase de partie à son historique
      identique → rien
      différent → restaure l'état serveur, rejoue S+1…
@@ -87,7 +87,7 @@ Tout est en **little-endian**. Le premier octet est toujours le type. Client →
 | 8–11  |        | réservés                                                                       |
 | 12–15 |        | retard de compensation de latence en ticks (0 à 15), **ajouté par le serveur** |
 
-Le serveur ne lit que les 8 bits de poids faible d'un paquet (`INPUT_MASK_USED`) : un client ne peut pas se donner une compensation de latence qu'il n'a pas. Le curseur du fantôme-crayon utilise les mêmes bits (directions pour le déplacer, attaque pour poser un trait, parade pour une goutte d'encre).
+Le serveur ne lit que les 14 bits de poids faible d'un paquet (`INPUT_MASK_USED`) : un client ne peut pas se donner une compensation de latence qu'il n'a pas. Le curseur du fantôme-crayon utilise les mêmes bits (directions pour le déplacer, attaque pour poser un trait, parade pour une goutte d'encre).
 
 ### `INPUT` (client → serveur) : 9 à 15 octets
 
@@ -118,7 +118,7 @@ Le serveur reconstitue l'étiquette complète : la valeur 32 bits la plus proche
 | 5      | u32  | `tick` | tick du salon au moment de la réponse                   |
 | 9      | u8   | `frac` | fraction de tick écoulée depuis le dernier tick (1/256) |
 
-### `SNAPSHOT` (serveur → client) : 17 + 18·J + 13·O + 13·P + 2·M (+ 69) + événements
+### `SNAPSHOT` (serveur → client) : 17 + 18·J + 13·O + 13·P + 2·M (+ 71) + événements
 
 Un snapshot par client : l'en-tête, le bloc `own`, les événements et la liste d'objets lui sont propres (les mines adverses armées sont invisibles : elles n'apparaissent pas dans la liste de leurs ennemis).
 
@@ -141,7 +141,7 @@ Un snapshot par client : l'en-tête, le bloc `own`, les événements et la liste
 | …      |       | objets        | O × 13 octets                                                                                                                                                                      |
 | …      |       | projectiles   | P × 13 octets                                                                                                                                                                      |
 | …      | u16[] | `modeData`    | M valeurs propres au mode (colline : temps tenu par équipe ; boulette-ball : buts des deux camps et délai de remise en jeu ; patate : porteur + 1, mèche, pause avant la suivante) |
-| …      |       | `own`         | 69 octets si `flags & 1`                                                                                                                                                           |
+| …      |       | `own`         | 71 octets si `flags & 1`                                                                                                                                                           |
 | …      |       | événements    | `eventCount` × (4 + `len`) octets                                                                                                                                                  |
 
 **Joueur (18 octets).** Positions et vitesses quantifiées au **1/8 d'unité** (i16, soit ±4 095 unités ; la page fait 1 024 × 576). Un fantôme-crayon est un joueur dont `anim` vaut `GHOST` et dont `x`, `y` sont ceux de son curseur.
@@ -168,15 +168,15 @@ Drapeaux de joueur (u16) : bit 0 vivant · 1 tourné à droite · 2 au sol · 3 
 
 **Projectile (13 octets).** `u16 uid, u8 type, i16 x, y, vx, vy, u8 owner, u8 a`. `type` : 1 boulette, 2 avion en papier, 3 roquette, 4 gomme, 5 objet lancé. `x`, `y` sont le centre, `owner` le tireur (255 aucun), `a` l'arme d'origine.
 
-**Bloc `own` (69 octets).** L'état _exact_ de prédiction du destinataire : tout ce qui influence l'évolution future de sa simulation. Flottants 32 bits (l'arrondi vaut moins de 10⁻⁴ unité). Ordre des champs (`OWN_FIELDS`, `packages/shared/src/codec/snapshot.ts`) :
+**Bloc `own` (71 octets).** L'état _exact_ de prédiction du destinataire : tout ce qui influence l'évolution future de sa simulation. Flottants 32 bits (l'arrondi vaut moins de 10⁻⁴ unité). Ordre des champs (`OWN_FIELDS`, `packages/shared/src/codec/snapshot.ts`) :
 
-| Octets | Type | Champs                                                                                                                                                                                                                                                                                                                               |
-| ------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0–31   | f32  | `x`, `y`, `vx`, `vy`, `grappleX`, `grappleY`, `ghostX`, `ghostY`                                                                                                                                                                                                                                                                     |
-| 32–37  | u8   | `flags` (bit 0 au sol · 1 accroupi · 2 double saut disponible · 3 saut en cours · 4 tourné à droite), `coyote`, `jumpBuffer`, `wallLock`, `wallCoyote`, `dropTimer`                                                                                                                                                                  |
-| 38–39  | i8   | `wallDir` (−1, 0, 1), `groundMover` (indice de plateforme mobile, −1 sinon)                                                                                                                                                                                                                                                          |
-| 40–60  | u8   | `hp`, `weapon`, `ammo`, `stun`, `hitLock`, `invuln` (plafonné à 255), `atkPhase`, `atkKind`, `atkTicks`, `combo`, `comboWindow`, `chargeTicks`, `attackHeld`, `blockTicks`, `blockCd`, `atkBuffer`, `pickupCd`, `aim`, `grappleTicks`, `status` (bit 0 fantôme · 1 mort · 2 porte la bombe · 3 coup de pied plongeant), `stunImmune` |
-| 61–68  | u16  | `prevInput`, `respawns`, `respawnTimer`, `ghostCd`                                                                                                                                                                                                                                                                                   |
+| Octets | Type | Champs                                                                                                                                                                                                                                                                                                                                                      |
+| ------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0–31   | f32  | `x`, `y`, `vx`, `vy`, `grappleX`, `grappleY`, `ghostX`, `ghostY`                                                                                                                                                                                                                                                                                            |
+| 32–37  | u8   | `flags` (bit 0 au sol · 1 accroupi · 2 double saut disponible · 3 saut en cours · 4 tourné à droite), `coyote`, `jumpBuffer`, `wallLock`, `wallCoyote`, `dropTimer`                                                                                                                                                                                         |
+| 38–39  | i8   | `wallDir` (−1, 0, 1), `groundMover` (indice de plateforme mobile, −1 sinon)                                                                                                                                                                                                                                                                                 |
+| 40–62  | u8   | `hp`, `weapon`, `ammo`, `stun`, `hitLock`, `invuln` (plafonné à 255), `atkPhase`, `atkKind`, `atkTicks`, `combo`, `comboWindow`, `chargeTicks`, `attackHeld`, `blockTicks`, `blockCd`, `atkBuffer`, `pickupCd`, `aim`, `grappleTicks`, `status` (bit 0 fantôme · 1 mort · 2 porte la bombe · 3 coup de pied plongeant), `stunImmune`, `dashTicks`, `dashCd` |
+| 63–70  | u16  | `prevInput`, `respawns`, `respawnTimer`, `ghostCd`                                                                                                                                                                                                                                                                                                          |
 
 **Événement fiable (4 + `len` octets).**
 
@@ -210,11 +210,11 @@ Chaque argument est `p` (position, i16 au 1/8 d'unité), `i` (i16) ou `u` (u16) 
 | 28   | `GOAL`         | —       | `i camp`, `p x`, `p y`                                                                                   |
 | 29   | `SUDDEN_DEATH` | —       | `i sorte` (0 encre · 1 déchirure)                                                                        |
 
-Les événements de mouvement (`JUMP`, `DOUBLE_JUMP`, `WALL_JUMP`, `LAND`, `DROP_THROUGH`) et le début d'un coup (`SWING`) **ne sont jamais transmis** : le client les recalcule pour son propre joueur (sons et effets immédiats) ; ceux des autres se déduisent de leur état d'animation. `ROUND_START`, `ROUND_END` et `MATCH_END` restent dans le salon, qui les annonce en JSON.
+Les événements de mouvement (`JUMP`, `DOUBLE_JUMP`, `WALL_JUMP`, `LAND`, `DROP_THROUGH`, `DASH`) et le début d'un coup (`SWING`) **ne sont jamais transmis** : le client les recalcule pour son propre joueur (sons et effets immédiats) ; ceux des autres se déduisent de leur état d'animation. `ROUND_START`, `ROUND_END` et `MATCH_END` restent dans le salon, qui les annonce en JSON.
 
 Les événements qui **changent le monde** sont appliqués par le client à son propre monde dès leur réception, par les mêmes fonctions entières que le serveur : `TERRAIN` (`destroyCircle`), `GHOST_DRAW` (`placeMark` : l'expiration est `tick de pose + durée`, donc identique), `PUDDLE`. Les autres ne servent qu'aux effets : ils sont rejoués à l'écran quand le tick de leur snapshot est atteint par l'interpolation (≈ 100 à 300 ms après leur réception), pour rester synchrones avec ce que l'on voit des autres joueurs.
 
-Taille typique à 8 joueurs en combat : 17 + 8 × 18 + 69 + une dizaine d'objets et de projectiles + 1 à 3 événements ≈ **280 octets**, soit **8,7 Ko/s** par client à 30 Hz avec les messages de salon (mesuré, §10). Maximum théorique : `SNAPSHOT_MAX_BYTES`.
+Taille typique à 8 joueurs en combat : 17 + 8 × 18 + 71 + une dizaine d'objets et de projectiles + 1 à 3 événements ≈ **280 octets**, soit **8,7 Ko/s** par client à 30 Hz avec les messages de salon (mesuré, §10). Maximum théorique : `SNAPSHOT_MAX_BYTES`.
 
 ### Messages de contrôle (JSON, texte)
 
@@ -233,7 +233,7 @@ Client → serveur (validés par zod : types stricts, longueurs bornées, énum�
 | `{"t":"teams","assign":[…],"shuffle":true}`                  | équipes (hôte, mode équipes)                                                                                                                         |
 | `{"t":"kick","slot":3}`                                      | expulse un joueur (hôte)                                                                                                                             |
 | `{"t":"look","look":{…}}`                                    | change d'apparence : couleur, trait, chapeau, emote de victoire                                                                                      |
-| `{"t":"emote","id":2}`                                       | emote prédéfinie (1 toutes les 3 s)                                                                                                                     |
+| `{"t":"emote","id":2}`                                       | emote prédéfinie (1 toutes les 3 s)                                                                                                                  |
 | `{"t":"tune","k":"runSpeed","val":200}`                      | réglage d'une constante de mouvement (`DEV_TOOLS=1` seulement)                                                                                       |
 
 Serveur → client (`packages/shared/src/messages.ts`) :
@@ -321,7 +321,7 @@ Sans elle, il faudrait viser là où l'adversaire _sera_ : ce que le tireur voit
 
 1. Il conserve les positions (x, y, hauteur) de chaque joueur sur les **16 derniers ticks**.
 2. Chaque client annonce, dans le champ `rewind` de ses paquets, la durée qui sépare ses entrées de ce qu'il voit des autres : `RTT + (avance + durée d'une image) × 16,7 ms + retard d'interpolation`, en pas de 4 ms.
-3. Le serveur borne ce retard à **15 ticks (250 ms)**, le place dans les bits 12 à 15 du masque d'entrées du joueur et, pour chaque coup de mêlée ou tir instantané, teste les cibles à leur position d'il y a `rewind` ticks (`rewoundBox`).
+3. Le serveur borne ce retard à **15 ticks (250 ms)**, le place dans les bits 14 et 15 du masque (par pas de 4 ticks) d'entrées du joueur et, pour chaque coup de mêlée ou tir instantané, teste les cibles à leur position d'il y a `rewind` ticks (`rewoundBox`).
 4. L'aide à la visée (±8° vers la cible la plus proche dans le cône) est calculée avec les mêmes positions passées, pour tous les appareils.
 
 Les projectiles lents (boulettes, avions, roquettes, gomme) **ne sont pas compensés** : ils sont simulés sur le serveur et apparaissent chez les autres à leur place du moment. Une parade parfaite se juge elle aussi sur le serveur, au tick où le coup arrive (fenêtre de 100 ms après l'appui). Au-delà de 250 ms de retard annoncé, la compensation est partielle : un joueur très lent doit viser un peu devant.

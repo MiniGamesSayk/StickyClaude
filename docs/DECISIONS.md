@@ -431,3 +431,10 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - **Pastilles d'encre** : uniquement la couleur, sans motif (le motif de poitrine du joueur avait déjà disparu du dessin).
 - **Personnalisation** : choisir une emote de victoire la joue aussitôt (avant, il fallait presser « Essayer »).
 - **Créateur** : pinceau / rectangle / seau en pictogrammes sur une seule ligne (info-bulle et `aria-label` pour le nom) ; symétries en grille 2 × 2.
+
+### D60. Dash : un bit de plus dans le masque, retard de compensation à 2 bits
+
+- **Contexte.** Le masque d'entrées de 16 bits était plein (boutons 0-7, visée 8-12, retard 13-15, D-visée). Le dash a besoin d'un bouton.
+- **Choix.** `Input.DASH` = bit 13 ; le retard de compensation passe à 2 bits (14-15), par pas de 4 ticks (0 à 12 au lieu de 0 à 14 par pas de 2) : erreur de ±2 ticks (33 ms) au lieu de ±1, plafond 200 ms au lieu de 233 ms. `INPUT_MASK_USED` = `0x3fff`. Le dash : Maj (touche reconfigurable dans Options, action « Dash »), manette LB, bouton tactile ; ruée horizontale de 9 ticks à 420 u/s sans gravité, recharge 45 ticks, interrompue par saut, mur, coup reçu, attaque, parade, charge ou grappin. État `dashTicks`/`dashCd` dans `OwnState` (71 octets), le hash de déterminisme, objectif « Fais un dash » du carnet, pose de squelette `PlayerState.DASH`, événement local `SimEvent.DASH`.
+- **Alternatives.** Masque 32 bits (touche tous les tampons et enregistrements, voir D-visée) ; combo de boutons existants (ambigu).
+- **À valider.** Équilibre du dash, et la précision de la compensation à 4 ticks (à mesurer avec `loadtest`).

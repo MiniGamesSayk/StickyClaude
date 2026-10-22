@@ -256,6 +256,10 @@ async function main(): Promise<void> {
       ],
       ['mur', { state: PlayerState.WALL_SLIDE, flags: PlayerFlag.ALIVE | PlayerFlag.FACING_RIGHT }],
       ['accroupi', { state: PlayerState.CROUCH, crouching: true }],
+      [
+        'dash',
+        { state: PlayerState.DASH, vx: 420, flags: PlayerFlag.ALIVE | PlayerFlag.FACING_RIGHT },
+      ],
       ['charge', { state: PlayerState.CHARGE, variant: 40 }],
       ['parade', { state: PlayerState.BLOCK, animProg: 20 }],
       ['étourdi', { state: PlayerState.STUN }],

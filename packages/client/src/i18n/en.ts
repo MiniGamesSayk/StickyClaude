@@ -284,6 +284,7 @@ export const en: Record<MessageKey, string> = {
   'train.double': 'Do a double jump',
   'train.wall': 'Jump off a wall (wall jump)',
   'train.drop': 'Drop through a platform (↓)',
+  'train.dash': 'Dash (Shift)',
   'train.crouch': 'Crouch for half a second',
   'train.punch': 'Hit a dummy',
   'train.combo': 'Chain 3 hits',
@@ -392,11 +393,12 @@ export const en: Record<MessageKey, string> = {
   'act.attack': 'Attack / shoot',
   'act.block': 'Block',
   'act.pickup': 'Pick up / throw',
+  'act.dash': 'Dash',
 
   'help.title': 'How to play',
   'help.goal': 'The last one standing wins the round; the first to several rounds wins the match.',
   'help.move':
-    'Move: arrows or WASD/ZQSD, gamepad, joystick. Jump twice = double jump; against a wall = wall jump.',
+    'Move: arrows or WASD/ZQSD, gamepad, joystick. Jump twice = double jump; against a wall = wall jump. Dash (Shift, LB): a 0.15 s horizontal burst, 0.75 s cooldown.',
   'help.fight':
     'Attack: 3-hit combo, hold to charge; ↑ + attack: upward strike; ↓ + attack: crouch strike (ground) or diving kick (air). Block: absorbs one hit only, stuns the attacker for 0.4 s, then a 0.5 s cooldown; right after pressing = perfect parry. Aim follows the mouse (or the joystick).',
   'help.weapons': 'Pick up / throw a weapon: pick-up key; ↓ + pick-up to drop it.',
@@ -414,6 +416,7 @@ export const en: Record<MessageKey, string> = {
   'touch.attack': 'Hit',
   'touch.block': 'Block',
   'touch.pickup': 'Grab',
+  'touch.dash': 'Dash',
   'touch.emote': 'Emotes',
   'touch.menu': 'Menu',
   'touch.rotate': 'Turn your phone to landscape to play.',

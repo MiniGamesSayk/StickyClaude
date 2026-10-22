@@ -411,6 +411,16 @@ export class Rig {
         set(raw, T_HNR, 7.6, -5.2);
         runTarget = 0.35 * Math.min(1, f * 2.5);
         break;
+      case PlayerState.DASH:
+        // Penché en avant, bras tirés en arrière, jambes tendues : une flèche.
+        raw[T_LEAN] = 0.32;
+        set(raw, T_PEL, 1.0, -9.6);
+        set(raw, T_FTL, -6.5, -1.5);
+        set(raw, T_FTR, 6.0, -3.0);
+        set(raw, T_HNR, -7.0, -17.0);
+        set(raw, T_HNL, -5.0, -15.0);
+        raw[T_TILT] = 0.2;
+        break;
       case PlayerState.CHARGE: {
         const k = clamp01(p.variant / COMBAT.chargeMaxTicks);
         raw[T_LEAN] = 0.2 + 0.1 * k;

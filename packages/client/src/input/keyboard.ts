@@ -11,6 +11,7 @@ const BIT: Record<Action, number> = {
   attack: Input.ATTACK,
   block: Input.BLOCK,
   pickup: Input.PICKUP,
+  dash: Input.DASH,
 };
 
 /** Table `event.code` → bit d'entrée, construite à partir des touches choisies. */

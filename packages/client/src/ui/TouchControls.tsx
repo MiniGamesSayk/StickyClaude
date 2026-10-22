@@ -132,6 +132,9 @@ export function TouchControls(): JSX.Element {
         <Btn cls="pickup" bit={Input.PICKUP} label={t('touch.pickup')}>
           ✋
         </Btn>
+        <Btn cls="dash" bit={Input.DASH} label={t('touch.dash')}>
+          ⇥
+        </Btn>
       </div>
       <div class="tsmall">
         <Button

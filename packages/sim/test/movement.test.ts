@@ -588,3 +588,52 @@ describe('plateformes mobiles pleines', () => {
     expect(p.state).toBe(PlayerState.WALL_SLIDE);
   });
 });
+
+describe('dash', () => {
+  const DASH = Input.DASH;
+
+  it('propulse horizontalement sans gravité puis revient à la vitesse de course', () => {
+    const w = worldWithPlayer();
+    const p = w.players[0];
+    put(w, 400, FLOOR_Y - 120);
+    const y0 = p.y;
+    run(w, 1, RIGHT | DASH);
+    expect(p.state).toBe(PlayerState.DASH);
+    expect(p.vx).toBe(P.dashSpeed);
+    run(w, P.dashTicks - 2, RIGHT);
+    expect(p.y).toBe(y0);
+    run(w, 2, RIGHT);
+    expect(p.dashTicks).toBe(0);
+    expect(p.vx).toBeLessThanOrEqual(P.runSpeed);
+  });
+
+  it('sans direction tenue, part vers où le joueur regarde', () => {
+    const w = worldWithPlayer();
+    const p = w.players[0];
+    p.facing = -1;
+    run(w, 1, DASH);
+    expect(p.vx).toBe(-P.dashSpeed);
+  });
+
+  it('une recharge empêche d enchaîner, puis le dash redevient possible', () => {
+    const w = worldWithPlayer();
+    const p = w.players[0];
+    run(w, 1, RIGHT | DASH);
+    run(w, 1, RIGHT);
+    run(w, P.dashTicks, RIGHT);
+    run(w, 1, RIGHT | DASH);
+    expect(p.dashTicks).toBe(0);
+    run(w, P.dashCooldownTicks, RIGHT);
+    run(w, 1, RIGHT | DASH);
+    expect(p.dashTicks).toBeGreaterThan(0);
+  });
+
+  it('un saut interrompt le dash', () => {
+    const w = worldWithPlayer();
+    const p = w.players[0];
+    run(w, 1, RIGHT | DASH);
+    run(w, 1, RIGHT | JUMP);
+    expect(p.dashTicks).toBe(0);
+    expect(p.vy).toBeLessThan(0);
+  });
+});

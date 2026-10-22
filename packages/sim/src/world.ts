@@ -70,6 +70,9 @@ export interface Player {
   blockTicks: number;
   blockCd: number;
   pickupCd: number;
+  /** Ticks de dash restants (0 = ne dash pas) et recharge. */
+  dashTicks: number;
+  dashCd: number;
   /** Direction de visée (0 à 7, voir `AIM_DX`). */
   aim: number;
   grappleTicks: number;
@@ -371,6 +374,8 @@ export function createPlayer(): Player {
     blockTicks: 0,
     blockCd: 0,
     pickupCd: 0,
+    dashTicks: 0,
+    dashCd: 0,
     aim: 0,
     grappleTicks: 0,
     grappleX: 0,
