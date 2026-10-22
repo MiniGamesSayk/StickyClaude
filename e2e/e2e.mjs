@@ -455,13 +455,22 @@ await step('partie à 2 onglets : salon → combat → podium', async () => {
   // décompte
   // le décompte « écrit à la main » : on attend le chiffre 2 (le 3 passe pendant la page qui se tourne)
   // (sondage par minuterie : le sondage par image, lent en rendu logiciel, peut rater un chiffre)
-  await pageA.waitForFunction(
-    () => /^[12]$/.test(document.querySelector('.hud-banner .bt')?.textContent ?? ''),
-    null,
-    { polling: 40, timeout: 15000 },
-  );
-  await pageA.waitForTimeout(350); // le chiffre se trace en un instant
-  await shot(pageA, '10-decompte');
+  // (en rendu logiciel chargé, le chiffre peut passer entre deux sondages : la capture est alors
+  // simplement omise, la partie vérifiée plus bas n'en dépend pas)
+  const counted = await pageA
+    .waitForFunction(
+      () => /^[12]$/.test(document.querySelector('.hud-banner .bt')?.textContent ?? ''),
+      null,
+      { polling: 40, timeout: 15000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  if (counted) {
+    await pageA.waitForTimeout(350); // le chiffre se trace en un instant
+    await shot(pageA, '10-decompte');
+  } else log('  décompte manqué (capture 10 omise)');
 
   const driverA = startDriver(pageA, 'A');
   const driverB = startDriver(pageB, 'B');
