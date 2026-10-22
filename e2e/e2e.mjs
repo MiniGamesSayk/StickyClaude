@@ -290,7 +290,7 @@ await step('manette : menus, jeu, pause, salon', async () => {
   await ready(page);
   // accueil : la croix descend jusqu'à « Entraînement », A l'active
   let found = false;
-  for (let i = 0; i < 16 && !found; i++) {
+  for (let i = 0; i < 20 && !found; i++) {
     await tap(BTN.DOWN);
     const f = await focused();
     if (process.env.E2E_DEBUG) log(`    focus : ${f}`);
