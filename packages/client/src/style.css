@@ -1150,6 +1150,215 @@ table.table td {
   padding: 1px 6px;
 }
 
+/* --- Vote de la carte ----------------------------------------------------------------------- */
+.vote {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 8;
+  padding: 12px;
+}
+.vote .card {
+  pointer-events: auto;
+  width: min(96vw, 46rem);
+  background-color: rgba(251, 247, 234, 0.97);
+  gap: 0.5rem;
+}
+.vote h2 {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  margin: 0;
+  font-weight: 400;
+  font-family: var(--display);
+  letter-spacing: 1px;
+}
+.vote .timer {
+  margin-left: auto;
+  font-family: var(--font);
+  color: var(--ink-soft);
+}
+.vote-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+}
+.vote-option {
+  width: 100%;
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 2.5px solid var(--ink);
+  border-radius: 8px 14px 9px 13px;
+  padding: 0.4rem;
+  box-shadow: 2px 3px 0 var(--shadow);
+}
+.vote-option:hover:not(:disabled) {
+  background: var(--paper);
+}
+.vote-option.mine {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.vote-option.won {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.vote-option .vcount {
+  font-size: 0.9rem;
+}
+.vote-option kbd {
+  font: inherit;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  padding: 0 0.3em;
+}
+.thumb {
+  width: 100%;
+  height: auto;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: var(--paper);
+}
+.level-list {
+  list-style: none;
+  margin: 0.2rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+.level-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.level-list .pname {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- Créateur de niveau --------------------------------------------------------------------- */
+.creator,
+#ui > .creator {
+  pointer-events: auto;
+}
+.creator {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: max(8px, var(--safe-top)) max(8px, var(--safe-right)) max(8px, var(--safe-bottom))
+    max(8px, var(--safe-left));
+  background: var(--table);
+  color: var(--ink);
+}
+.creator-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.creator-head h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: 1px;
+  font-size: 1.6rem;
+}
+.creator-name {
+  flex: 1;
+  min-width: 8rem;
+  max-width: 22rem;
+}
+.creator-body {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr) 16rem;
+  gap: 8px;
+  min-height: 0;
+}
+.creator-tools,
+.creator-side {
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 8px 14px 9px 13px;
+  padding: 0.6rem;
+  overflow: auto;
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+.creator h2 {
+  margin: 0.4rem 0 0.1rem;
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+.creator-tools .tool {
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 2px solid var(--ink);
+  border-radius: 6px 10px 7px 9px;
+  padding: 0.25rem 0.5rem;
+  margin-bottom: 0.25rem;
+  width: 100%;
+}
+.creator-tools .tool.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.creator-stage {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  align-items: start;
+}
+.creator-stage canvas {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
+  border: 2.5px solid var(--ink);
+  border-radius: 4px;
+  touch-action: none;
+  cursor: crosshair;
+  background: var(--paper);
+}
+.creator .check.ok {
+  color: var(--ok);
+}
+.creator .check.ko {
+  color: var(--danger);
+}
+.creator .problems {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+}
+@media (max-width: 900px) {
+  .creator {
+    overflow: auto;
+    grid-template-rows: auto auto;
+  }
+  .creator-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .creator-tools {
+    grid-auto-flow: row;
+  }
+}
+
 /* --- Petits écrans ---------------------------------------------------------------------------- */
 @media (max-width: 700px) {
   .card h1 {

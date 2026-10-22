@@ -132,6 +132,11 @@ export function Home(): JSX.Element {
           </Button>
         </div>
         <div class="row">
+          <Button secondary class="grow" onClick={() => (overlay.value = 'creator')}>
+            {t('home.create_level')}
+          </Button>
+        </div>
+        <div class="row">
           <Button secondary class="grow" onClick={() => actions.create(isPublic)} disabled={busy}>
             {t('home.create')}
           </Button>

@@ -1,3 +1,4 @@
+import type { ArenaData } from './arena.ts';
 import type { Look } from './cosmetics.ts';
 import type { MovementKey } from './movement.ts';
 import type { RoomSettings } from './settings.ts';
@@ -25,6 +26,20 @@ export interface SpectatorInfo {
   name: string;
 }
 
+/** Un niveau créé par un joueur et proposé au salon. */
+export interface CustomArenaInfo {
+  id: string;
+  name: string;
+  /** Nom du joueur qui l'a créé. */
+  by: string;
+}
+
+/** Une carte proposée au vote. */
+export interface VoteOption {
+  id: string;
+  name: { fr: string; en: string };
+}
+
 export interface LobbyView {
   code: string;
   /** Emplacement de l'hôte, -1 si aucun. */
@@ -33,6 +48,8 @@ export interface LobbyView {
   players: PlayerInfo[];
   spectators: SpectatorInfo[];
   phase: GamePhaseId;
+  /** Niveaux créés par les joueurs de ce salon. */
+  custom: CustomArenaInfo[];
   /** Millisecondes avant le lancement automatique (salon public), -1 sinon. */
   autostartMs: number;
   /** Manche courante (0 en attente) et manches gagnées par équipe ou emplacement. */
@@ -87,7 +104,9 @@ export type ErrorCode =
   | 'not_enough_players'
   | 'not_ready'
   | 'in_game'
-  | 'bad_token';
+  | 'bad_token'
+  | 'bad_arena'
+  | 'too_many_arenas';
 
 export type ServerMessage =
   | {
@@ -112,6 +131,15 @@ export type ServerMessage =
       round: RoundInfo;
     }
   | { t: 'lobby'; lobby: LobbyView }
+  /** Un niveau de joueur à connaître (envoyé avant `joined` aux nouveaux venus). */
+  | { t: 'arena'; arena: ArenaData }
+  | { t: 'arena_del'; id: string }
+  /** Vote de carte ouvert : `endsInMs` avant la clôture. */
+  | { t: 'vote'; round: number; options: VoteOption[]; endsInMs: number; counts: number[] }
+  /** Votes en cours (une valeur par carte). */
+  | { t: 'votes'; counts: number[] }
+  /** Vote clos : la carte retenue (indice dans `options`). */
+  | { t: 'voteEnd'; pick: number }
   | {
       t: 'round';
       round: RoundInfo;

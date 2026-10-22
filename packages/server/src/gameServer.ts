@@ -11,6 +11,7 @@ import {
   INPUT_MASK_USED,
   INPUT_RING,
   LOBBY_ARENA_ID,
+  MAX_ARENA_MESSAGE_BYTES,
   MAX_CLIENT_MESSAGE_BYTES,
   MAX_INPUT_AHEAD_TICKS,
   MOVEMENT_TUNING,
@@ -120,7 +121,9 @@ export class GameServer implements RoomIO {
     const size = typeof data === 'string' ? data.length : data.byteLength;
     this.metrics.bytesIn += size;
     // Le plafond est aussi fixé par `ws` (maxPayload) ; on le vérifie ici pour les autres transports.
-    if (size > MAX_CLIENT_MESSAGE_BYTES) {
+    // Seul l'envoi d'un niveau (JSON `{"t":"arena",…}`) peut dépasser le plafond ordinaire.
+    const isArena = typeof data === 'string' && data.startsWith('{"t":"arena"');
+    if (size > (isArena ? MAX_ARENA_MESSAGE_BYTES : MAX_CLIENT_MESSAGE_BYTES)) {
       this.invalid(c);
       return;
     }
@@ -291,6 +294,17 @@ export class GameServer implements RoomIO {
       }
       case 'look':
         room.setLook(m, msg.look, now);
+        break;
+      case 'vote':
+        room.castVote(m, msg.pick, now);
+        break;
+      case 'arena': {
+        const r = room.addCustomArena(m, msg.arena, now);
+        if (r !== 'ok') this.error(c, r.code, r.msg);
+        break;
+      }
+      case 'arena_del':
+        room.removeCustomArena(m, msg.id, now);
         break;
       case 'emote':
         if (!room.emote(m, msg.id, now)) this.metrics.emotesLimited++;

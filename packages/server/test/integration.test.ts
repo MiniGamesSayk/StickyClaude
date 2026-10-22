@@ -119,6 +119,7 @@ async function boot(
       PORT: '0',
       HOST: '127.0.0.1',
       MATCH_END_MS: '500',
+      VOTE_DEFAULT: '0',
       CODE_TRIES_PER_MIN: '1000',
       CREATE_PER_MIN: '1000',
       MAX_CONN_PER_IP: '100',
@@ -338,9 +339,16 @@ describe('tentatives de triche', () => {
 
     const big = peer(url);
     await big.ready();
-    big.ws.send(JSON.stringify({ t: 'create', v: V, name: 'x'.repeat(5000) }));
+    big.ws.send(JSON.stringify({ t: 'create', v: V, name: 'x'.repeat(9000) }));
     await big.until(() => big.closeCode !== null, 4000, 'coupure du message énorme');
     expect(big.closeCode).toBe(1009);
+
+    // entre le plafond ordinaire (1 Ko) et celui des niveaux (8 Ko) : refusé comme invalide
+    const mid = peer(url);
+    await mid.ready();
+    mid.ws.send(JSON.stringify({ t: 'create', v: V, name: 'x'.repeat(3000) }));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(mid.last('joined')).toBeUndefined();
   });
 
   it('essais de code en rafale : limités ; code faux : not_found', async () => {

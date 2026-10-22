@@ -16,6 +16,7 @@ import {
   PlayerState,
   Rng,
   TICK_HZ,
+  VOTE_OPTIONS,
 } from '@stickyclaude/shared';
 import type { ArenaData, MovementParams, SimRules } from '@stickyclaude/shared';
 
@@ -299,6 +300,16 @@ export interface World {
   game: GameState;
   /** Arènes tirables au sort pour les manches. */
   arenaPool: ArenaData[];
+  /**
+   * Vote de carte (voir `game.ts`) : mode de la manche suivante, cartes proposées (indices dans
+   * `arenaPool`), choix du salon (-1 : pas encore) ; `voteHold` : la partie attend ce choix.
+   */
+  votePlanned: boolean;
+  voteHold: boolean;
+  voteMode: number;
+  voteOptions: Int32Array;
+  voteCount: number;
+  voteChoice: number;
   /** Joueurs qui participent à la partie (les autres sont absents ou spectateurs). */
   inMatch: Uint8Array;
   /** Équipe de chaque emplacement (en chacun pour soi : l'emplacement lui-même). */
@@ -634,6 +645,12 @@ export function createWorld(arena: ArenaData, seed: number): World {
     rules: defaultRules(),
     game: createGame(),
     arenaPool: [],
+    votePlanned: false,
+    voteHold: false,
+    voteMode: 0,
+    voteOptions: new Int32Array(VOTE_OPTIONS),
+    voteCount: 0,
+    voteChoice: -1,
     inMatch: new Uint8Array(MAX_PLAYERS),
     team,
     side: new Int8Array(MAX_PLAYERS),

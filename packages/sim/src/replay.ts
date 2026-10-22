@@ -1,7 +1,7 @@
 import { Cause, getArena, isMovementKey, MAX_PLAYERS } from '@stickyclaude/shared';
 import type { ArenaData, Recording, RecordOp } from '@stickyclaude/shared';
 import { killPlayer } from './combat.ts';
-import { applyStart, returnToLobby } from './game.ts';
+import { applyStart, resolveVote, returnToLobby } from './game.ts';
 import { addPlayer, removePlayer } from './spawn.ts';
 import { step } from './step.ts';
 import { createWorld } from './world.ts';
@@ -26,10 +26,13 @@ export function applyOp(world: World, op: RecordOp, lobbyArena: ArenaData): void
     case 'rules':
       world.rules = { ...op.rules, bonusModes: [...op.rules.bonusModes] };
       break;
+    case 'vote':
+      resolveVote(world, op.choice);
+      break;
     case 'start': {
       const arenas: ArenaData[] = [];
       for (const id of op.arenas) {
-        const a = getArena(id);
+        const a = getArena(id) ?? op.custom?.find((c) => c.id === id);
         if (a) arenas.push(a);
       }
       applyStart(world, { rules: op.rules, arenas, inMatch: op.inMatch, teams: op.teams });

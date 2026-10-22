@@ -98,7 +98,7 @@ export interface Harness {
 }
 
 export function harness(env: Record<string, string> = {}): Harness {
-  const config = loadConfig({ NODE_ENV: 'test', ...env }, '/nonexistent');
+  const config = loadConfig({ NODE_ENV: 'test', VOTE_DEFAULT: '0', ...env }, '/nonexistent');
   const h: Harness = {
     config,
     time: 1000,

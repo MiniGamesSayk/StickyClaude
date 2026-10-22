@@ -37,6 +37,7 @@ import {
   screen,
   training,
   urlCode,
+  vote,
 } from './store.ts';
 
 /** Mouvement réduit effectif : l'option, ou le réglage du système si elle est sur « auto ». */
@@ -154,6 +155,34 @@ export async function startApp(): Promise<void> {
     if (options.value.autoFullscreen && touchActive()) enterFullscreen();
   };
 
+  /** Entraînement solo, ou essai d'un niveau créé par le joueur (`arena`). */
+  let testingLevel = false;
+  const startSolo = (arena?: ArenaData): void => {
+    const look = profile.value.look;
+    testingLevel = arena !== undefined;
+    solo = new SoloSource({
+      name: profile.value.name,
+      look,
+      audio,
+      arena,
+      onEvent: (e) => renderer.addEvent(e),
+      onObjectives: (list, done) => {
+        training.value = list.length > 0 ? list : null;
+        if (done.length > 0) say(t('train.done'));
+      },
+      onHit: (s) => haptics.hit(s),
+    });
+    mode.value = 'solo';
+    source = solo;
+    renderer.setArena(solo.world.arena);
+    renderer.reset();
+    renderer.setSelf(0);
+    renderer.setCameraOverride(null);
+    renderer.setColorSource((slot) => (slot === 0 ? INK_COLORS[look.color % 12] : 0x6b7280));
+    roster.value = [{ name: profile.value.name, color: INK_COLORS[look.color % 12], team: -1 }];
+    hud.value = { ...EMPTY_HUD };
+  };
+
   Object.assign(actions, {
     quick: () => {
       goFullscreen();
@@ -177,6 +206,12 @@ export async function startApp(): Promise<void> {
     teams: (o: Parameters<typeof actions.teams>[0]) => online.client?.teams(o),
     kick: (slot: number) => online.client?.kick(slot),
     look: (look: Look) => online.client?.setLook(look),
+    vote: (pick: number) => online.client?.vote(pick),
+    sendLevel: (arena: ArenaData) => {
+      online.client?.sendArena(arena);
+      say(t('lobby.level_sent'));
+    },
+    deleteLevel: (id: string) => online.client?.deleteArena(id),
     emote: (id: number) => {
       if (solo) solo.emote(id);
       else online.client?.emote(id);
@@ -196,33 +231,20 @@ export async function startApp(): Promise<void> {
     solo: () => {
       goFullscreen();
       audio.unlock();
-      const look = profile.value.look;
-      solo = new SoloSource({
-        name: profile.value.name,
-        look,
-        audio,
-        onEvent: (e) => renderer.addEvent(e),
-        onObjectives: (list, done) => {
-          training.value = list;
-          if (done.length > 0) say(t('train.done'));
-        },
-        onHit: (s) => haptics.hit(s),
-      });
-      mode.value = 'solo';
-      source = solo;
-      renderer.setArena(solo.world.arena);
-      renderer.reset();
-      renderer.setSelf(0);
-      renderer.setCameraOverride(null);
-      renderer.setColorSource((slot) => (slot === 0 ? INK_COLORS[look.color % 12] : 0x6b7280));
-      roster.value = [{ name: profile.value.name, color: INK_COLORS[look.color % 12], team: -1 }];
-      hud.value = { ...EMPTY_HUD };
+      startSolo();
+    },
+    testLevel: (arena: ArenaData) => {
+      goFullscreen();
+      audio.unlock();
+      overlay.value = null;
+      startSolo(arena);
     },
     quitSolo: () => {
       solo?.dispose();
       solo = null;
       training.value = null;
-      overlay.value = null;
+      overlay.value = testingLevel ? 'creator' : null;
+      testingLevel = false;
       showMenu();
     },
     resetTraining: () => solo?.resetProgress(),
@@ -297,6 +319,16 @@ export async function startApp(): Promise<void> {
       return;
     }
     const m = /^Digit([1-9])$/.exec(e.code);
+    const vs = vote.value;
+    if (m && vs && vs.picked < 0 && overlay.value === null && online.slot >= 0) {
+      // pendant le vote de la carte, 1 à 4 votent (au lieu de faire des emotes)
+      const i = Number(m[1]) - 1;
+      if (i < vs.options.length) {
+        vote.value = { ...vs, mine: i };
+        actions.vote(i);
+      }
+      return;
+    }
     if (m && mode.value !== 'menu' && overlay.value === null) {
       if (mode.value === 'solo' || (online.client?.state === 'joined' && online.slot >= 0)) {
         actions.emote(Number(m[1]) - 1);

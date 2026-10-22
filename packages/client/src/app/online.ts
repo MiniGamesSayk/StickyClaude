@@ -35,6 +35,7 @@ import {
   say,
   selfSlot,
   roster,
+  vote,
 } from './store.ts';
 import type { HudData } from './store.ts';
 
@@ -100,6 +101,8 @@ const ERROR_KEYS: Record<string, MessageKey> = {
   not_ready: 'err.not_ready',
   in_game: 'err.in_game',
   bad_token: 'err.bad_token',
+  bad_arena: 'err.bad_arena',
+  too_many_arenas: 'err.too_many_arenas',
 };
 
 const CAUSE_KEYS: Record<number, MessageKey> = {
@@ -255,9 +258,34 @@ export class Online {
         rr.reset();
         this.winners = 0;
         round.value = r;
+        vote.value = null;
         banner.value = null;
         killFeed.value = [];
         if (r.round > 0) podium.value = null;
+      },
+      onVote: (m) => {
+        if (this.client !== c) return;
+        vote.value = {
+          round: m.round,
+          options: m.options,
+          counts: m.counts,
+          endsAt: performance.now() + m.endsInMs,
+          mine: -1,
+          picked: -1,
+        };
+      },
+      onVotes: (counts) => {
+        if (this.client !== c || !vote.value) return;
+        vote.value = { ...vote.value, counts };
+      },
+      onVoteEnd: (pick) => {
+        if (this.client !== c || !vote.value) return;
+        vote.value = { ...vote.value, picked: pick };
+        const shown = vote.value;
+        // la carte retenue reste affichée un instant, puis la manche commence
+        setTimeout(() => {
+          if (vote.value === shown) vote.value = null;
+        }, 1400);
       },
       onScores: (m) => {
         if (this.client !== c) return;
@@ -385,6 +413,7 @@ export class Online {
     selfSlot.value = -1;
     round.value = null;
     podium.value = null;
+    vote.value = null;
     banner.value = null;
     killFeed.value = [];
     hud.value = { ...hud.value, inMatch: false, phase: 0 };

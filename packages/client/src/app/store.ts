@@ -1,6 +1,15 @@
 import { signal } from '@preact/signals';
-import type { LobbyView, Look, PublicRoom, RoomSettings, RoundInfo } from '@stickyclaude/shared';
+import type {
+  ArenaData,
+  LobbyView,
+  Look,
+  PublicRoom,
+  RoomSettings,
+  RoundInfo,
+  VoteOption,
+} from '@stickyclaude/shared';
 import type { ResultsMessage, ScoresMessage } from '../net/client.ts';
+import { loadLevels } from './levels.ts';
 
 /**
  * État partagé de l'interface (signaux Preact) : écran courant, connexion, salon, HUD, podium,
@@ -9,7 +18,7 @@ import type { ResultsMessage, ScoresMessage } from '../net/client.ts';
 
 export type Mode = 'menu' | 'online' | 'solo';
 export type Screen = 'home' | 'customize';
-export type Overlay = 'options' | 'credits' | 'help' | 'pause' | null;
+export type Overlay = 'options' | 'credits' | 'help' | 'pause' | 'creator' | null;
 export type NetStatus = 'idle' | 'connecting' | 'joined' | 'reconnecting' | 'maintenance';
 
 export const mode = signal<Mode>('menu');
@@ -30,6 +39,21 @@ export const lobby = signal<LobbyView | null>(null);
 export const selfSlot = signal(-1);
 export const round = signal<RoundInfo | null>(null);
 export const rooms = signal<PublicRoom[]>([]);
+
+/** Vote de carte en cours : cartes, votes de chacun, échéance (horloge de la page), mon choix. */
+export interface VoteState {
+  round: number;
+  options: VoteOption[];
+  counts: number[];
+  endsAt: number;
+  mine: number;
+  /** Carte retenue une fois le vote clos (affichée un instant), -1 tant qu'il est ouvert. */
+  picked: number;
+}
+export const vote = signal<VoteState | null>(null);
+
+/** Niveaux créés par le joueur, gardés dans le navigateur. */
+export const levels = signal<ArenaData[]>(loadLevels());
 
 /** Ce que le HUD affiche, rafraîchi quelques fois par seconde. */
 export interface HudData {
@@ -120,6 +144,13 @@ export interface Actions {
   teams(opts: { assign?: number[]; shuffle?: boolean }): void;
   kick(slot: number): void;
   look(look: Look): void;
+  /** Vote de carte (indice dans la liste proposée). */
+  vote(pick: number): void;
+  /** Propose un niveau au salon ; retire un niveau du salon. */
+  sendLevel(arena: ArenaData): void;
+  deleteLevel(id: string): void;
+  /** Teste un niveau créé par le joueur dans l'entraînement (depuis l'accueil). */
+  testLevel(arena: ArenaData): void;
   emote(id: number): void;
   copyLink(): void;
   /** Aperçu du stickman de l'accueil et de la personnalisation. */
@@ -148,6 +179,10 @@ export const actions: Actions = {
   teams: noop,
   kick: noop,
   look: noop,
+  vote: noop,
+  sendLevel: noop,
+  deleteLevel: noop,
+  testLevel: noop,
   emote: noop,
   copyLink: noop,
   preview: noop,

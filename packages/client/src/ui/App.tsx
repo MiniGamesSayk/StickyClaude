@@ -1,8 +1,20 @@
 import { GamePhase } from '@stickyclaude/shared';
 import type { JSX } from 'preact';
-import { banner, hud, lobby, mode, net, overlay, podium, round, screen } from '../app/store.ts';
+import {
+  banner,
+  hud,
+  lobby,
+  mode,
+  net,
+  overlay,
+  podium,
+  round,
+  screen,
+  training,
+} from '../app/store.ts';
 import { t } from '../i18n/index.ts';
 import { touchActive } from './device.ts';
+import { Creator } from './Creator.tsx';
 import { Customize, Home } from './Home.tsx';
 import { Hud, Podium } from './Hud.tsx';
 import { LobbyPanel } from './Lobby.tsx';
@@ -10,6 +22,7 @@ import { OptionsModal } from './Options.tsx';
 import { ConnectionOverlay, CreditsModal, HelpModal, PauseModal } from './Overlays.tsx';
 import { TouchControls } from './TouchControls.tsx';
 import { Training } from './Training.tsx';
+import { Vote } from './Vote.tsx';
 
 /** Racine de l'interface : l'écran courant, la fenêtre ouverte, les messages de connexion. */
 export function App(): JSX.Element {
@@ -50,12 +63,13 @@ export function App(): JSX.Element {
             <Hud />
             {inLobby && <LobbyPanel />}
             {podium.value && <Podium />}
+            <Vote />
           </>
         )}
         {m === 'solo' && (
           <>
             <Hud solo />
-            <Training touch={touch} />
+            {training.value !== null && <Training touch={touch} />}
           </>
         )}
         {touch && ov === null && <TouchControls />}
@@ -74,6 +88,7 @@ export function App(): JSX.Element {
       {ov === 'help' && <HelpModal />}
       {ov === 'credits' && <CreditsModal />}
       {ov === 'pause' && <PauseModal />}
+      {ov === 'creator' && <Creator />}
     </>
   );
 }

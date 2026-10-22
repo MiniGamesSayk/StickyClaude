@@ -238,6 +238,8 @@ export interface SoloDeps {
   onHit?: (strength: number) => void;
   /** Graine de la simulation (tests) ; par défaut tirée de l'horloge. */
   seed?: number;
+  /** Niveau à essayer (créateur de niveau) à la place de l'arène d'entraînement : sans carnet. */
+  arena?: ArenaData;
 }
 
 /** Pas fixe de 60 Hz, rattrapage borné. */
@@ -263,7 +265,7 @@ export class SoloSource implements RenderSource {
 
   constructor(private readonly deps: SoloDeps) {
     this.audio = deps.audio ?? nullAudio;
-    this.arena = getArena(LOBBY_ARENA_ID) as ArenaData;
+    this.arena = deps.arena ?? (getArena(LOBBY_ARENA_ID) as ArenaData);
     this.seed = deps.seed ?? (Date.now() ^ 0x5eed) >>> 0;
     this.world = createWorld(this.arena, this.seed);
     this.world.auth = true;
@@ -272,7 +274,7 @@ export class SoloSource implements RenderSource {
     this.scene = createScene(this.world);
     this.tracker = new TrainingTracker(loadDone());
     this.placeActors();
-    this.deps.onObjectives(this.tracker.list(), []);
+    this.deps.onObjectives(deps.arena ? [] : this.tracker.list(), []);
   }
 
   private placeActors(): void {
@@ -304,7 +306,8 @@ export class SoloSource implements RenderSource {
   }
 
   private progress(done: string[]): void {
-    if (done.length === 0) return;
+    // l'essai d'un niveau de joueur n'avance pas le carnet d'entraînement
+    if (done.length === 0 || this.deps.arena) return;
     saveDone(this.tracker.done);
     this.deps.onObjectives(this.tracker.list(), done);
   }

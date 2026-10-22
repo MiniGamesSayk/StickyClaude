@@ -40,6 +40,8 @@ export class Member {
   /** Dernière activité (entrée non neutre ou changement d'entrée), en ms. */
   lastActiveAt = 0;
   lastEmoteAt = -Infinity;
+  /** Dernier niveau proposé (ms) : un envoi toutes les 2 s au plus. */
+  lastArenaAt = -Infinity;
 
   constructor(
     readonly id: number,

@@ -163,7 +163,10 @@ export class TestWorld {
   readonly rng = new Rng(2024);
 
   constructor(env: Record<string, string> = {}) {
-    const config = loadConfig({ NODE_ENV: 'test', ROOM_IDLE_TTL_SEC: '600', ...env }, '/none');
+    const config = loadConfig(
+      { NODE_ENV: 'test', ROOM_IDLE_TTL_SEC: '600', VOTE_DEFAULT: '0', ...env },
+      '/none',
+    );
     this.server = new GameServer(config, { now: () => this.net.nowMs });
     this.net.every(TICK_MS, () => this.server.tick(this.net.nowMs));
   }

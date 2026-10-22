@@ -51,6 +51,27 @@ export const ROTATION_ARENA_IDS: readonly string[] = [
 ];
 export const DEFAULT_ARENA_ID = LOBBY_ARENA_ID;
 
+/**
+ * Niveaux de joueurs reçus du salon (côté client seulement : le serveur garde les siens par
+ * salon). Les identifiants commencent par `custom-` : ils ne peuvent pas masquer une arène du jeu.
+ */
+const EXTRA = new Map<string, ArenaData>();
+
+export const CUSTOM_ARENA_PREFIX = 'custom-';
+
+export function registerExtraArena(a: ArenaData): void {
+  if (a.id.startsWith(CUSTOM_ARENA_PREFIX)) EXTRA.set(a.id, a);
+}
+
+export function unregisterExtraArena(id: string): void {
+  EXTRA.delete(id);
+}
+
+export function clearExtraArenas(): void {
+  EXTRA.clear();
+}
+
 export function getArena(id: string): ArenaData | undefined {
-  return Object.prototype.hasOwnProperty.call(ARENAS, id) ? ARENAS[id] : undefined;
+  if (Object.prototype.hasOwnProperty.call(ARENAS, id)) return ARENAS[id];
+  return EXTRA.get(id);
 }

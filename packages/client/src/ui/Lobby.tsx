@@ -19,7 +19,7 @@ import type { RoomSettings } from '@stickyclaude/shared';
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import { profile } from '../app/options.ts';
-import { actions, hud, lobby, selfSlot } from '../app/store.ts';
+import { actions, hud, levels, lobby, overlay, selfSlot } from '../app/store.ts';
 import { pick, t } from '../i18n/index.ts';
 import { touchActive } from './device.ts';
 import { LookEditor } from './Home.tsx';
@@ -288,7 +288,7 @@ export function LobbyPanel(): JSX.Element | null {
             </div>
             <span class="hint">{t('set.arenas')}</span>
             <div class="checks">
-              {ROTATION_ARENA_IDS.map((id) => (
+              {[...ROTATION_ARENA_IDS, ...lob.custom.map((c) => c.id)].map((id) => (
                 <Check
                   key={id}
                   label={pick(getArena(id)?.name ?? { fr: id, en: id })}
@@ -301,11 +301,60 @@ export function LobbyPanel(): JSX.Element | null {
               ))}
             </div>
             <Check
+              label={t('set.vote')}
+              checked={s.voteMaps}
+              disabled={!editable}
+              onChange={(v) => patch({ voteMaps: v })}
+            />
+            <Check
               label={t('set.public')}
               checked={s.isPublic}
               disabled={!editable}
               onChange={(v) => patch({ isPublic: v })}
             />
+          </details>
+        )}
+        {!collapsed && (
+          <details class="levels">
+            <summary>{t('lobby.levels')}</summary>
+            {lob.custom.length === 0 && <p class="hint">{t('lobby.levels_none')}</p>}
+            <ul class="level-list">
+              {lob.custom.map((c) => (
+                <li key={c.id}>
+                  <span class="pname">
+                    {c.name} <span class="hint">{t('lobby.levels_by', { name: c.by })}</span>
+                  </span>
+                  {inLobby && self >= 0 && (isHost || c.by === me?.name) && (
+                    <Button
+                      small
+                      secondary
+                      label={t('lobby.level_remove')}
+                      title={t('lobby.level_remove')}
+                      onClick={() => actions.deleteLevel(c.id)}
+                    >
+                      ✖
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <span class="hint">{t('lobby.levels_mine')}</span>
+            {levels.value.length === 0 && <p class="hint">{t('lobby.levels_mine_none')}</p>}
+            <ul class="level-list">
+              {levels.value.map((l) => (
+                <li key={l.id}>
+                  <span class="pname">{pick(l.name)}</span>
+                  {inLobby && self >= 0 && (
+                    <Button small secondary onClick={() => actions.sendLevel(l)}>
+                      {t('lobby.level_send')}
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <Button small secondary onClick={() => (overlay.value = 'creator')}>
+              {t('lobby.create_level')}
+            </Button>
           </details>
         )}
         {!collapsed && self >= 0 && (

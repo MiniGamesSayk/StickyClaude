@@ -20,6 +20,8 @@ export interface RoomSettings {
   bonusEvery: number;
   /** « Les morts dessinent » : les éliminés deviennent des fantômes-crayons. */
   ghosts: boolean;
+  /** Vote de la carte avant chaque manche (parmi celles retenues, niveaux des joueurs compris). */
+  voteMaps: boolean;
   isPublic: boolean;
 }
 
@@ -42,6 +44,7 @@ export const DEFAULT_SETTINGS: Readonly<RoomSettings> = {
   bonusModes: [...BONUS_MODE_IDS],
   bonusEvery: 3,
   ghosts: true,
+  voteMaps: true,
   isPublic: false,
 };
 
@@ -97,6 +100,7 @@ export function normalizeSettings(
     out.bonusEvery = clampInt(raw.bonusEvery, 0, BONUS_EVERY_MAX, out.bonusEvery);
   }
   if (typeof raw.ghosts === 'boolean') out.ghosts = raw.ghosts;
+  if (typeof raw.voteMaps === 'boolean') out.voteMaps = raw.voteMaps;
   if (typeof raw.isPublic === 'boolean') out.isPublic = raw.isPublic;
   return out;
 }
@@ -113,4 +117,6 @@ export interface SimRules {
   teamCount: number;
   bonusModes: number[];
   bonusEvery: number;
+  /** La manche suivante attend le vote du salon (voir `resolveVote`). */
+  vote?: boolean;
 }

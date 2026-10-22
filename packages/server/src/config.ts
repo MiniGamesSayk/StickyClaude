@@ -6,6 +6,7 @@ import {
   RECONNECT_GRACE_MS,
   SNAPSHOT_HZ_DEFAULT,
   TICK_HZ,
+  VOTE_MS_DEFAULT,
 } from '@stickyclaude/shared';
 
 export interface ServerConfig {
@@ -57,6 +58,10 @@ export interface ServerConfig {
   idleLobbyMs: number;
   /** Durée du podium avant le retour au salon (ms). */
   matchEndMs: number;
+  /** Durée du vote de carte avant chaque manche (ms). */
+  voteMs: number;
+  /** Vote de carte activé par défaut dans les nouveaux salons (l'hôte peut le changer). */
+  voteDefault: boolean;
   /** Délai minimal entre deux emotes d'un joueur (ms). */
   emoteCooldownMs: number;
   /** Messages de contrôle JSON acceptés par seconde et par connexion. */
@@ -102,6 +107,8 @@ export function loadConfig(
     idlePlayingMs: int(env.IDLE_PLAYING_MS, IDLE_PLAYING_MS, 1000, 3_600_000),
     idleLobbyMs: int(env.IDLE_LOBBY_MS, IDLE_LOBBY_MS, 1000, 86_400_000),
     matchEndMs: int(env.MATCH_END_MS, 12_000, 0, 120_000),
+    voteMs: int(env.VOTE_MS, VOTE_MS_DEFAULT, 500, 120_000),
+    voteDefault: env.VOTE_DEFAULT !== '0',
     emoteCooldownMs: int(env.EMOTE_COOLDOWN_MS, EMOTE_COOLDOWN_MS, 0, 60_000),
     controlPerSec: int(env.CONTROL_PER_SEC, 20, 1, 1000),
   };

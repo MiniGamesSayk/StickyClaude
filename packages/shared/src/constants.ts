@@ -1,6 +1,6 @@
 /** Constantes globales du jeu. Les constantes de mouvement sont dans `movement.ts`. */
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Simulation à pas de temps fixe. */
 export const TICK_HZ = 60;
@@ -33,6 +33,14 @@ export const FALL_MARGIN = 3 * CELL;
 
 /** Réseau. */
 export const MAX_CLIENT_MESSAGE_BYTES = 1024;
+/** Seul le message d'envoi d'un niveau (`arena`) peut dépasser `MAX_CLIENT_MESSAGE_BYTES`. */
+export const MAX_ARENA_MESSAGE_BYTES = 8192;
+
+/** Vote de carte avant chaque manche : nombre de cartes proposées et durée par défaut. */
+export const VOTE_OPTIONS = 4;
+export const VOTE_MS_DEFAULT = 12_000;
+/** Niveaux créés par les joueurs, par salon. */
+export const MAX_CUSTOM_ARENAS = 6;
 /** Entrées envoyées par paquet : l'entrée courante + 3 précédentes (redondance). */
 export const INPUT_REDUNDANCY = 4;
 /** Nombre de ticks d'avance maximum acceptés par le serveur pour une entrée. */

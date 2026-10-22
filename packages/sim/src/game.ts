@@ -11,6 +11,7 @@ import {
   ObjType,
   SimEvent,
   TICK_HZ,
+  VOTE_OPTIONS,
   WORLD_H,
   WORLD_W,
   weaponDef,
@@ -27,6 +28,11 @@ export const COUNTDOWN_TICKS = 3 * TICK_HZ;
 export const ROUND_END_TICKS = Math.round(3.6 * TICK_HZ);
 /** Au-delà de ce nombre de manches sans vainqueur, la partie est tranchée au score. */
 const ROUND_CAP_FACTOR = 3;
+/**
+ * Garde-fou du vote de carte : si le salon ne le clôt pas dans ce délai (après la fin de la
+ * manche), la simulation tranche elle-même, au hasard parmi les cartes proposées.
+ */
+export const VOTE_SAFETY_TICKS = 30 * TICK_HZ;
 
 /** Réglages de l'hôte → règles lues par la simulation. */
 export function rulesFromSettings(s: Readonly<RoomSettings>): Rules {
@@ -40,6 +46,7 @@ export function rulesFromSettings(s: Readonly<RoomSettings>): Rules {
     teamCount: s.teams,
     bonusModes: [...s.bonusModes],
     bonusEvery: s.bonusEvery,
+    vote: s.voteMaps,
   };
 }
 
@@ -118,16 +125,23 @@ function baseMode(world: World): number {
   return world.rules.teamsMode ? ModeId.TEAMS : ModeId.FFA;
 }
 
-function pickRound(world: World): { arena: ArenaData; mode: number } {
-  const g = world.game;
-  const pool = world.arenaPool.length > 0 ? world.arenaPool : [world.arena];
-  const nextRound = g.round + 1;
+/** Mode de la manche suivante : le mode de base, ou un mode bonus tiré au sort (consomme le RNG). */
+function chooseMode(world: World, pool: ArenaData[]): number {
+  const nextRound = world.game.round + 1;
   let mode = baseMode(world);
   const r = world.rules;
   if (r.bonusEvery > 0 && r.bonusModes.length > 0 && nextRound % r.bonusEvery === 0) {
     const ok = r.bonusModes.filter((m) => pool.some((a) => supportsMode(a, m)));
     if (ok.length > 0) mode = ok[world.rng.int(ok.length)]!;
   }
+  return mode;
+}
+
+function pickRound(world: World): { arena: ArenaData; mode: number } {
+  const g = world.game;
+  const pool = world.arenaPool.length > 0 ? world.arenaPool : [world.arena];
+  if (world.votePlanned) return pickVoted(world, pool);
+  const mode = chooseMode(world, pool);
   const compatible: number[] = [];
   for (let i = 0; i < pool.length; i++) if (supportsMode(pool[i], mode)) compatible.push(i);
   let idx = compatible[world.rng.int(compatible.length)];
@@ -138,6 +152,60 @@ function pickRound(world: World): { arena: ArenaData; mode: number } {
       ]!;
   }
   g.lastArena = idx;
+  return { arena: pool[idx], mode };
+}
+
+// --- Vote de la carte ------------------------------------------------------------------------
+
+/**
+ * Prépare le vote de la manche suivante : son mode, puis jusqu'à `VOTE_OPTIONS` cartes qui le
+ * supportent (la carte jouée en dernier est écartée s'il en reste d'autres). S'il n'y a qu'une
+ * carte possible, il n'y a rien à voter. Le salon lit `voteOptions`, recueille les votes et
+ * appelle `resolveVote`.
+ */
+function planVote(world: World): void {
+  const g = world.game;
+  const pool = world.arenaPool.length > 0 ? world.arenaPool : [world.arena];
+  const mode = chooseMode(world, pool);
+  const compatible: number[] = [];
+  for (let i = 0; i < pool.length; i++) if (supportsMode(pool[i], mode)) compatible.push(i);
+  if (compatible.length > 1 && compatible.includes(g.lastArena)) {
+    compatible.splice(compatible.indexOf(g.lastArena), 1);
+  }
+  // mélange (Fisher-Yates) puis on garde les premières
+  for (let i = compatible.length - 1; i > 0; i--) {
+    const j = world.rng.int(i + 1);
+    const t = compatible[i];
+    compatible[i] = compatible[j]!;
+    compatible[j] = t;
+  }
+  const n = Math.min(VOTE_OPTIONS, compatible.length);
+  for (let i = 0; i < n; i++) world.voteOptions[i] = compatible[i]!;
+  world.voteCount = n;
+  world.voteMode = mode;
+  world.voteChoice = -1;
+  world.votePlanned = true;
+  world.voteHold = n > 1;
+}
+
+/** Le salon a clos le vote : la carte `option` (indice dans `voteOptions`) sera jouée. */
+export function resolveVote(world: World, option: number): void {
+  if (!world.voteHold) return;
+  if (option >= 0 && option < world.voteCount) world.voteChoice = world.voteOptions[option]!;
+  world.voteHold = false;
+}
+
+function pickVoted(world: World, pool: ArenaData[]): { arena: ArenaData; mode: number } {
+  let idx = world.voteChoice;
+  if (idx < 0 || idx >= pool.length) {
+    idx = world.voteCount > 0 ? world.voteOptions[world.rng.int(world.voteCount)] : 0;
+  }
+  const mode = world.voteMode;
+  world.votePlanned = false;
+  world.voteHold = false;
+  world.voteCount = 0;
+  world.voteChoice = -1;
+  world.game.lastArena = idx;
   return { arena: pool[idx], mode };
 }
 
@@ -156,6 +224,16 @@ export function startMatch(world: World): void {
   st.damage.fill(0);
   st.bestCombo.fill(0);
   st.silly.fill(0);
+  world.votePlanned = false;
+  world.voteHold = false;
+  world.voteCount = 0;
+  world.voteChoice = -1;
+  if (world.rules.vote === true) {
+    // Vote avant la première manche : on reste sur la carte du salon, hors combat.
+    g.phase = GamePhase.ROUND_END;
+    g.phaseTick = ROUND_END_TICKS;
+    return;
+  }
   const { arena, mode } = pickRound(world);
   beginRound(world, arena, mode);
 }
@@ -628,7 +706,12 @@ export function stepGame(world: World): void {
       break;
     case GamePhase.ROUND_END:
       stepOutOfBounds(world);
-      if (g.phaseTick >= ROUND_END_TICKS) nextAfterRound(world);
+      if (g.phaseTick >= ROUND_END_TICKS) {
+        if (world.rules.vote === true && g.matchWinner < 0 && !world.votePlanned) planVote(world);
+        // Le salon décide ; sans réponse, la simulation tranche au bout du garde-fou.
+        if (world.voteHold && g.phaseTick < ROUND_END_TICKS + VOTE_SAFETY_TICKS) break;
+        nextAfterRound(world);
+      }
       break;
     default:
       stepOutOfBounds(world);

@@ -83,6 +83,11 @@ try {
   await a.getByText('Tout le monde est prêt').waitFor({ timeout: 20000 });
   await a.getByRole('button', { name: 'Lancer la partie' }).click();
 
+  // vote de la carte : les deux joueurs votent, la manche démarre
+  for (const p of [a, b]) await p.locator('.vote').waitFor({ timeout: 30000 });
+  await a.locator('.vote-option').first().click();
+  await b.locator('.vote-option').first().click();
+
   // la manche démarre : le HUD de partie apparaît chez les deux joueurs
   for (const p of [a, b]) {
     await p.waitForFunction(() => document.querySelector('.hud-top') !== null, null, {

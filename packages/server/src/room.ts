@@ -2,6 +2,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import {
   ARENAS,
   Cause,
+  CUSTOM_ARENA_PREFIX,
   closestFreeColor,
   createSnapshot,
   decodeEventPayload,
@@ -15,6 +16,7 @@ import {
   isNetworkEvent,
   LAG_COMP_TICKS,
   LOBBY_ARENA_ID,
+  MAX_CUSTOM_ARENAS,
   MAX_EVENT_PAYLOAD,
   MAX_PLAYERS,
   MAX_SPECTATORS,
@@ -32,6 +34,8 @@ import {
 } from '@stickyclaude/shared';
 import type {
   ArenaData,
+  CustomArenaInfo,
+  ErrorCode,
   LobbyView,
   Look,
   PlayerInfo,
@@ -41,9 +45,11 @@ import type {
   RoundInfo,
   ServerMessage,
   Snapshot,
+  VoteOption,
 } from '@stickyclaude/shared';
 import {
   addPlayer,
+  analyzeArena,
   applyStart,
   createWorld,
   exportOwn,
@@ -55,6 +61,7 @@ import {
   hasHiddenMines,
   killPlayer,
   removePlayer,
+  resolveVote,
   returnToLobby,
   rulesFromSettings,
   step,
@@ -66,12 +73,32 @@ import type { ServerConfig } from './config.ts';
 import type { Metrics } from './metrics.ts';
 import type { RoomRecorder } from './recorder.ts';
 import { ReliableLog } from './reliable.ts';
+import { isOffensive } from './badwords.ts';
 
 /** Au-delà de ce nombre de ticks sans entrée, on arrête de répéter la dernière entrée. */
 const MISS_NEUTRAL_AFTER = 20;
 const BACKPRESSURE_SKIP = 64 * 1024;
 const BACKPRESSURE_CLOSE = 1024 * 1024;
-const KNOWN_ARENAS: ReadonlySet<string> = new Set(ROTATION_ARENA_IDS);
+/** Un vote de carte ouvert : cartes proposées, votes par participant, délais. */
+interface VoteSession {
+  options: VoteOption[];
+  votes: Map<number, number>;
+  endsAt: number;
+  /** Pas de clôture anticipée avant cet instant (le temps de voir les cartes). */
+  earliest: number;
+  round: number;
+}
+
+/** Un niveau créé par un joueur du salon. */
+interface CustomArena {
+  arena: ArenaData;
+  by: string;
+  /** Identifiant du membre auteur (pour retirer son niveau). */
+  owner: number;
+}
+
+/** Durée minimale d'affichage du vote, même si tout le monde a déjà voté (ms). */
+const VOTE_MIN_MS = 1500;
 
 /** Ce dont un salon a besoin du serveur qui l'héberge. */
 export interface RoomIO {
@@ -115,6 +142,9 @@ export class Room {
   private readonly matchTeams = new Int8Array(MAX_PLAYERS).fill(-1);
   private readonly matchNames: string[] = new Array<string>(MAX_PLAYERS).fill('');
   private lastRoundWinner = -1;
+  private readonly custom = new Map<string, CustomArena>();
+  private customSeq = 0;
+  private vote: VoteSession | null = null;
 
   constructor(
     private readonly io: RoomIO,
@@ -128,6 +158,7 @@ export class Room {
     this.lobbyArena = getArena(lobbyArenaId) ?? ARENAS[LOBBY_ARENA_ID];
     this.settings = cloneSettings(DEFAULT_SETTINGS);
     this.settings.isPublic = isPublic;
+    this.settings.voteMaps = io.config.voteDefault;
     this.world = createWorld(this.lobbyArena, seed);
     this.world.rules = rulesFromSettings(this.settings);
     this.recorder?.op({ tick: 0, op: 'rules', rules: this.world.rules });
@@ -244,6 +275,7 @@ export class Room {
       players,
       spectators: this.spectators.map((m) => ({ id: m.id, name: m.name })),
       phase: this.phase as LobbyView['phase'],
+      custom: this.customInfo(),
       autostartMs: this.autostartAt === null ? -1 : Math.max(0, Math.round(this.autostartAt - now)),
       round: this.world.game.round,
       scores: Array.from(this.world.game.scores),
@@ -367,6 +399,8 @@ export class Room {
   sendJoined(m: Member, now: number): void {
     const c = m.client;
     if (!c) return;
+    // Les niveaux de joueurs d'abord : la manche en cours peut se jouer sur l'un d'eux.
+    for (const e of this.custom.values()) this.io.sendJson(c, { t: 'arena', arena: e.arena });
     this.io.sendJson(c, {
       t: 'joined',
       v: PROTOCOL_VERSION,
@@ -382,6 +416,16 @@ export class Room {
       lobby: this.lobbyView(now),
       round: this.roundInfo(true),
     });
+    const v = this.vote;
+    if (v) {
+      this.io.sendJson(c, {
+        t: 'vote',
+        round: v.round,
+        options: v.options,
+        endsInMs: Math.max(0, Math.round(v.endsAt - now)),
+        counts: this.voteCounts(v),
+      });
+    }
   }
 
   // --- Salon : réglages, équipes, prêt, apparence -------------------------------------------
@@ -421,7 +465,7 @@ export class Room {
   setSettings(m: Member, patch: Partial<RoomSettings>, now: number): 'ok' | 'not_host' | 'in_game' {
     if (m.slot !== this.host) return 'not_host';
     if (this.phase !== GamePhase.LOBBY) return 'in_game';
-    this.settings = normalizeSettings(patch, this.settings, KNOWN_ARENAS);
+    this.settings = normalizeSettings(patch, this.settings, this.knownArenaIds());
     this.setLobbyRules();
     this.assignTeams(false);
     this.markLobby();
@@ -537,14 +581,31 @@ export class Room {
       this.matchTeams[s] = p ? team : -1;
       this.matchNames[s] = p?.name ?? '';
     }
-    const ids = this.settings.arenas.length > 0 ? this.settings.arenas : [...ROTATION_ARENA_IDS];
+    const ids =
+      this.settings.arenas.length > 0
+        ? this.settings.arenas
+        : [...ROTATION_ARENA_IDS, ...this.custom.keys()];
     const arenas: ArenaData[] = [];
+    const used: string[] = [];
     for (const id of ids) {
-      const a = getArena(id);
-      if (a) arenas.push(a);
+      const a = this.arenaById(id);
+      if (a) {
+        arenas.push(a);
+        used.push(id);
+      }
     }
     const rules = rulesFromSettings(this.settings);
-    this.recorder?.op({ tick: this.world.tick, op: 'start', rules, arenas: ids, inMatch, teams });
+    const custom = arenas.filter((a) => this.custom.has(a.id));
+    this.recorder?.op({
+      tick: this.world.tick,
+      op: 'start',
+      rules,
+      arenas: used,
+      ...(custom.length > 0 ? { custom } : {}),
+      inMatch,
+      teams,
+    });
+    this.vote = null;
     applyStart(this.world, { rules, arenas, inMatch, teams });
     for (const p of players) p.ready = false;
     this.autostartAt = null;
@@ -553,6 +614,143 @@ export class Room {
     this.markLobby();
     this.flushLobby(now);
     return 'ok';
+  }
+
+  // --- Niveaux de joueurs ---------------------------------------------------------------------
+
+  private knownArenaIds(): Set<string> {
+    return new Set([...ROTATION_ARENA_IDS, ...this.custom.keys()]);
+  }
+
+  private arenaById(id: string): ArenaData | undefined {
+    return this.custom.get(id)?.arena ?? getArena(id);
+  }
+
+  private customInfo(): CustomArenaInfo[] {
+    return [...this.custom.entries()].map(([id, e]) => ({ id, name: e.arena.name.fr, by: e.by }));
+  }
+
+  /**
+   * Un joueur propose un niveau (en salle d'attente). Le schéma a déjà été validé par zod ; on
+   * rejoue ici les contrôles de cases (apparitions debout, zones des modes, plateformes dans la
+   * page), on impose un identifiant à nous, on retire le décor libre et on filtre les noms.
+   */
+  addCustomArena(m: Member, raw: ArenaData, now: number): 'ok' | { code: ErrorCode; msg?: string } {
+    if (m.slot < 0 || this.phase !== GamePhase.LOBBY) return { code: 'in_game' };
+    if (now - m.lastArenaAt < 2000) return { code: 'rate_limited' };
+    m.lastArenaAt = now;
+    if (this.custom.size >= MAX_CUSTOM_ARENAS) return { code: 'too_many_arenas' };
+    const names = [raw.name.fr, raw.name.en].map((n) =>
+      n
+        .normalize('NFKC')
+        .replace(/[\p{Cc}\p{Cf}]/gu, '')
+        .trim(),
+    );
+    if (names.some((n) => n === '' || isOffensive(n))) {
+      return { code: 'bad_arena', msg: 'name' };
+    }
+    // contrôles légers seulement : l'accessibilité (plusieurs secondes de simulation) a été
+    // vérifiée par le créateur de niveau, et un salon peut retirer le niveau d'un tricheur
+    const report = analyzeArena(raw, { reach: false });
+    if (report.errors.length > 0) return { code: 'bad_arena', msg: report.errors[0] };
+    const id = `${CUSTOM_ARENA_PREFIX}${++this.customSeq}`;
+    const arena: ArenaData = {
+      ...structuredClone(raw),
+      id,
+      name: { fr: names[0], en: names[1] },
+      decor: [],
+    };
+    this.custom.set(id, { arena, by: m.name, owner: m.id });
+    if (this.settings.arenas.length > 0) this.settings.arenas.push(id);
+    this.sendAll({ t: 'arena', arena });
+    this.markLobby();
+    this.flushLobby(now);
+    return 'ok';
+  }
+
+  /** L'auteur ou l'hôte retire un niveau. */
+  removeCustomArena(m: Member, id: string, now: number): void {
+    const e = this.custom.get(id);
+    if (!e || this.phase !== GamePhase.LOBBY) return;
+    if (e.owner !== m.id && m.slot !== this.host) return;
+    this.custom.delete(id);
+    this.settings.arenas = this.settings.arenas.filter((a) => a !== id);
+    this.sendAll({ t: 'arena_del', id });
+    this.markLobby();
+    this.flushLobby(now);
+  }
+
+  // --- Vote de la carte -----------------------------------------------------------------------
+
+  private voteCounts(v: VoteSession): number[] {
+    const counts = new Array<number>(v.options.length).fill(0);
+    for (const pick of v.votes.values()) counts[pick]++;
+    return counts;
+  }
+
+  /** Un joueur vote pour une des cartes proposées (il peut changer d'avis jusqu'à la clôture). */
+  castVote(m: Member, pick: number, now: number): void {
+    const v = this.vote;
+    if (!v || m.slot < 0 || pick >= v.options.length) return;
+    m.lastActiveAt = now;
+    v.votes.set(m.id, pick);
+    this.sendAll({ t: 'votes', counts: this.voteCounts(v) });
+  }
+
+  private openVote(now: number): void {
+    const w = this.world;
+    const options: VoteOption[] = [];
+    for (let i = 0; i < w.voteCount; i++) {
+      const a = w.arenaPool[w.voteOptions[i]];
+      if (a) options.push({ id: a.id, name: a.name });
+    }
+    const ms = this.io.config.voteMs;
+    const v: VoteSession = {
+      options,
+      votes: new Map(),
+      endsAt: now + ms,
+      earliest: now + Math.min(VOTE_MIN_MS, ms),
+      round: w.game.round + 1,
+    };
+    this.vote = v;
+    this.sendAll({
+      t: 'vote',
+      round: v.round,
+      options,
+      endsInMs: ms,
+      counts: this.voteCounts(v),
+    });
+  }
+
+  private stepVote(now: number): void {
+    const v = this.vote;
+    if (!v) {
+      if (this.world.voteHold) this.openVote(now);
+      return;
+    }
+    if (!this.world.voteHold) {
+      // clos par la simulation (garde-fou) : rien d'autre à faire
+      this.vote = null;
+      return;
+    }
+    let everyone = true;
+    for (const m of this.slots) if (m?.client && !v.votes.has(m.id)) everyone = false;
+    if (now >= v.endsAt || (everyone && now >= v.earliest)) this.closeVote(v);
+  }
+
+  /** Dépouille le vote : la carte la plus votée, les égalités et l'absence de vote au sort. */
+  private closeVote(v: VoteSession): void {
+    const counts = this.voteCounts(v);
+    const best = Math.max(...counts);
+    const top: number[] = [];
+    counts.forEach((c, i) => {
+      if (c === best) top.push(i);
+    });
+    const pick = top[randomInt(top.length)];
+    this.recorder?.op({ tick: this.world.tick, op: 'vote', choice: pick });
+    resolveVote(this.world, pick);
+    this.vote = null;
+    this.sendAll({ t: 'voteEnd', pick });
   }
 
   private sendAll(msg: ServerMessage): void {
@@ -742,6 +940,7 @@ export class Room {
     step(w, this.inputs);
     this.io.metrics.roomStepMs.add(performance.now() - t0);
     this.drainEvents(now);
+    this.stepVote(now);
     this.stepLobby(now);
     this.sendSnapshots();
     if (this.lobbyDirty || (this.tickCount % 180 === 0 && this.hasConnected())) {

@@ -8,7 +8,10 @@ import {
   encodeInput,
   encodePing,
   eventIdDiff,
+  clearExtraArenas,
   getArena,
+  registerExtraArena,
+  unregisterExtraArena,
   INPUT_REDUNDANCY,
   isMovementKey,
   MARGIN_MAX,
@@ -89,6 +92,7 @@ export type ClientState = 'connecting' | 'open' | 'joined' | 'closed';
 export type JoinedMessage = Extract<ServerMessage, { t: 'joined' }>;
 export type ScoresMessage = Extract<ServerMessage, { t: 'scores' }>;
 export type ResultsMessage = Extract<ServerMessage, { t: 'results' }>;
+export type VoteMessage = Extract<ServerMessage, { t: 'vote' }>;
 export type LeftReason = Extract<ServerMessage, { t: 'left' }>['reason'];
 
 /** Événement de simulation décodé, à jouer à l'écran (effets, sons, messages). */
@@ -185,6 +189,10 @@ export interface GameClientHooks {
   onRound?: (round: RoundInfo, arena: ArenaData) => void;
   onScores?: (m: ScoresMessage) => void;
   onResults?: (m: ResultsMessage) => void;
+  /** Vote de carte ouvert, mis à jour (`counts`), puis clos (`pick` : carte retenue). */
+  onVote?: (m: VoteMessage) => void;
+  onVotes?: (counts: number[]) => void;
+  onVoteEnd?: (pick: number) => void;
   onError?: (code: ErrorCode, msg?: string) => void;
   onClosed?: (code: number) => void;
   onLeft?: (reason: LeftReason) => void;
@@ -329,6 +337,8 @@ export class GameClient {
     private readonly hooks: GameClientHooks = {},
     private readonly now: () => number = () => performance.now(),
   ) {
+    // une nouvelle connexion repart sans les niveaux de joueurs du salon précédent
+    clearExtraArenas();
     transport.onOpen = (): void => {
       this.state = 'open';
       for (const text of this.queued.splice(0)) this.transport.send(text);
@@ -377,6 +387,20 @@ export class GameClient {
 
   start(): void {
     this.sendJson({ t: 'start' });
+  }
+
+  /** Vote pour une des cartes proposées (indice dans la liste du vote). */
+  vote(pick: number): void {
+    this.sendJson({ t: 'vote', pick });
+  }
+
+  /** Propose un niveau créé par le joueur au salon (en salle d'attente). */
+  sendArena(arena: ArenaData): void {
+    this.sendJson({ t: 'arena', arena });
+  }
+
+  deleteArena(id: string): void {
+    this.sendJson({ t: 'arena_del', id });
   }
 
   settings(patch: Partial<RoomSettings>): void {
@@ -477,6 +501,21 @@ export class GameClient {
         }
         break;
       }
+      case 'arena':
+        registerExtraArena(m.arena);
+        break;
+      case 'arena_del':
+        unregisterExtraArena(m.id);
+        break;
+      case 'vote':
+        this.hooks.onVote?.(m);
+        break;
+      case 'votes':
+        this.hooks.onVotes?.(m.counts);
+        break;
+      case 'voteEnd':
+        this.hooks.onVoteEnd?.(m.pick);
+        break;
       case 'scores':
         this.hooks.onScores?.(m);
         break;
@@ -508,6 +547,7 @@ export class GameClient {
         this.view.remoteCount = 0;
         this.view.objectCount = 0;
         this.view.projCount = 0;
+        clearExtraArenas();
         this.hooks.onLeft?.(m.reason);
         break;
     }

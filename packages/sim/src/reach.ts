@@ -182,8 +182,16 @@ export function reachableFrom(
   return seen;
 }
 
-/** Vérifie une arène : cellules d'apparition, accessibilité, zones de mode. */
-export function analyzeArena(arena: ArenaData): ArenaReport {
+/**
+ * Vérifie une arène : cellules d'apparition, accessibilité, zones de mode.
+ *
+ * `reach: false` saute l'accessibilité par simulation (la partie lourde : plusieurs secondes sur
+ * une arène très ouverte) et ne garde que les contrôles de cases, d'apparitions, de zones et de
+ * plateformes : c'est ce que fait le serveur pour un niveau de joueur, le créateur de niveau ayant
+ * déjà fait l'analyse complète chez le joueur.
+ */
+export function analyzeArena(arena: ArenaData, opts: { reach?: boolean } = {}): ArenaReport {
+  const reach = opts.reach !== false;
   const errors: string[] = [];
   const cells = parseGrid(arena.grid);
   let standing = 0;
@@ -259,7 +267,7 @@ export function analyzeArena(arena: ArenaData): ArenaReport {
 
   // Accessibilité par simulation, sans plateformes mobiles.
   let reachable = 0;
-  if (spawns.length > 0) {
+  if (reach && spawns.length > 0) {
     const flat: ArenaData = { ...arena, movers: [] };
     const world = createWorld(flat, 1);
     world.auth = false;
@@ -304,4 +312,82 @@ export function analyzeArena(arena: ArenaData): ArenaReport {
     if (isBlocking(cellType(cells, x, y))) errors.push(`${p.type} (${x},${y}) dans un bloc plein`);
   }
   return { errors, standing, reachable };
+}
+
+export interface SpawnSuggestion {
+  players: [number, number][];
+  weapons: [number, number][];
+}
+
+/**
+ * Propose des points d'apparition pour une arène dessinée à la main (créateur de niveau) : des
+ * positions debout, réparties sur la largeur, toutes **atteignables dans les deux sens** depuis une
+ * même position de départ (donc sans impasse), puis quelques points d'arme parmi elles.
+ * Les listes sont vides si le terrain ne contient aucune position debout.
+ */
+export function suggestSpawns(
+  arena: ArenaData,
+  wantPlayers = 12,
+  wantWeapons = 4,
+): SpawnSuggestion {
+  const cells = parseGrid(arena.grid);
+  const standing: Node[] = [];
+  for (let cy = 0; cy < GRID_H; cy++) {
+    for (let cx = 0; cx < GRID_W; cx++) {
+      if (canStand(cells, cx, cy) && cellType(cells, cx, cy) !== Cell.HAZARD) {
+        standing.push({ cx, cy });
+      }
+    }
+  }
+  const none: SpawnSuggestion = { players: [], weapons: [] };
+  if (standing.length === 0) return none;
+
+  const world = createWorld({ ...arena, movers: [] }, 1);
+  world.auth = false;
+  world.game.phase = 0;
+  const cache = new Map<number, Node[]>();
+
+  // Départ : parmi quelques positions basses, celle d'où l'on atteint le plus de monde.
+  const starts = standing
+    .slice()
+    .sort((a, b) => b.cy - a.cy || a.cx - b.cx)
+    .filter((_, i, all) => i % Math.max(1, Math.floor(all.length / 6)) === 0)
+    .slice(0, 6);
+  let best: { start: Node; ok: Node[] } | null = null;
+  for (const start of starts) {
+    const from = reachableFrom(world, cells, start, cache);
+    const reach = standing.filter((n) => from.has(key(n.cx, n.cy)));
+    // on n'éprouve que des échantillons répartis sur la largeur : `cache` rend les suivants gratuits
+    const sample = reach
+      .slice()
+      .sort((a, b) => a.cx - b.cx || a.cy - b.cy)
+      .filter((_, i, all) => i % Math.max(1, Math.floor(all.length / 48)) === 0);
+    const ok = sample.filter((n) => {
+      if (n.cx === start.cx && n.cy === start.cy) return true;
+      return reachableFrom(world, cells, n, cache).has(key(start.cx, start.cy));
+    });
+    if (!best || ok.length > best.ok.length) best = { start, ok };
+  }
+  if (!best || best.ok.length === 0) return none;
+
+  const spread = (list: Node[], n: number): Node[] => {
+    if (list.length <= n) return list.slice();
+    const out: Node[] = [];
+    for (let i = 0; i < n; i++) out.push(list[Math.floor(((i + 0.5) * list.length) / n)]);
+    return out;
+  };
+  const players = spread(best.ok, wantPlayers);
+  // la première apparition doit être le point de départ (l'analyse part d'elle)
+  const first = players.findIndex((p) => p.cx === best.start.cx && p.cy === best.start.cy);
+  if (first > 0) players.unshift(players.splice(first, 1)[0]);
+  else if (first < 0) players[0] = best.start;
+  const used = new Set(players.map((p) => key(p.cx, p.cy)));
+  const weapons = spread(
+    best.ok.filter((n) => !used.has(key(n.cx, n.cy))),
+    wantWeapons,
+  );
+  return {
+    players: players.map((p): [number, number] => [p.cx, p.cy]),
+    weapons: weapons.map((p): [number, number] => [p.cx, p.cy]),
+  };
 }

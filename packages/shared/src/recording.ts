@@ -1,3 +1,4 @@
+import type { ArenaData } from './arena.ts';
 import type { SimRules } from './settings.ts';
 
 /**
@@ -14,6 +15,8 @@ export type RecordOp =
       rules: SimRules;
       /** Identifiants des arènes tirables au sort. */
       arenas: string[];
+      /** Niveaux de joueurs parmi `arenas` (le jeu ne les connaît pas par leur identifiant). */
+      custom?: ArenaData[];
       /** Participants (1) ou non (0), par emplacement. */
       inMatch: number[];
       /** Équipe de chaque emplacement. */
@@ -21,7 +24,9 @@ export type RecordOp =
     }
   | { tick: number; op: 'lobby' }
   | { tick: number; op: 'kill'; slot: number }
-  | { tick: number; op: 'rules'; rules: SimRules };
+  | { tick: number; op: 'rules'; rules: SimRules }
+  /** Le salon a clos le vote de carte : indice de la carte retenue parmi les cartes proposées. */
+  | { tick: number; op: 'vote'; choice: number };
 
 /**
  * Enregistrement des entrées d'une salle, pour reproduire un bug ou vérifier le déterminisme.
@@ -30,7 +35,7 @@ export type RecordOp =
  *   le tick `tick + 1`), dans l'ordre.
  * - `tunes` : à partir du tick `tick` (avant le pas suivant), la constante change de valeur.
  * - `inputs` : `[tick, slot, masque]` = à partir du pas qui produit le tick `tick`, ce joueur
- *   applique ce masque (jusqu'au changement suivant). Les bits 12 à 15 portent la compensation
+ *   applique ce masque (jusqu'au changement suivant). Les bits 13 à 15 portent la compensation
  *   de latence.
  */
 export interface Recording {

@@ -4,7 +4,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { parseArena } from '@stickyclaude/shared/schemas';
-import { ARENAS } from '@stickyclaude/shared';
+import { ARENAS, MAX_ARENA_MESSAGE_BYTES } from '@stickyclaude/shared';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { RawData } from 'ws';
 import { originAllowed } from './config.ts';
@@ -164,7 +164,11 @@ export function startServer(cfg: ServerConfig, log: LogFn = () => {}): Promise<R
   };
 
   const server = createServer(handler);
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 1024, perMessageDeflate: false });
+  const wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: MAX_ARENA_MESSAGE_BYTES,
+    perMessageDeflate: false,
+  });
   const missed = new WeakMap<WebSocket, number>();
   let nextId = 1;
 

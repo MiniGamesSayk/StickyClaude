@@ -182,7 +182,7 @@ describe('parties complètes : du salon au podium', { timeout: 300_000 }, () => 
     const b = h.connect('10.0.0.2');
     const code = h.create(a);
     h.join(b, code);
-    h.settings(a, { weapons: false, roundsToWin: 3, suddenDeathSec: 20 });
+    h.settings(a, { weapons: false, roundsToWin: 3, suddenDeathSec: 20, bonusEvery: 0 });
     h.startMatch(a, [b]);
     const bots = [new Bot(h, a, 1), new Bot(h, b, 2)];
     let weaponSeen = false;

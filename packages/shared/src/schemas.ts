@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { GRID_H, GRID_W, MAX_PLAYERS } from './constants.ts';
+import { GRID_H, GRID_W, MAX_PLAYERS, VOTE_OPTIONS } from './constants.ts';
 import { EMOTE_COUNT } from './emotes.ts';
 import { SUDDEN_MAX_SEC, SUDDEN_MIN_SEC } from './settings.ts';
 import { isMovementKey } from './movement.ts';
@@ -103,6 +103,7 @@ export const settingsPatchSchema = z
     bonusModes: z.array(z.number().int().min(0).max(31)).max(16),
     bonusEvery: z.number().int().min(0).max(6),
     ghosts: z.boolean(),
+    voteMaps: z.boolean(),
     isPublic: z.boolean(),
   })
   .partial()
@@ -162,6 +163,20 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
     })
     .strict(),
   z.object({ t: z.literal('look'), look: lookSchema }).strict(),
+  /** Vote de carte : indice dans la liste proposée. */
+  z
+    .object({
+      t: z.literal('vote'),
+      pick: z
+        .number()
+        .int()
+        .min(0)
+        .max(VOTE_OPTIONS - 1),
+    })
+    .strict(),
+  /** Un niveau créé par le joueur, proposé au salon (validé en entier côté serveur). */
+  z.object({ t: z.literal('arena'), arena: arenaSchema }).strict(),
+  z.object({ t: z.literal('arena_del'), id: z.string().max(60) }).strict(),
   z
     .object({
       t: z.literal('emote'),

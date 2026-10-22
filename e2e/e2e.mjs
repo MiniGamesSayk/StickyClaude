@@ -452,6 +452,14 @@ await step('partie à 2 onglets : salon → combat → podium', async () => {
   await pageA.getByText('Tout le monde est prêt').waitFor();
   await pageA.getByRole('button', { name: 'Lancer la partie' }).click();
 
+  // vote de la carte : une capture, puis chacun vote
+  await pageA.locator('.vote').waitFor({ timeout: 15000 });
+  await pageB.locator('.vote').waitFor({ timeout: 15000 });
+  await pageA.waitForTimeout(500);
+  await shot(pageA, '10a-vote');
+  await pageA.locator('.vote-option').first().click();
+  await pageB.locator('.vote-option').nth(1).click();
+
   // décompte
   // le décompte « écrit à la main » : on attend le chiffre 2 (le 3 passe pendant la page qui se tourne)
   // (sondage par minuterie : le sondage par image, lent en rendu logiciel, peut rater un chiffre)
