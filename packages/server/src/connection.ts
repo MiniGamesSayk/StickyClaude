@@ -6,6 +6,8 @@ export interface Connection {
   readonly bufferedAmount: number;
   /** Latence aller-retour mesurée par le serveur (ms), 0 si inconnue. */
   rttMs?: number;
+  /** Compte sayk.fr connecté (cookie de session vérifié à l'ouverture), absent si anonyme. */
+  userId?: string;
   send(data: Uint8Array | string): void;
   close(code: number, reason: string): void;
 }

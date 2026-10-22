@@ -2,6 +2,7 @@ import { HAT_NAMES, NAME_MAX, STROKE_NAMES, VICTORY_NAMES } from '@stickyclaude/
 import type { Look } from '@stickyclaude/shared';
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
+import { account, apiBase, loginError, loginUrl, logout, stats } from '../app/account.ts';
 import { setOptions, profile, setProfile } from '../app/options.ts';
 import { actions, net, overlay, rooms, screen, urlCode } from '../app/store.ts';
 import { lang, pick, t } from '../i18n/index.ts';
@@ -78,6 +79,41 @@ export function LookEditor(p: {
   );
 }
 
+/** Compte sayk.fr : connexion Discord, ou nom et statistiques du joueur connecté. */
+function AccountBox(): JSX.Element | null {
+  if (apiBase() === null) return null;
+  const user = account.value;
+  const s = stats.value;
+  if (user === null) {
+    const href = loginUrl();
+    return (
+      <div class="account">
+        {href !== null && (
+          <a class="btn secondary" href={href}>
+            {t('account.login')}
+          </a>
+        )}
+        <span class="hint">
+          {loginError.value !== null ? t('account.error') : t('account.hint')}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div class="account">
+      <span>{t('account.as', { name: user.name })}</span>
+      <button type="button" class="link" onClick={() => void logout()}>
+        {t('account.logout')}
+      </button>
+      {s !== null && (s.matches ?? 0) > 0 && (
+        <span class="hint">
+          {t('account.stats', { matches: s.matches ?? 0, wins: s.wins ?? 0, kos: s.kos ?? 0 })}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Accueil : pseudo, parties, salons publics, entraînement. */
 export function Home(): JSX.Element {
   const prof = profile.value;
@@ -103,6 +139,7 @@ export function Home(): JSX.Element {
       <div class="card main">
         <Logo />
         <p class="sub">{t('app.tagline')}</p>
+        <AccountBox />
         <label>
           {t('home.name')}
           <input

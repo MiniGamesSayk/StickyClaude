@@ -375,6 +375,16 @@ input.code {
   transform: translate(2px, 2px);
   box-shadow: none;
 }
+.account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+a.btn {
+  display: inline-block;
+  text-decoration: none;
+}
 .link {
   font: inherit;
   background: none;
