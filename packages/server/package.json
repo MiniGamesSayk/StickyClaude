@@ -17,6 +17,7 @@
   "dependencies": {
     "@stickyclaude/shared": "0.1.0",
     "@stickyclaude/sim": "0.1.0",
+    "pino": "^10.4.0",
     "ws": "^8.18.3"
   }
 }

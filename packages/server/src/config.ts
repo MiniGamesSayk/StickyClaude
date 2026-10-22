@@ -33,8 +33,21 @@ export interface ServerConfig {
   staticDir: string;
   /** Si défini, chaque salle écrit son enregistrement d'entrées dans ce dossier. */
   recordDir: string;
-  /** Si défini, `/metrics` exige `Authorization: Bearer <jeton>`. */
+  /**
+   * Proxys de confiance dont on croit l'en-tête `X-Forwarded-For` : `caddy` (réseaux privés,
+   * dont celui de Docker) ou une liste d'adresses et de CIDR séparés par des virgules.
+   * Vide : l'en-tête est ignoré.
+   */
+  trustedProxy: string;
+  /**
+   * `/metrics` : jeton `Authorization: Bearer <jeton>` (accepté de partout) ; sans jeton, seules
+   * les requêtes internes (réseau privé, sans en-tête de proxy) sont acceptées.
+   */
   metricsToken: string;
+  /** Niveau des journaux pino (trace, debug, info, warn, error, fatal, silent). */
+  logLevel: string;
+  /** Arrêt propre (SIGTERM) : délai avant de fermer les connexions restantes (ms). */
+  shutdownGraceMs: number;
   /** Délai de reconnexion d'un joueur (ms). */
   reconnectGraceMs: number;
   /** Lancement automatique d'un salon public, une fois 2 joueurs prêts (ms). */
@@ -80,7 +93,10 @@ export function loadConfig(
     allowNoOrigin: env.ALLOW_NO_ORIGIN === '1',
     staticDir: env.STATIC_DIR ?? defaultStaticDir,
     recordDir: env.RECORD_DIR ?? '',
+    trustedProxy: env.TRUSTED_PROXY ?? '',
     metricsToken: env.METRICS_TOKEN ?? '',
+    logLevel: env.LOG_LEVEL ?? 'info',
+    shutdownGraceMs: int(env.SHUTDOWN_GRACE_SEC, 30, 0, 300) * 1000,
     reconnectGraceMs: int(env.RECONNECT_GRACE_MS, RECONNECT_GRACE_MS, 0, 600_000),
     autostartMs: int(env.AUTOSTART_MS, AUTOSTART_MS, 0, 600_000),
     idlePlayingMs: int(env.IDLE_PLAYING_MS, IDLE_PLAYING_MS, 1000, 3_600_000),
@@ -91,10 +107,25 @@ export function loadConfig(
   };
 }
 
-export function originAllowed(origin: string | undefined, cfg: ServerConfig): boolean {
+/**
+ * Origine acceptée pour le WebSocket. En production : `PUBLIC_ORIGIN` ; sans elle, seule l'origine
+ * qui correspond à l'en-tête `Host` de la requête (même site). Hors production : aussi localhost.
+ */
+export function originAllowed(
+  origin: string | undefined,
+  cfg: ServerConfig,
+  host?: string,
+): boolean {
   if (!origin) return !cfg.production || cfg.allowNoOrigin;
   if (cfg.publicOrigin !== '' && origin === cfg.publicOrigin) return true;
-  if (cfg.production) return false;
+  if (cfg.production) {
+    if (cfg.publicOrigin !== '' || !host) return false;
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      return false;
+    }
+  }
   try {
     const h = new URL(origin).hostname;
     return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';

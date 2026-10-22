@@ -137,7 +137,9 @@ export type ServerMessage =
     }
   | { t: 'error'; code: ErrorCode; msg?: string }
   | { t: 'tune'; k: MovementKey; val: number }
-  | { t: 'left'; reason: 'left' | 'kicked' | 'closed' | 'idle' };
+  | { t: 'left'; reason: 'left' | 'kicked' | 'closed' | 'idle' }
+  /** Arrêt propre annoncé (mise à jour) : le serveur ferme les connexions dans `inMs` (code 1012). */
+  | { t: 'shutdown'; inMs: number };
 
 /** Salon public dans `GET /api/rooms`. */
 export interface PublicRoom {

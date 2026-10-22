@@ -1,7 +1,7 @@
-import { createReadStream, existsSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { extname, join, normalize, sep } from 'node:path';
+import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { parseArena } from '@stickyclaude/shared/schemas';
 import { ARENAS } from '@stickyclaude/shared';
@@ -12,25 +12,12 @@ import type { ServerConfig } from './config.ts';
 import type { Connection } from './connection.ts';
 import { GameServer } from './gameServer.ts';
 import { startLoop } from './loop.ts';
+import type { LogFn } from './logger.ts';
+import { truncateIp } from './logger.ts';
+import { clientAddress, isInternalRequest, parseTrustedProxy } from './proxy.ts';
 import type { Room } from './room.ts';
-
-const MIME: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.woff2': 'font/woff2',
-  '.opus': 'audio/ogg; codecs=opus',
-  '.ogg': 'audio/ogg',
-  '.ico': 'image/x-icon',
-  '.map': 'application/json; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8',
-};
+import { securityHeaders } from './security.ts';
+import { StaticSite } from './static.ts';
 
 /** Déconnexion après 3 pings WebSocket sans réponse (30 s avec l'intervalle par défaut de 10 s). */
 const HEARTBEAT_MAX_MISSED = 3;
@@ -63,13 +50,17 @@ export interface RunningServer {
   http: Server;
   game: GameServer;
   port: number;
+  /** Arrêt immédiat. */
   stop(): Promise<void>;
+  /**
+   * Arrêt propre : n'accepte plus de connexion, annonce l'arrêt aux joueurs, attend qu'ils soient
+   * partis (au plus `graceMs`), ferme le reste avec le code 1012 (le client se reconnecte seul).
+   */
+  shutdown(graceMs: number): Promise<void>;
 }
 
-function clientIp(req: IncomingMessage): string {
-  const a = req.socket.remoteAddress ?? 'unknown';
-  return a.startsWith('::ffff:') ? a.slice(7) : a;
-}
+/** Code de fermeture WebSocket « Service Restart » : le serveur redémarre (mise à jour). */
+export const CLOSE_SERVICE_RESTART = 1012;
 
 function toBytes(data: RawData): Uint8Array {
   if (Buffer.isBuffer(data)) return data;
@@ -77,58 +68,20 @@ function toBytes(data: RawData): Uint8Array {
   return new Uint8Array(data);
 }
 
-function json(res: ServerResponse, status: number, body: unknown): void {
+function json(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  extra: Record<string, string> = {},
+): void {
   const text = JSON.stringify(body);
   res.writeHead(status, {
+    ...extra,
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'Content-Length': Buffer.byteLength(text),
   });
   res.end(text);
-}
-
-function serveStatic(
-  cfg: ServerConfig,
-  req: IncomingMessage,
-  res: ServerResponse,
-  pathname: string,
-): void {
-  let rel: string;
-  try {
-    rel = decodeURIComponent(pathname);
-  } catch {
-    res.writeHead(400).end();
-    return;
-  }
-  if (rel.includes('\0')) {
-    res.writeHead(400).end();
-    return;
-  }
-  const root = normalize(cfg.staticDir);
-  let file = normalize(join(root, rel));
-  if (file !== root && !file.startsWith(root + sep)) {
-    res.writeHead(403).end();
-    return;
-  }
-  if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
-  if (!existsSync(file) || !statSync(file).isFile()) {
-    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Not found');
-    return;
-  }
-  const ext = extname(file).toLowerCase();
-  const isIndex = file.endsWith(`${sep}index.html`);
-  res.writeHead(200, {
-    'Content-Type': MIME[ext] ?? 'application/octet-stream',
-    'Content-Length': statSync(file).size,
-    'Cache-Control': isIndex ? 'no-cache' : 'public, max-age=3600',
-    'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'no-referrer',
-  });
-  if (req.method === 'HEAD') {
-    res.end();
-    return;
-  }
-  createReadStream(file).pipe(res);
 }
 
 function writeRecording(cfg: ServerConfig, room: Room): void {
@@ -139,50 +92,75 @@ function writeRecording(cfg: ServerConfig, room: Room): void {
   writeFileSync(file, JSON.stringify(rec.toRecording(room.world.tick, room.stateHash())));
 }
 
-export function startServer(
-  cfg: ServerConfig,
-  log: (o: Record<string, unknown>) => void = () => {},
-): Promise<RunningServer> {
+export function startServer(cfg: ServerConfig, log: LogFn = () => {}): Promise<RunningServer> {
   // Les arènes embarquées doivent être valides : on échoue au démarrage sinon.
   for (const a of Object.values(ARENAS)) parseArena(a);
 
+  const trusted = parseTrustedProxy(cfg.trustedProxy);
+  const site = new StaticSite(cfg.staticDir, !cfg.production);
   const game = new GameServer(cfg, { onRoomClosed: (room) => writeRecording(cfg, room) });
+  let warnedForwarded = false;
+
+  /** Adresse du client ; avertit une fois si un proxy non déclaré est détecté en production. */
+  const addressOf = (req: IncomingMessage): string => {
+    const a = clientAddress(req, trusted);
+    if (a.ignoredForwarded && cfg.production && !warnedForwarded) {
+      warnedForwarded = true;
+      log({
+        level: 'warn',
+        msg: 'X-Forwarded-For ignored: the peer is not in TRUSTED_PROXY, all clients share its address',
+        peer: truncateIp(req.socket.remoteAddress ?? ''),
+      });
+    }
+    return a.ip;
+  };
+
+  const metricsAllowed = (req: IncomingMessage): boolean =>
+    (cfg.metricsToken !== '' && req.headers.authorization === `Bearer ${cfg.metricsToken}`) ||
+    isInternalRequest(req);
 
   const handler = (req: IncomingMessage, res: ServerResponse): void => {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    const sec = securityHeaders(cfg, req, false);
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      res.writeHead(405, { Allow: 'GET, HEAD' }).end();
+      res.writeHead(405, { ...sec, Allow: 'GET, HEAD' }).end();
       return;
     }
     if (url.pathname === '/healthz') {
-      json(res, 200, { ok: true, rooms: game.rooms.size, players: game.playerCount });
+      if (game.isDraining) json(res, 503, { ok: false, draining: true }, sec);
+      else json(res, 200, { ok: true, rooms: game.rooms.size, players: game.playerCount }, sec);
       return;
     }
     if (url.pathname === '/api/rooms') {
-      json(res, 200, game.publicRooms());
+      json(res, 200, game.publicRooms(), sec);
       return;
     }
     if (url.pathname === '/metrics') {
-      if (cfg.metricsToken !== '' && req.headers.authorization !== `Bearer ${cfg.metricsToken}`) {
-        res.writeHead(401).end();
+      if (!metricsAllowed(req)) {
+        res.writeHead(404, sec).end();
         return;
       }
       const snapshot = game.metrics.snapshot(game.stats());
       if (url.searchParams.get('reset') === '1') game.metrics.resetWindow();
-      json(res, 200, snapshot);
+      json(res, 200, snapshot, sec);
       return;
     }
     if (cfg.devTools && url.pathname.startsWith('/dev/recording/')) {
       const room = game.rooms.get(url.pathname.slice('/dev/recording/'.length).toUpperCase());
       const rec = room?.recording;
       if (!room || !rec) {
-        res.writeHead(404).end();
+        res.writeHead(404, sec).end();
         return;
       }
-      json(res, 200, rec.toRecording(room.world.tick, room.stateHash()));
+      json(res, 200, rec.toRecording(room.world.tick, room.stateHash()), sec);
       return;
     }
-    serveStatic(cfg, req, res, url.pathname);
+    const served = site.serve(req, res, url.pathname, (isDocument) =>
+      securityHeaders(cfg, req, isDocument),
+    );
+    if (!served) {
+      res.writeHead(404, { ...sec, 'Content-Type': 'text/plain; charset=utf-8' }).end('Not found');
+    }
   };
 
   const server = createServer(handler);
@@ -198,12 +176,14 @@ export function startServer(
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (url.pathname !== '/ws') return reject(socket, '404 Not Found');
-    if (!originAllowed(req.headers.origin, cfg)) return reject(socket, '403 Forbidden');
-    const ip = clientIp(req);
+    if (!originAllowed(req.headers.origin, cfg, req.headers.host)) {
+      return reject(socket, '403 Forbidden');
+    }
+    const ip = addressOf(req);
     wss.handleUpgrade(req, socket, head, (ws) => {
       const conn = new WsConnection(nextId++, ip, ws);
       if (!game.onConnect(conn)) {
-        ws.close(1013, 'server busy');
+        ws.close(game.isDraining ? CLOSE_SERVICE_RESTART : 1013, 'server busy');
         return;
       }
       missed.set(ws, 0);
@@ -235,32 +215,66 @@ export function startServer(
   }, cfg.heartbeatMs);
   heartbeat.unref();
 
-  const loop = startLoop(game, cfg.tickHz, (lag) =>
-    log({ level: 'warn', msg: 'tick overrun', lagMs: Math.round(lag) }),
-  );
+  // Un serveur en retard le reste en rafale : un seul journal toutes les 5 s, avec le total.
+  let overruns = 0;
+  let worstLag = 0;
+  let lastOverrunLog = 0;
+  const loop = startLoop(game, cfg.tickHz, (lag) => {
+    overruns++;
+    worstLag = Math.max(worstLag, lag);
+    const now = performance.now();
+    if (now - lastOverrunLog < 5000) return;
+    lastOverrunLog = now;
+    log({ level: 'warn', msg: 'tick overrun', count: overruns, worstLagMs: Math.round(worstLag) });
+    overruns = 0;
+    worstLag = 0;
+  });
+
+  const stop = (): Promise<void> =>
+    new Promise<void>((done) => {
+      clearInterval(heartbeat);
+      loop.stop();
+      for (const ws of wss.clients) ws.close(1001, 'server stopping');
+      for (const room of game.rooms.values()) writeRecording(cfg, room);
+      game.stop();
+      wss.close();
+      server.closeAllConnections();
+      server.close(() => done());
+    });
+
+  const shutdown = async (graceMs: number): Promise<void> => {
+    game.drain();
+    game.announceShutdown(graceMs);
+    log({ level: 'info', msg: 'draining', graceMs, connections: game.connectionCount });
+    const deadline = performance.now() + graceMs;
+    while (game.connectionCount > 0 && performance.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const left = game.connectionCount;
+    for (const ws of wss.clients) ws.close(CLOSE_SERVICE_RESTART, 'server restarting');
+    // Laisse partir les trames de fermeture avant de couper les sockets.
+    if (left > 0) await new Promise((r) => setTimeout(r, 300));
+    log({ level: 'info', msg: 'drained', closed: left });
+    await stop();
+  };
 
   return new Promise((resolve, reject2) => {
     server.once('error', reject2);
     server.listen(cfg.port, cfg.host, () => {
       const addr = server.address();
       const port = typeof addr === 'object' && addr ? addr.port : cfg.port;
-      log({ level: 'info', msg: 'listening', host: cfg.host, port, devTools: cfg.devTools });
-      resolve({
-        http: server,
-        game,
+      log({
+        level: 'info',
+        msg: 'listening',
+        host: cfg.host,
         port,
-        stop: () =>
-          new Promise<void>((done) => {
-            clearInterval(heartbeat);
-            loop.stop();
-            for (const ws of wss.clients) ws.close(1001, 'server stopping');
-            for (const room of game.rooms.values()) writeRecording(cfg, room);
-            game.stop();
-            wss.close();
-            server.closeAllConnections();
-            server.close(() => done());
-          }),
+        production: cfg.production,
+        devTools: cfg.devTools,
+        staticFiles: site.size,
+        publicOrigin: cfg.publicOrigin,
+        trustedProxy: cfg.trustedProxy,
       });
+      resolve({ http: server, game, port, stop, shutdown });
     });
   });
 }

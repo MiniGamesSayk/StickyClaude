@@ -485,9 +485,19 @@ export class GameServer implements RoomIO {
 
   // --- Divers ---------------------------------------------------------------------------------
 
-  /** Arrête d'accepter de nouvelles connexions et salons (arrêt propre, phase 4). */
+  /** Arrête d'accepter de nouvelles connexions et salons (arrêt propre). */
   drain(): void {
     this.draining = true;
+  }
+
+  get isDraining(): boolean {
+    return this.draining;
+  }
+
+  /** Prévient tous les clients connectés que le serveur s'arrête dans `inMs` millisecondes. */
+  announceShutdown(inMs: number): void {
+    const text = JSON.stringify({ t: 'shutdown', inMs } satisfies ServerMessage);
+    for (const c of this.clients.values()) this.sendRaw(c, text);
   }
 
   private invalid(c: ClientState): void {

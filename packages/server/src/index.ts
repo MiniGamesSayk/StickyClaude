@@ -10,3 +10,7 @@ export * from './recorder.ts';
 export * from './names.ts';
 export * from './httpServer.ts';
 export * from './loop.ts';
+export * from './logger.ts';
+export * from './proxy.ts';
+export * from './security.ts';
+export * from './static.ts';
