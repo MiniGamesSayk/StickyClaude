@@ -1,3 +1,5 @@
+// Pixi sans `eval` : la politique de sécurité du contenu (CSP, analyse §2.9) interdit `unsafe-eval`.
+import 'pixi.js/unsafe-eval';
 import { Application, Container, Rectangle, Sprite, Texture } from 'pixi.js';
 import {
   CELL,

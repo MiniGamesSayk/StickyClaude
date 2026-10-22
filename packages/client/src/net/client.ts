@@ -188,6 +188,8 @@ export interface GameClientHooks {
   onError?: (code: ErrorCode, msg?: string) => void;
   onClosed?: (code: number) => void;
   onLeft?: (reason: LeftReason) => void;
+  /** Le serveur annonce son arrêt (mise à jour) dans `inMs` millisecondes. */
+  onShutdown?: (inMs: number) => void;
   /** Événement fiable à jouer maintenant (livré une seule fois, dans l'ordre). */
   onEvent?: (e: GameEvent) => void;
   /** Événement local de son propre joueur (saut, atterrissage, début de coup). */
@@ -489,6 +491,9 @@ export class GameClient {
           this.world.params[m.k] = m.val;
           this.world.baseParams[m.k] = m.val;
         }
+        break;
+      case 'shutdown':
+        this.hooks.onShutdown?.(m.inMs);
         break;
       case 'left':
         this.state = 'open';

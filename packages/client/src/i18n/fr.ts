@@ -214,6 +214,8 @@ export const fr = {
   'msg.kicked': 'Tu as été expulsé du salon.',
   'msg.idle': 'Tu as été retiré du salon pour inactivité.',
   'msg.closed': 'Le salon a été fermé.',
+  'msg.shutdown':
+    'Le serveur redémarre pour une mise à jour dans {s} s. Tu seras reconnecté tout seul.',
   'msg.connection_lost': 'Connexion perdue.',
   'msg.resume_failed': 'Impossible de reprendre ta place : le délai est dépassé.',
   'err.version': 'Version du jeu incompatible : recharge la page.',

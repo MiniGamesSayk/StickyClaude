@@ -312,6 +312,10 @@ export class Online {
                 : null;
         this.backToMenu(key);
       },
+      onShutdown: (inMs) => {
+        if (this.client !== c) return;
+        say(t('msg.shutdown', { s: Math.max(1, Math.round(inMs / 1000)) }));
+      },
       onClosed: (code) => {
         if (this.client !== c) return;
         const restart = code === CLOSE_SERVICE_RESTART;

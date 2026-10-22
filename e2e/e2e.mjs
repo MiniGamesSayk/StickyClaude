@@ -65,6 +65,8 @@ if (!base) {
     cwd: root,
     env: {
       ...process.env,
+      // comme en production : en-têtes de sécurité, CSP stricte et vérification de l'Origin
+      NODE_ENV: 'production',
       PORT: String(port),
       HOST: '127.0.0.1',
       // pas de limites de débit pour les tests, pas de lancement automatique de la partie
@@ -571,7 +573,9 @@ await step('maintenance et connexion perdue', async () => {
   });
   if (server) {
     expectingDisconnect = true;
-    server.kill();
+    // arrêt brutal (le serveur s'arrête sans prévenir) : l'arrêt propre, lui, est annoncé puis
+    // fermé avec le code 1012 (écran de maintenance), voir packages/server/test/prod.test.ts
+    server.kill('SIGKILL');
     await pageA.getByText('Connexion perdue').waitFor({ timeout: 15000 });
     await pageA.waitForTimeout(500);
     await shot(pageA, '18-connexion-perdue');

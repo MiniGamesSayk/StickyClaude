@@ -204,6 +204,8 @@ export const en: Record<MessageKey, string> = {
   'msg.kicked': 'You were kicked from the room.',
   'msg.idle': 'You were removed from the room for inactivity.',
   'msg.closed': 'The room was closed.',
+  'msg.shutdown':
+    'The server restarts for an update in {s} s. You will be reconnected automatically.',
   'msg.connection_lost': 'Connection lost.',
   'msg.resume_failed': 'Could not resume your spot: time is up.',
   'err.version': 'Incompatible game version: reload the page.',
