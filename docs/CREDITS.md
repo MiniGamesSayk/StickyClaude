@@ -15,6 +15,8 @@
 
 Quelques pictogrammes de l'interface (✏️ ✊ 🛡 ✋ ⛶) sont des caractères Unicode affichés par la police d'emoji du système : rien n'est embarqué. Les glyphes qui manquent au sous-ensemble latin (★ ♥ ☺ ♪ ♫ ♩) sont dessinés en vectoriel, pas écrits. Les polices sont servies par le jeu lui-même, jamais par un serveur tiers.
 
+L'icône du hub `sayk.fr` (`deploy/hub/stickyclaude.svg`, 16 × 16) est dessinée pour ce projet, dans le style en pixels des autres jeux du hub ; aucune image n'est reprise.
+
 Aucun nom, visuel ni son de Stick Fight ou d'un autre jeu n'est utilisé.
 
 ## Logiciels libres utilisés
@@ -22,6 +24,7 @@ Aucun nom, visuel ni son de Stick Fight ou d'un autre jeu n'est utilisé.
 | Projet                                                                                               | Licence      |
 | ---------------------------------------------------------------------------------------------------- | ------------ |
 | [ws](https://github.com/websockets/ws)                                                               | MIT          |
+| [pino](https://github.com/pinojs/pino) (journaux JSON du serveur)                                    | MIT          |
 | [zod](https://github.com/colinhacks/zod)                                                             | MIT          |
 | [PixiJS](https://pixijs.com/)                                                                        | MIT          |
 | [Preact](https://preactjs.com/), [@preact/signals](https://github.com/preactjs/signals)              | MIT          |

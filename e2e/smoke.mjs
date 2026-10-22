@@ -8,6 +8,8 @@
 // CREATE_PER_MIN, CODE_TRIES_PER_MIN et MAX_CONN_PER_IP assez hauts pour les enchaînements de CI.
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 
 const args = Object.fromEntries(
@@ -98,14 +100,14 @@ try {
   await a.keyboard.up('ArrowRight');
   await b.keyboard.up('ArrowLeft');
 
-  const tick = await a.evaluate(() => window.__stickyclaude.source?.world?.tick ?? 0);
-  assert.ok(tick > 0, 'la simulation locale doit avoir avancé');
+  const tick = await a.evaluate(() => window.__stickyclaude.client?.stats?.predTick ?? 0);
+  assert.ok(tick > 60, `la prédiction locale doit avoir avancé (tick ${tick})`);
   const after = await fetch(`${base}/healthz`).then((r) => r.json());
   assert.ok(after.players >= 2, `le serveur doit voir 2 joueurs (${JSON.stringify(after)})`);
 } catch (e) {
   failure = e;
   for (const [i, p] of pages.entries()) {
-    await p.screenshot({ path: `smoke-echec-${i}.png` }).catch(() => undefined);
+    await p.screenshot({ path: join(tmpdir(), `smoke-echec-${i}.png`) }).catch(() => undefined);
   }
 }
 await browser.close();

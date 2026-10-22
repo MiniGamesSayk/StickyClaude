@@ -4,7 +4,7 @@ Jeu de combat de stickmen en ligne dans le navigateur, de 2 à 8 joueurs, au th�
 
 ![Accueil](docs/screenshots/01-accueil.jpg)
 
-> **État : phase 3 sur 4** (rendu et sensations). Le jeu est complet et habillé : tout est dessiné au stylo sur du papier de cahier (traits qui « bouillonnent », encre qui éclabousse, onomatopées), avec sons et musiques générés par script, une interface française et anglaise, le tactile et la manette, et un entraînement solo contre des mannequins. Pas encore d'image Docker ni de mise en production (phase 4). Voir `docs/ANALYSE.md` pour la feuille de route.
+> **État : phase 4 sur 4** (mise en production). Le jeu est complet et habillé : tout est dessiné au stylo sur du papier de cahier (traits qui « bouillonnent », encre qui éclabousse, onomatopées), avec sons et musiques générés par script, une interface française et anglaise, le tactile et la manette, et un entraînement solo contre des mannequins. Il se construit en **une image Docker de 123 Mo** et se déploie sur `https://stickyclaude.sayk.fr` avec la plateforme multi-jeux du VPS : voir [Déploiement](#déploiement) et `docs/DEPLOIEMENT.md`.
 
 |                                           |                                                                         |
 | ----------------------------------------- | ----------------------------------------------------------------------- |
@@ -38,6 +38,15 @@ Ouvre <http://localhost:5173>. Trois façons de jouer :
 
 **Tester un mauvais réseau** : ajoute `?lag=150&jitter=30&loss=2` à l'adresse (latence aller-retour 150 ms, gigue ± 30 ms, 2 % de pertes). Plusieurs onglets dans le même salon suffisent pour voir le résultat. Autres paramètres : `?solo=1` (entraînement), `?salon=CODE`, `?auto=1&name=…` (entre directement dans un salon), `?debug=1`.
 
+## Docker
+
+```bash
+docker build -f deploy/Dockerfile -t stickyclaude .
+docker run --rm --init --read-only --memory 512m --cpus 1 -p 3000:3000 stickyclaude
+```
+
+Ouvre <http://localhost:3000> : le jeu, servi par le conteneur (`/healthz` répond `{"ok":true,…}`). C'est exactement l'image de production : utilisateur `node`, système de fichiers en lecture seule, 512 Mo et 1 CPU. Toutes les variables d'environnement sont dans `.env.example` et `docs/DEPLOIEMENT.md`.
+
 ## Scripts
 
 | Commande                          | Effet                                                                                                                                                                 |
@@ -47,10 +56,12 @@ Ouvre <http://localhost:5173>. Trois façons de jouer :
 | `npm start`                       | lance le serveur construit, qui sert aussi le client                                                                                                                  |
 | `npm run check`                   | lint, formatage, types, tests et `audio:check` (à garder vert avant chaque push)                                                                                      |
 | `npm test` / `npm run test:watch` | tests Vitest                                                                                                                                                          |
+| `node e2e/smoke.mjs --url …`      | test de fumée (CI, contre le conteneur) : 2 clients, une partie, **aucune erreur ni avertissement dans la console** (CSP comprise)                                    |
 | `npm run e2e`                     | tests de bout en bout dans Chromium : écrans, entraînement, **partie à 2 onglets**, tactile, connexion perdue ; refait les captures (`-- --sheet` : aussi la planche) |
 | `npm run gen-audio`               | régénère les sons et musiques (`packages/client/public/audio`) ; `npm run audio:check` vérifie qu'ils sont à jour                                                     |
 | `npm run simulate`                | déterminisme (deux mondes, hash comparé), mouvement seul puis parties enchaînées, et coût d'un pas ; `-- --replay fichier.json`                                       |
 | `npm run loadtest`                | faux clients qui se battent contre un serveur construit : `-- --rooms 25 --players 8 --duration 120` ; `-- --no-combat` pour les déplacements seuls                   |
+| `node scripts/precompress.mjs`    | précompresse le client construit en brotli et gzip (lancé par `npm run build`)                                                                                        |
 | `node scripts/browser-check.mjs`  | N onglets Chromium dans un salon, avec réseau dégradé (`--clients 8 --lag 150 …`)                                                                                     |
 | `node scripts/perf-check.mjs`     | FPS et allocations du rendu en émulation mobile : `--cpu 4 --seconds 20 --quality auto` (voir `docs/DECISIONS.md` D56)                                                |
 
@@ -64,9 +75,10 @@ packages/
   sim/      simulation pure et déterministe : joueurs, combat, armes, objets, terrain, manches, modes, fantômes, analyse des arènes, relecture
   server/   HTTP + WebSocket, salons, boucle de ticks, entrées, snapshots, compensation de latence, sécurité, métriques
   client/   réseau (prédiction, interpolation), rendu Pixi « encre et carnet » (render/), interface Preact (ui/), état et sources de scène (app/), entrées (input/), audio (audio/), i18n FR/EN (i18n/), éditeur d'arènes et planche de style (dev)
-scripts/    simulate, loadtest, browser-check, perf-check, check-bundle, gen-audio/
-e2e/        tests de bout en bout (Playwright)
-docs/       ANALYSE.md, DIRECTION_ARTISTIQUE.md, ARENES.md, NETCODE.md, DECISIONS.md, CREDITS.md, PROMPTS_SONNET.md, screenshots/
+scripts/    simulate, loadtest, browser-check, perf-check, check-bundle, precompress, gen-audio/
+e2e/        tests de bout en bout (Playwright) : parcours complet et test de fumée
+deploy/     Dockerfile de production, Dockerfile du générateur de charge, blocs pour le hub sayk.fr
+docs/       ANALYSE.md, ARCHITECTURE.md, DEPLOIEMENT.md, DIRECTION_ARTISTIQUE.md, ARENES.md, NETCODE.md, DECISIONS.md, CREDITS.md, PROMPTS_SONNET.md, screenshots/
 ```
 
 `sim` ne dépend que de `shared` : ni E/S, ni DOM, ni horloge système, ni `Math.random` (règles appliquées par ESLint), et aucune allocation dans `step` (mesuré par `npm run simulate`). Il fait deux passes : le mouvement et les actions de chaque joueur (prédits par le client), puis la résolution des coups, des objets et de la partie (serveur seulement). Voir `docs/NETCODE.md`.
@@ -83,13 +95,27 @@ Le rendu du client lit une **source de scène** (`app/source.ts`) : le jeu en li
 
 ## Mesures
 
-- **Simulation** d'un salon de 8 joueurs en combat (armes, modes, fantômes) : **6 µs par pas** au p50, 15 µs au p99 (budget 150 µs). Débit par client en combat à 8 : **8,7 Ko/s** (budget 20). Charge à 25 salons × 8 joueurs avec combat actif : voir `docs/NETCODE.md` §10 — mesurée sous Windows, où même les déplacements seuls dépassent les budgets de CPU et de boucle ; la vérification à retenir est celle du conteneur `--cpus 1` sous Linux (phase 4).
+- **Simulation** d'un salon de 8 joueurs en combat (armes, modes, fantômes) : **6 µs par pas** au p50, 15 µs au p99 (budget 150 µs). Débit par client en combat à 8 : **8,7 Ko/s** (budget 20).
+- **Charge**, conteneur `--memory 512m --cpus 1` sur le VPS (Xeon 2,3 GHz, 2 vCPU), combat actif : **64 joueurs : 40 % de CPU, boucle p99 8,1 ms, budgets tenus** ; 96 joueurs : 50 %, boucle p99 10,6 ms (limite) ; **200 joueurs (25 salons × 8) : 74 %, boucle p99 16 ms, budgets non tenus** (sur un poste de bureau, les mêmes 200 joueurs tiennent : 48 %, 7,6 ms). Les plafonds de production sont donc de 12 salons et 120 connexions ; détails, protocole et leviers dans `docs/DEPLOIEMENT.md` § 10.
 - **Rendu** (`scripts/perf-check.mjs`, Chrome 155, rendu logiciel, téléphone émulé 851 × 393 à DPR 2,75, **CPU ralenti ×4**, entraînement solo, 20 s) : **59,7 FPS en qualité auto** (95ᵉ centile d'image : 16,8 ms ; 4 images sur 1 200 au-delà de 20 ms), 59,9 en haute et en basse ; ≈ 15 Ko alloués par image, 0,7 ramasse-miettes mineur par seconde. Mesure en rendu logiciel : à confirmer sur un vrai téléphone (D56).
 - **Bundle** : 325,7 Ko gzip pour un budget de 400 Ko (JS, CSS, polices ; hors audio) ; les 374 Ko de sons sont chargés après le premier écran.
+
+## Déploiement
+
+Le jeu tourne sur `https://stickyclaude.sayk.fr` via la plateforme multi-jeux du VPS (un dépôt = un conteneur = un sous-domaine) :
+
+```bash
+games add stickyclaude MiniGamesSayk/StickyClaude stickyclaude.sayk.fr 3000 main   # première fois
+games update stickyclaude                                                             # mises à jour
+```
+
+Le `.env` à créer, la vérification, la mise à jour, le retour en arrière, les journaux et le dépannage : **`docs/DEPLOIEMENT.md`**. Le serveur de production sert le client précompressé (brotli, gzip) avec une CSP stricte, vérifie l'`Origin`, ne croit `X-Forwarded-For` que de son proxy de confiance, garde `/metrics` en interne, journalise en JSON (pino) et s'arrête proprement sur `SIGTERM` (annonce aux joueurs, délai, fermeture avec le code 1012, reconnexion automatique du client). La CI (GitHub Actions) fait `check`, `build` (budget du bundle), `docker build` (< 150 Mo), lance le conteneur avec ses limites, exécute le test de fumée Playwright et vérifie l'arrêt propre.
 
 ## Documentation
 
 - `docs/ANALYSE.md` : analyse fonctionnelle et technique (source de vérité)
+- `docs/ARCHITECTURE.md` : organisation du code, du serveur de production, de l'arrêt propre et de la construction
+- `docs/DEPLOIEMENT.md` : déploiement pas à pas, variables d'environnement, mesures de charge, dépannage
 - `docs/DIRECTION_ARTISTIQUE.md` : palette, traits, polices, animation, éléments à dessiner
 - `docs/ARENES.md` : format des arènes, éditeur, comment en ajouter une
 - `docs/NETCODE.md` : protocole, formats binaires, délais, compensation de latence, mesures

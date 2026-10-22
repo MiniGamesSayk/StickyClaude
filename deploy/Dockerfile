@@ -19,13 +19,20 @@ COPY scripts ./scripts
 # fichier, dépendances comprises). Les cartes de sources ne partent pas en production.
 RUN npm run build \
  && find packages/client/dist packages/server/dist -name '*.map' -delete
+# Binaire de Node sans symboles (-16 Mo).
+RUN apk add --no-cache binutils && strip --strip-all -o /node-stripped /usr/local/bin/node
 
-# ---- Étape 2 : exécution (Node seul : aucune dépendance à installer, le serveur est empaqueté) -----
-FROM node:22-alpine
+# ---- Étape 2 : exécution ----------------------------------------------------------------------
+# Alpine nu + le binaire de Node (allégé) : l'image officielle node:22-alpine pèse ~ 180 Mo à cause de
+# npm, yarn et des en-têtes, qu'une couche de plus ne peut pas retirer. Le serveur est empaqueté
+# en un seul fichier : aucune dépendance à installer à l'exécution.
+FROM alpine:3.24
+RUN apk add --no-cache libstdc++ \
+ && addgroup -g 1000 node \
+ && adduser -u 1000 -G node -s /bin/sh -D node
+COPY --from=build /node-stripped /usr/local/bin/node
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0
-# npm et yarn ne servent pas à l'exécution (~ 25 Mo en moins).
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /opt/yarn-* /usr/local/bin/yarn*
 COPY --from=build /app/packages/server/package.json packages/server/package.json
 COPY --from=build /app/packages/server/dist packages/server/dist
 COPY --from=build /app/packages/client/dist packages/client/dist

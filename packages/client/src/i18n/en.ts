@@ -206,6 +206,8 @@ export const en: Record<MessageKey, string> = {
   'msg.closed': 'The room was closed.',
   'msg.shutdown':
     'The server restarts for an update in {s} s. You will be reconnected automatically.',
+  'msg.server_restarted':
+    'The server was just updated: your game has ended. Create or join a new room.',
   'msg.connection_lost': 'Connection lost.',
   'msg.resume_failed': 'Could not resume your spot: time is up.',
   'err.version': 'Incompatible game version: reload the page.',

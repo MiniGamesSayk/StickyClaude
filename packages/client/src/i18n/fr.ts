@@ -216,6 +216,8 @@ export const fr = {
   'msg.closed': 'Le salon a été fermé.',
   'msg.shutdown':
     'Le serveur redémarre pour une mise à jour dans {s} s. Tu seras reconnecté tout seul.',
+  'msg.server_restarted':
+    "Le serveur vient d'être mis à jour : ta partie s'est arrêtée. Crée un salon ou rejoins-en un.",
   'msg.connection_lost': 'Connexion perdue.',
   'msg.resume_failed': 'Impossible de reprendre ta place : le délai est dépassé.',
   'err.version': 'Version du jeu incompatible : recharge la page.',

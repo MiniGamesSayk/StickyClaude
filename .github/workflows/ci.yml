@@ -2,10 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'phase-*']
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Lint, types, tests, puis le build : il échoue si le premier chargement dépasse 400 Ko gzip
+  # (hors audio), voir scripts/check-bundle.mjs.
   check:
     runs-on: ubuntu-latest
     steps:
@@ -16,5 +22,48 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      # Le build échoue si le premier chargement dépasse 400 Ko gzip (hors audio).
       - run: npm run build
+
+  # Image Docker de production, lancée avec les limites du VPS, puis test de fumée dans Chrome
+  # (deux clients, une partie, aucune erreur dans la console) et arrêt propre sur SIGTERM.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Construire l'image
+        run: docker build -f deploy/Dockerfile -t stickyclaude:ci .
+      - name: Taille de l'image (moins de 150 Mo, système de fichiers décompressé)
+        run: |
+          id=$(docker create stickyclaude:ci)
+          size=$(docker export "$id" | wc -c)
+          docker rm "$id"
+          echo "image : $((size / 1000000)) Mo"
+          test "$size" -lt 150000000
+      - name: Lancer le conteneur (512 Mo, 1 CPU)
+        run: |
+          docker run -d --name stickyclaude --init --read-only --memory 512m --cpus 1 -p 3000:3000 \
+            -e AUTOSTART_MS=0 -e CREATE_PER_MIN=1000 -e CODE_TRIES_PER_MIN=1000 -e MAX_CONN_PER_IP=50 \
+            -e SHUTDOWN_GRACE_SEC=5 \
+            stickyclaude:ci
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3000/healthz && exit 0
+            sleep 1
+          done
+          docker logs stickyclaude
+          exit 1
+      - run: npm ci
+      - name: Test de fumée (Playwright, Chrome)
+        run: node e2e/smoke.mjs --url http://127.0.0.1:3000 --chrome "$(which google-chrome)"
+      - name: Arrêt propre sur SIGTERM (annonce, fermeture, code de sortie 0)
+        run: |
+          docker stop --time 20 stickyclaude
+          code=$(docker inspect stickyclaude --format '{{.State.ExitCode}}')
+          docker logs stickyclaude
+          test "$code" = 0
+      - name: Journaux du conteneur
+        if: failure()
+        run: docker logs stickyclaude || true

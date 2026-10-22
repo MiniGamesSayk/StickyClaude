@@ -264,8 +264,13 @@ class FakeClient {
     }
   }
 
-  /** Nombre de joueurs attendus dans le salon avant de lancer (renseigné par le programme). */
-  playersWanted = 2;
+  /**
+   * Nombre de joueurs attendus dans le salon avant de lancer (renseigné par le programme une fois
+   * le salon plein). Tant qu'il ne l'est pas, personne ne lance : un générateur lent qui fait entrer
+   * les joueurs au compte-gouttes verrait sinon la partie démarrer à 2 et les suivants finir
+   * spectateurs, puis « full ».
+   */
+  playersWanted = Number.MAX_SAFE_INTEGER;
 
   /** Une entrée par tick, comme un vrai client ; ping toutes les 2 s environ. */
   tick(): void {
@@ -468,6 +473,9 @@ async function main(): Promise<void> {
       ready.push(
         new Promise((res, rej) => {
           worker.once('error', rej);
+          // Un thread qui sort avant d'être prêt (erreur d'entrée dans les salons) ne doit pas
+          // laisser le test attendre indéfiniment.
+          worker.once('exit', (code) => rej(new Error(`thread générateur arrêté (code ${code})`)));
           worker.on('message', (m: { type: string; clients?: number }) => {
             if (m.type === 'ready') res(m.clients ?? 0);
           });

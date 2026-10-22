@@ -293,7 +293,8 @@ export class Online {
         if (this.client !== c) return;
         const key = ERROR_KEYS[code] ?? 'err.bad_request';
         if (this.reconnect && code === 'bad_token') {
-          this.backToMenu(key);
+          // Après une mise à jour du serveur, les salons n'existent plus : pas un délai dépassé.
+          this.backToMenu(this.reconnect.maintenance ? 'msg.server_restarted' : key);
         } else if (c.state === 'joined') {
           say(t(key) + (msg ? ` (${msg})` : ''));
         } else if (!this.reconnect) {

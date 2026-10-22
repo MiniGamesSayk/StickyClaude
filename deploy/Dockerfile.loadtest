@@ -1,0 +1,18 @@
+# Générateur de charge (scripts/loadtest.ts) dans un conteneur, pour viser un serveur lancé dans un
+# autre conteneur sans passer par un tunnel ni par le proxy de ports de Docker :
+#   docker build -f deploy/Dockerfile.loadtest -t stickyclaude-loadtest .
+#   docker run --rm --cpuset-cpus 0 stickyclaude-loadtest \
+#     --url ws://IP_DU_CONTENEUR:3000/ws --rooms 25 --players 8 --duration 120
+# Le serveur visé doit avoir PUBLIC_ORIGIN=http://loadtest.local et des plafonds par IP élevés
+# (MAX_CONN_PER_IP, CREATE_PER_MIN, CODE_TRIES_PER_MIN) : toutes les connexions viennent de la même IP.
+FROM node:22-alpine
+WORKDIR /app
+COPY package.json package-lock.json .npmrc tsconfig.base.json ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/sim/package.json packages/sim/
+COPY packages/server/package.json packages/server/
+COPY packages/client/package.json packages/client/
+RUN npm ci --include=dev
+COPY packages ./packages
+COPY scripts ./scripts
+ENTRYPOINT ["npx", "tsx", "scripts/loadtest.ts"]

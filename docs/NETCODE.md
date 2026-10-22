@@ -238,16 +238,17 @@ Client → serveur (validés par zod : types stricts, longueurs bornées, énum�
 
 Serveur → client (`packages/shared/src/messages.ts`) :
 
-| Message   | Contenu                                                                                                                                                                                                      |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `joined`  | emplacement (−1 : spectateur), identifiant, **jeton de reconnexion**, code, fréquences, tick, dernier événement fiable, `lobby`, `round` (avec le terrain courant)                                           |
-| `lobby`   | joueurs (pseudo, apparence, prêt, équipe, connecté, ping), hôte, réglages, spectateurs, phase, lancement automatique, manche, scores                                                                         |
-| `round`   | nouvelle manche ou retour au salon : arène, graine, mode, équipes, mort subite, règles, arme commune ; `ev` est le dernier événement émis, point de départ du client                                         |
-| `scores`  | fin de manche : gagnant (équipe ou emplacement, −1 si personne), scores, dernière manche de la partie ou non                                                                                                 |
-| `results` | fin de partie : gagnant, podium, scores, équipes, statistiques (KO, morts, dégâts, plus long combo, mort la plus bête)                                                                                       |
-| `error`   | `version`, `bad_request`, `bad_name`, `not_found`, `full`, `server_full`, `rate_limited`, `already_joined`, `not_joined`, `forbidden`, `not_host`, `not_enough_players`, `not_ready`, `in_game`, `bad_token` |
-| `tune`    | constante de mouvement modifiée (dev)                                                                                                                                                                        |
-| `left`    | `left`, `kicked`, `closed` ou `idle`                                                                                                                                                                         |
+| Message    | Contenu                                                                                                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `joined`   | emplacement (−1 : spectateur), identifiant, **jeton de reconnexion**, code, fréquences, tick, dernier événement fiable, `lobby`, `round` (avec le terrain courant)                                           |
+| `lobby`    | joueurs (pseudo, apparence, prêt, équipe, connecté, ping), hôte, réglages, spectateurs, phase, lancement automatique, manche, scores                                                                         |
+| `round`    | nouvelle manche ou retour au salon : arène, graine, mode, équipes, mort subite, règles, arme commune ; `ev` est le dernier événement émis, point de départ du client                                         |
+| `scores`   | fin de manche : gagnant (équipe ou emplacement, −1 si personne), scores, dernière manche de la partie ou non                                                                                                 |
+| `results`  | fin de partie : gagnant, podium, scores, équipes, statistiques (KO, morts, dégâts, plus long combo, mort la plus bête)                                                                                       |
+| `error`    | `version`, `bad_request`, `bad_name`, `not_found`, `full`, `server_full`, `rate_limited`, `already_joined`, `not_joined`, `forbidden`, `not_host`, `not_enough_players`, `not_ready`, `in_game`, `bad_token` |
+| `tune`     | constante de mouvement modifiée (dev)                                                                                                                                                                        |
+| `left`     | `left`, `kicked`, `closed` ou `idle`                                                                                                                                                                         |
+| `shutdown` | arrêt propre annoncé (mise à jour) : `{"t":"shutdown","inMs":8000}`, le serveur ferme les connexions restantes dans `inMs` ms avec le code 1012 (§8)                                                         |
 
 `GET /api/rooms` renvoie la liste des salons publics : `{code, players, maxPlayers, spectators, mode, phase: 'lobby' | 'playing', host}`.
 
@@ -333,6 +334,8 @@ Le champ `rewind` ne vient que du client, mais il est borné, et ne peut servir 
 - **Reconnexion.** À la perte de la connexion, le joueur garde sa place **20 s** : son stickman reste immobile (entrées neutres) et le salon l'affiche « en reconnexion ». Si c'était l'hôte, le plus ancien joueur connecté le devient tout de suite. Le client rouvre une connexion et envoie `resume` avec le jeton (délais croissants de 0,4 à 2,5 s, jusqu'à 20 s) ; un rechargement de la page dans les 17 s tente la même chose. Le serveur répond par un nouveau `joined` complet (terrain courant compris). Un jeton déjà utilisé ou périmé donne `bad_token`, et les essais comptent dans la limite d'essais de code. Le délai écoulé : en salon d'attente ou entre deux manches, le joueur est retiré ; en manche, il est éliminé et retiré à la fin de la manche.
 - **Spectateurs.** 4 au plus. Quiconque arrive pendant une partie est spectateur ; il reçoit les mêmes snapshots (sans bloc `own`, avec **toutes** les mines), accuse les événements fiables, et prend une place de joueur à la fin de la manche en cours s'il en reste une. Un joueur inactif depuis 60 s devient spectateur jusqu'à la fin de la partie.
 - **Changement de manche.** Le serveur envoie `round` avant le premier snapshot de la manche : le client vide ses tampons d'interpolation, charge la nouvelle arène et redémarre sa prédiction au premier snapshot reçu. `scores` suit chaque fin de manche, `results` la fin de partie, puis le salon rejoue l'arène d'entraînement.
+
+- **Arrêt propre du serveur (mise à jour).** Sur `SIGTERM`, le serveur n'accepte plus de connexion (les nouveaux venus sont fermés avec le code **1012**), envoie `shutdown` à chaque client connecté, laisse les manches continuer pendant `SHUTDOWN_GRACE_SEC` (30 s par défaut), puis ferme les connexions restantes avec **1012** (« Service Restart ») et sort. Le client affiche l'annonce, puis, à la fermeture 1012, l'écran de maintenance, et tente `resume` pendant 90 s (délais de 0,4 à 4 s). Les salons étant en mémoire, ils ne survivent pas au redémarrage : le serveur neuf répond `bad_token` et le client revient à l'accueil avec le message « le serveur vient d'être mis à jour ». Voir `docs/ARCHITECTURE.md` §5 et `docs/DEPLOIEMENT.md` §7.
 
 ## 9. Outils
 
