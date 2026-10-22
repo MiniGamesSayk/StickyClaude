@@ -45,6 +45,12 @@ export interface ServerConfig {
    * les requêtes internes (réseau privé, sans en-tête de proxy) sont acceptées.
    */
   metricsToken: string;
+  /** Service de comptes sayk.fr, joint en interne (ex. http://auth:3000) ; vide : jeu anonyme. */
+  authUrl: string;
+  /** Clé de ce jeu auprès du service de comptes (GAME_KEYS côté `auth`). */
+  authKey: string;
+  /** Origine publique de l'API de comptes, autorisée par la CSP pour que la page la contacte. */
+  authApiOrigin: string;
   /** Niveau des journaux pino (trace, debug, info, warn, error, fatal, silent). */
   logLevel: string;
   /** Arrêt propre (SIGTERM) : délai avant de fermer les connexions restantes (ms). */
@@ -100,6 +106,9 @@ export function loadConfig(
     recordDir: env.RECORD_DIR ?? '',
     trustedProxy: env.TRUSTED_PROXY ?? '',
     metricsToken: env.METRICS_TOKEN ?? '',
+    authUrl: (env.SAYK_AUTH_URL ?? '').replace(/\/$/, ''),
+    authKey: env.SAYK_AUTH_KEY ?? '',
+    authApiOrigin: env.SAYK_API_ORIGIN ?? '',
     logLevel: env.LOG_LEVEL ?? 'info',
     shutdownGraceMs: int(env.SHUTDOWN_GRACE_SEC, 30, 0, 300) * 1000,
     reconnectGraceMs: int(env.RECONNECT_GRACE_MS, RECONNECT_GRACE_MS, 0, 600_000),

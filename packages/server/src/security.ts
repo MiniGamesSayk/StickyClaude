@@ -25,6 +25,9 @@ function websocketOrigin(cfg: ServerConfig, req: IncomingMessage): string | null
  */
 export function contentSecurityPolicy(cfg: ServerConfig, req: IncomingMessage): string {
   const ws = websocketOrigin(cfg, req);
+  const api = /^https?:\/\/[a-z0-9.-]+(:\d{1,5})?$/i.test(cfg.authApiOrigin)
+    ? cfg.authApiOrigin
+    : null;
   const directives = [
     "default-src 'self'",
     "script-src 'self'",
@@ -33,7 +36,7 @@ export function contentSecurityPolicy(cfg: ServerConfig, req: IncomingMessage): 
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "media-src 'self' blob:",
-    `connect-src 'self'${ws ? ` ${ws}` : ''}`,
+    `connect-src 'self'${ws ? ` ${ws}` : ''}${api ? ` ${api}` : ''}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     "object-src 'none'",

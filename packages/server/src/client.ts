@@ -12,6 +12,8 @@ export class Member {
   slot = -1;
   name = '';
   look: Look = { ...DEFAULT_LOOK };
+  /** Compte sayk.fr (vide si anonyme), fixé à l'arrivée : la reconnexion garde le même compte. */
+  userId = '';
   /** Jeton de reconnexion (128 bits, hexadécimal). */
   token = '';
   /** Ordre d'arrivée dans le salon (pour choisir le prochain hôte). */

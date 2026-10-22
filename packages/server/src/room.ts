@@ -110,6 +110,7 @@ export interface RoomIO {
   sendJson(c: ClientState, msg: ServerMessage): void;
   sendRaw(c: ClientState, data: Uint8Array | string): void;
   closeConn(c: ClientState, code: number, reason: string): void;
+  reportStats(userId: string, add: Record<string, number>, max: Record<string, number>): void;
 }
 
 export type LeaveReason = 'left' | 'kicked' | 'closed' | 'idle';
@@ -292,6 +293,7 @@ export class Room {
 
     const m = new Member(++this.memberSeq, this);
     m.name = name;
+    m.userId = client.conn.userId ?? '';
     m.look = sanitizeLook(rawLook, DEFAULT_LOOK);
     m.look.color = closestFreeColor(m.look.color, this.usedColors(null));
     m.token = randomBytes(16).toString('hex');
@@ -813,7 +815,29 @@ export class Room {
       stats,
     });
     this.io.metrics.matchesCompleted++;
+    this.reportAccountStats(stats, g.matchWinner);
     this.matchEndAt = now + this.io.config.matchEndMs;
+  }
+
+  /** Envoie au service de comptes le bilan de chaque joueur connecté à un compte sayk.fr. */
+  private reportAccountStats(stats: PlayerStats[], matchWinner: number): void {
+    const whole = (n: number): number => (Number.isFinite(n) && n > 0 ? Math.round(n) : 0);
+    for (const s of stats) {
+      const m = this.slots[s.slot];
+      if (!m || m.userId === '') continue;
+      const won = matchWinner >= 0 && this.matchTeams[s.slot] === matchWinner;
+      this.io.reportStats(
+        m.userId,
+        {
+          matches: 1,
+          wins: won ? 1 : 0,
+          kos: whole(s.kos),
+          deaths: whole(s.deaths),
+          damage: whole(s.damage),
+        },
+        { bestCombo: whole(s.bestCombo) },
+      );
+    }
   }
 
   /** Retour au salon d'attente : tout le monde réapparaît, les spectateurs deviennent joueurs. */
