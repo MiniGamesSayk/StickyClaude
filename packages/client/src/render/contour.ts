@@ -36,6 +36,50 @@ export function contours(
   cx1 = GRID_W,
   cy1 = GRID_H,
 ): Polyline[] {
+  return contoursIn(cells, GRID_W, GRID_H, filter, cx0, cy0, cx1, cy1);
+}
+
+/** Marge (cellules) ajoutée autour de la page par `fillContours`. */
+const FILL_PAD = 2;
+
+/**
+ * Contours **tous fermés** des cellules retenues, pour remplir ou découper une forme : la page est
+ * prolongée de `FILL_PAD` cellules (les murs qui touchent le bord continuent), puis entourée d'une
+ * rangée vide. Un contour ouvert, une fois fermé par une droite, couperait la forme en biais ;
+ * ici les coins arrondis du trait correspondent exactement à ceux du remplissage.
+ */
+export function fillContours(cells: ArrayLike<number>, filter: CellFilter): Polyline[] {
+  const pad = FILL_PAD;
+  const ew = GRID_W + 2 * pad;
+  const eh = GRID_H + 2 * pad;
+  const ext = new Uint8Array(ew * eh);
+  for (let y = 1; y < eh - 1; y++) {
+    for (let x = 1; x < ew - 1; x++) {
+      const gx = Math.min(GRID_W - 1, Math.max(0, x - pad));
+      const gy = Math.min(GRID_H - 1, Math.max(0, y - pad));
+      ext[y * ew + x] = cells[gy * GRID_W + gx];
+    }
+  }
+  const lines = contoursIn(ext, ew, eh, filter, 0, 0, ew, eh);
+  for (const l of lines) {
+    for (let i = 0; i < l.pts.length; i += 2) {
+      l.pts[i] -= pad;
+      l.pts[i + 1] -= pad;
+    }
+  }
+  return lines;
+}
+
+function contoursIn(
+  cells: ArrayLike<number>,
+  gridW: number,
+  gridH: number,
+  filter: CellFilter,
+  cx0: number,
+  cy0: number,
+  cx1: number,
+  cy1: number,
+): Polyline[] {
   const w = (cx1 - cx0) * SS + 1;
   const h = (cy1 - cy0) * SS + 1;
   // Échantillons aux centres des sous-cellules, avec une bordure d'un échantillon.
@@ -43,9 +87,9 @@ export function contours(
   const stride = w + 1;
   for (let j = 0; j <= h; j++) {
     for (let i = 0; i <= w; i++) {
-      const gx = Math.min(GRID_W - 1, Math.max(0, cx0 + Math.floor((i - 1) / SS)));
-      const gy = Math.min(GRID_H - 1, Math.max(0, cy0 + Math.floor((j - 1) / SS)));
-      field[j * stride + i] = filter(cells[gy * GRID_W + gx]) ? 1 : 0;
+      const gx = Math.min(gridW - 1, Math.max(0, cx0 + Math.floor((i - 1) / SS)));
+      const gy = Math.min(gridH - 1, Math.max(0, cy0 + Math.floor((j - 1) / SS)));
+      field[j * stride + i] = filter(cells[gy * gridW + gx]) ? 1 : 0;
     }
   }
   // Segments entre points milieu des arêtes de chaque carré de 2 × 2 échantillons.

@@ -67,6 +67,7 @@ export function pathCells(
   cells: number[],
   closed: boolean,
   wb: Wobble,
+  begin = true,
 ): void {
   const n = cells.length / 2;
   if (n < 2) return;
@@ -77,7 +78,7 @@ export function pathCells(
     px.push(tmp.x);
     py.push(tmp.y);
   }
-  ctx.beginPath();
+  if (begin) ctx.beginPath();
   if (closed && n > 2) {
     const last = n - 1; // le dernier point répète le premier
     ctx.moveTo((px[last - 1] + px[0]) / 2, (py[last - 1] + py[0]) / 2);
@@ -92,6 +93,26 @@ export function pathCells(
       ctx.quadraticCurveTo(px[i], py[i], (px[i] + px[i + 1]) / 2, (py[i] + py[i + 1]) / 2);
     }
     ctx.lineTo(px[n - 1], py[n - 1]);
+  }
+}
+
+/**
+ * Ajoute au chemin courant (sans `beginPath`) les contours fermés `lines` qui touchent la fenêtre
+ * [x0, x1] × [y0, y1] (unités de monde), tels que `strokeHandDrawn` les trace : sert à découper le
+ * remplissage selon le même tracé que le contour, coins arrondis compris.
+ */
+export function addOutlines(
+  ctx: CanvasRenderingContext2D,
+  lines: readonly { line: Polyline; box: { x0: number; y0: number; x1: number; y1: number } }[],
+  wb: Wobble,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): void {
+  for (const s of lines) {
+    if (s.box.x1 < x0 || s.box.x0 > x1 || s.box.y1 < y0 || s.box.y0 > y1) continue;
+    pathCells(ctx, resample(s.line), s.line.closed, wb, false);
   }
 }
 

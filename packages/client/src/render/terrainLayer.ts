@@ -1,9 +1,17 @@
 import { Cell, CELL, GRID_H, GRID_W } from '@stickyclaude/shared';
 import type { ArenaData } from '@stickyclaude/shared';
 import { Container, Sprite, Texture } from 'pixi.js';
-import { blend, canvas2d, hatch, resample, strokeHandDrawn, wobblePoint } from './art.ts';
+import {
+  addOutlines,
+  blend,
+  canvas2d,
+  hatch,
+  resample,
+  strokeHandDrawn,
+  wobblePoint,
+} from './art.ts';
 import type { Wobble } from './art.ts';
-import { contours, isPaperCell, isSolidCell, simplify } from './contour.ts';
+import { contours, fillContours, isPaperCell, isSolidCell, simplify } from './contour.ts';
 import type { Polyline } from './contour.ts';
 import { rand2, seedOf, srand2 } from './noise.ts';
 import { css, INK, themeOf } from './palette.ts';
@@ -68,6 +76,9 @@ export class TerrainLayer {
   private seed = 1;
   private solid: { line: Polyline; box: Box }[] = [];
   private paper: { line: Polyline; box: Box }[] = [];
+  /** Contours fermés (page prolongée) qui découpent les remplissages, coins arrondis comme le trait. */
+  private solidFill: { line: Polyline; box: Box }[] = [];
+  private paperFill: { line: Polyline; box: Box }[] = [];
   private masked = new Uint8Array(GRID_W * GRID_H);
   private prev = new Uint8Array(GRID_W * GRID_H);
   private version = -1;
@@ -173,6 +184,13 @@ export class TerrainLayer {
         const s = simplify(l);
         return { line: s, box: boxOf(s) };
       });
+      const closedOf = (filter: typeof isSolidCell): { line: Polyline; box: Box }[] =>
+        fillContours(this.masked, filter).map((l) => {
+          const s = simplify(l);
+          return { line: s, box: boxOf(s) };
+        });
+      this.solidFill = closedOf(isSolidCell);
+      this.paperFill = closedOf(isPaperCell);
       // morceaux dont au moins une cellule (± 1) a changé
       const all = this.prev[0] === 255;
       if (!all) {
@@ -260,21 +278,21 @@ export class TerrainLayer {
       x < 0 || x >= GRID_W || y < 0 || y >= GRID_H ? Cell.SOLID : this.masked[y * GRID_W + x];
 
     // --- Blocs pleins : fond opaque, hachures, contour ------------------------------------
+    // Le remplissage est découpé selon le contour tracé (et non selon les cases) : sinon les coins
+    // carrés des cases dépassent du trait aux angles arrondis.
     ctx.save();
     ctx.beginPath();
-    for (let y = cy0; y <= cy1; y++) {
-      for (let x = cx0; x <= cx1; x++) {
-        if (cell(x, y) === Cell.SOLID)
-          ctx.rect(x * CELL - 0.2, y * CELL - 0.2, CELL + 0.4, CELL + 0.4);
-      }
-    }
-    ctx.clip();
+    addOutlines(ctx, this.solidFill, wb, x0, y0, x1, y1);
+    ctx.clip('evenodd');
     ctx.fillStyle = css(blend(th.paper, ink, 0.07));
     ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
     hatch(ctx, x0, y0, x1, y1, 7, 1, hatchInk2, 1.0, this.seed, variant, wb.boil);
     ctx.restore();
-    // bande de bord : hachures croisées plus denses
+    // bande de bord : hachures croisées plus denses (dans la même forme)
     ctx.save();
+    ctx.beginPath();
+    addOutlines(ctx, this.solidFill, wb, x0, y0, x1, y1);
+    ctx.clip('evenodd');
     ctx.beginPath();
     for (let y = cy0; y <= cy1; y++) {
       for (let x = cx0; x <= cx1; x++) {
@@ -298,12 +316,8 @@ export class TerrainLayer {
     // --- Blocs de papier : papier froissé, contour au crayon -------------------------------
     ctx.save();
     ctx.beginPath();
-    for (let y = cy0; y <= cy1; y++) {
-      for (let x = cx0; x <= cx1; x++) {
-        if (cell(x, y) === Cell.PAPER) ctx.rect(x * CELL, y * CELL, CELL, CELL);
-      }
-    }
-    ctx.clip();
+    addOutlines(ctx, this.paperFill, wb, x0, y0, x1, y1);
+    ctx.clip('evenodd');
     ctx.fillStyle = css(INK.paperBlock);
     ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
     ctx.restore();
