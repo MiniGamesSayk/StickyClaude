@@ -74,7 +74,7 @@ if (!base) {
       CODE_TRIES_PER_MIN: '1000',
       MAX_CONN_PER_IP: '50',
       AUTOSTART_MS: '0',
-      MATCH_END_MS: '7000',
+      MATCH_END_MS: '15000',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
