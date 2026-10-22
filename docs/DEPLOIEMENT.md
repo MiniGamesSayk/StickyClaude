@@ -48,10 +48,10 @@ MAX_CONNECTIONS=120
 SNAPSHOT_HZ=30
 TRUSTED_PROXY=caddy
 PUBLIC_ORIGIN=https://stickyclaude.sayk.fr
-SHUTDOWN_GRACE_SEC=8
+SHUTDOWN_GRACE_SEC=30
 ```
 
-`TRUSTED_PROXY=caddy` est **indispensable** : sans lui, tous les joueurs ont l'adresse de Caddy et partagent les limites par IP (8 connexions en tout). Le serveur le signale dans les journaux (`X-Forwarded-For ignored`). `SHUTDOWN_GRACE_SEC=8` s'explique en § 7.
+`TRUSTED_PROXY=caddy` est **indispensable** : sans lui, tous les joueurs ont l'adresse de Caddy et partagent les limites par IP (8 connexions en tout). Le serveur le signale dans les journaux (`X-Forwarded-For ignored`). `SHUTDOWN_GRACE_SEC` doit rester sous le `stop_grace_period` de Docker (§ 7).
 
 **3. Appliquer le `.env`** (recrée le conteneur) :
 
@@ -130,19 +130,9 @@ Docker garde 3 fichiers de 10 Mo (`json-file`) : quelques jours de journaux. **A
 
 L'arrêt propre (`ARCHITECTURE.md` § 5) laisse `SHUTDOWN_GRACE_SEC` secondes (30 par défaut) aux joueurs, puis ferme les connexions avec le code 1012. L'analyse demande que `docker stop` accorde **au moins 35 s**.
 
-**Vérifié le 22/10/2026 : ce n'est pas le cas.** Le `docker-compose.yml` généré par `games` n'a pas de `stop_grace_period` ; Docker applique donc **10 s** puis envoie `SIGKILL`.
+**Corrigé le 22/10/2026.** Le compose généré par `games` n'avait pas de `stop_grace_period` (10 s par défaut, puis `SIGKILL`). Le générateur (dépôt goldmine, `deploy/platform/games`) ajoute maintenant `stop_grace_period: ${STOP_GRACE_PERIOD:-35s}`, installé sur le VPS ; la variable `STOP_GRACE_PERIOD` du `.env` d'un jeu permet de la changer. Vérifié : `docker stop` sur StickyClaude attend les 30 s de `SHUTDOWN_GRACE_SEC`, annonce, ferme 5 connexions et sort avec le code 0. goldmine et openclaude prennent le nouveau délai à leur prochaine mise à jour.
 
-- **Solution actuelle (sans toucher à goldmine)** : `SHUTDOWN_GRACE_SEC=8` dans le `.env`. Le serveur ferme proprement à 8 s, avant le `SIGKILL`.
-- **Solution complète (changement à faire dans le dépôt goldmine, non fait ici)** : dans `deploy/platform/games`, fonction `render_compose`, ajouter une ligne après `pids_limit: 512` :
-
-```diff
-     cpus: \${CPUS:-1.0}
-     pids_limit: 512
-+    stop_grace_period: \${STOP_GRACE_PERIOD:-35s}
-     env_file:
-```
-
-Cela vaut pour tous les jeux sans rien leur coûter (un arrêt rapide reste rapide). Une fois le générateur à jour et `games update all` passé, remplacer `SHUTDOWN_GRACE_SEC=8` par `SHUTDOWN_GRACE_SEC=30`.
+**Piège** : si `SHUTDOWN_GRACE_SEC` dépasse `STOP_GRACE_PERIOD` (35 s par défaut), Docker tue le serveur avant la fin de l'arrêt propre. Garder `SHUTDOWN_GRACE_SEC` ≤ 30.
 
 ## 8. Variables d'environnement
 
@@ -226,13 +216,13 @@ Le conteneur de test doit tourner avec `-e PUBLIC_ORIGIN=http://loadtest.local -
 
 ## 11. Le hub `sayk.fr`
 
-Le dépôt `ClaudeGame` n'est **pas** modifié ici. Les trois morceaux à y ajouter sont dans `deploy/hub/` :
+Fait le 22/10/2026 dans le dépôt `ClaudeGame` (commit `9b9a549`) et sur le VPS. Les trois morceaux, conservés dans `deploy/hub/`, sont :
 
 1. `deploy/hub/games.json.stickyclaude.json` : l'entrée à ajouter au tableau de `site/games.json` ;
 2. `deploy/hub/stickyclaude.svg` : à copier dans `site/img/stickyclaude.svg` ;
 3. `deploy/hub/Caddyfile.stickyclaude` : le bloc `handle /status/stickyclaude` à ajouter dans `deploy/caddy/Caddyfile`, à côté de ceux de goldmine et d'OpenClaude.
 
-Puis redéployer le hub (selon la procédure de ClaudeGame). Le statut du jeu y apparaît « en ligne » tant que `/healthz` répond 200 (il répond 503 pendant un arrêt propre).
+Mise en ligne du hub : `git pull` dans `~/apps/hub/src`, puis `docker compose exec hub caddy reload --config /etc/caddy/Caddyfile` dans `~/apps/hub/src/deploy`. Le statut du jeu y apparaît « en ligne » tant que `/healthz` répond 200 (il répond 503 pendant un arrêt propre).
 
 ## 12. Dépannage
 
