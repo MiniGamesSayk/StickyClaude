@@ -1,0 +1,11 @@
+{
+  "id": "stickyclaude",
+  "name": "StickyClaude",
+  "description": "Combat de stickmen dessinés au stylo sur une page de cahier : frappez, parez, ramassez des armes et gagnez la partie, de 2 à 8 joueurs.",
+  "url": "https://stickyclaude.sayk.fr",
+  "status": "/status/stickyclaude",
+  "icon": "✏️",
+  "image": "img/stickyclaude.svg",
+  "color": "#ff5c8a",
+  "tags": ["Combat", "2 à 8 joueurs", "Multijoueur"]
+}

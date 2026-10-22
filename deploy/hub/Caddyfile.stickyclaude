@@ -1,0 +1,9 @@
+	# StickyClaude : point de santé interne de son conteneur (réseau Docker « web »).
+	handle /status/stickyclaude {
+		rewrite * /healthz
+		reverse_proxy stickyclaude:3000 {
+			transport http {
+				dial_timeout 2s
+			}
+		}
+	}
