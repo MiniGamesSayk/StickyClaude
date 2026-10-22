@@ -1,5 +1,8 @@
 import './style.css';
+import { initAccount } from './app/account.ts';
 import { startApp } from './app/app.ts';
+
+void initAccount();
 
 startApp().catch((err: unknown) => {
   console.error(err);

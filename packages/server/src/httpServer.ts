@@ -14,6 +14,7 @@ import { GameServer } from './gameServer.ts';
 import { startLoop } from './loop.ts';
 import type { LogFn } from './logger.ts';
 import { truncateIp } from './logger.ts';
+import { createAccountService } from './account.ts';
 import { clientAddress, isInternalRequest, parseTrustedProxy } from './proxy.ts';
 import type { Room } from './room.ts';
 import { securityHeaders } from './security.ts';
@@ -24,6 +25,7 @@ const HEARTBEAT_MAX_MISSED = 3;
 
 class WsConnection implements Connection {
   rttMs = 0;
+  userId?: string;
   constructor(
     readonly id: number,
     readonly ip: string,
@@ -98,7 +100,11 @@ export function startServer(cfg: ServerConfig, log: LogFn = () => {}): Promise<R
 
   const trusted = parseTrustedProxy(cfg.trustedProxy);
   const site = new StaticSite(cfg.staticDir, !cfg.production);
-  const game = new GameServer(cfg, { onRoomClosed: (room) => writeRecording(cfg, room) });
+  const accounts = createAccountService(cfg, log);
+  const game = new GameServer(cfg, {
+    onRoomClosed: (room) => writeRecording(cfg, room),
+    onMatchStats: accounts ? (id, add, max) => accounts.report(id, add, max) : undefined,
+  });
   let warnedForwarded = false;
 
   /** Adresse du client ; avertit une fois si un proxy non déclaré est détecté en production. */
@@ -174,14 +180,22 @@ export function startServer(cfg: ServerConfig, log: LogFn = () => {}): Promise<R
   };
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    void onUpgrade(req, socket, head);
+  });
+
+  const onUpgrade = async (req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (url.pathname !== '/ws') return reject(socket, '404 Not Found');
     if (!originAllowed(req.headers.origin, cfg, req.headers.host)) {
       return reject(socket, '403 Forbidden');
     }
     const ip = addressOf(req);
+    // Compte sayk.fr éventuel : vérifié avant l'upgrade (au plus 1,5 s, anonyme en cas d'échec).
+    const userId = accounts ? await accounts.resolve(req.headers.cookie) : null;
+    if (socket.destroyed) return;
     wss.handleUpgrade(req, socket, head, (ws) => {
       const conn = new WsConnection(nextId++, ip, ws);
+      if (userId !== null) conn.userId = userId;
       if (!game.onConnect(conn)) {
         ws.close(game.isDraining ? CLOSE_SERVICE_RESTART : 1013, 'server busy');
         return;
@@ -200,7 +214,7 @@ export function startServer(cfg: ServerConfig, log: LogFn = () => {}): Promise<R
       ws.on('close', () => game.onClose(conn));
       ws.on('error', (err) => log({ level: 'warn', msg: 'ws error', err: err.message }));
     });
-  });
+  };
 
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {

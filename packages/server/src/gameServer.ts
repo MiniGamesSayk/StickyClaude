@@ -42,6 +42,8 @@ export interface GameServerOptions {
   now?: () => number;
   /** Appelé quand un salon est supprimé (écriture de l'enregistrement, tests). */
   onRoomClosed?: (room: Room) => void;
+  /** Statistiques de fin de partie d'un compte connecté (voir `account.ts`). */
+  onMatchStats?: (userId: string, add: Record<string, number>, max: Record<string, number>) => void;
 }
 
 /**
@@ -516,6 +518,10 @@ export class GameServer implements RoomIO {
   sendRaw(c: ClientState, data: Uint8Array | string): void {
     this.metrics.bytesOut += typeof data === 'string' ? data.length : data.byteLength;
     c.conn.send(data);
+  }
+
+  reportStats(userId: string, add: Record<string, number>, max: Record<string, number>): void {
+    this.opts.onMatchStats?.(userId, add, max);
   }
 
   closeConn(c: ClientState, code: number, reason: string): void {
