@@ -123,7 +123,7 @@ Modes bonus v1 :
 | Déplacer / viser | ZQSD ou WASD (selon la disposition) / flèches | Stick gauche ou croix | Joystick virtuel à gauche |
 | Sauter | Espace | A / Croix | Bouton |
 | Attaquer / tirer | J (ou clic gauche) | X / Carré, gâchette droite | Bouton |
-| Parer | K (ou clic droit) | B / Rond, gâchette gauche | Bouton |
+| Parer | E (ou clic droit) | B / Rond, gâchette gauche | Bouton |
 | Ramasser / lancer | L | Y / Triangle | Bouton |
 | Emote | 1 à 6 | Croix directionnelle | Roue d'emotes |
 | Fantôme : poser | Attaquer / parer | Idem | Glisser + bouton |
@@ -143,7 +143,7 @@ Modes bonus v1 :
 - **Hôte** : il règle la partie, lance, expulse, change les équipes. S'il part, l'hôte passe automatiquement au joueur le plus ancien.
 - **Reconnexion** : un jeton de session (en `localStorage`) permet de retrouver sa place pendant 20 s ; pendant ce délai, le stickman reste immobile. Après le délai : éliminé pour la manche, et retiré du salon à la fin de la manche.
 - **Inactivité** : 60 s sans aucune entrée en jeu, le joueur devient spectateur. 10 min en salon d'attente, il est déconnecté.
-- **Emotes** : 6 bulles de BD prédéfinies et traduites (« Bien joué ! », « Oups », « Revanche ! », « Hé hé », « Aïe », « GG »), plus une emote animée du stickman (salut, danse, rire). Limite : 1 emote par seconde et par joueur. Pas de chat libre, donc rien à modérer.
+- **Emotes** : 6 bulles de BD prédéfinies et traduites (« Bien joué ! », « Oups », « Revanche ! », « Hé hé », « Aïe », « GG »), plus une emote animée du stickman (salut, danse, rire). Limite : 1 emote toutes les 3 s par joueur (délai aussi appliqué côté client). Pas de chat libre, donc rien à modérer.
 
 ### 1.8 Personnalisation (locale, tout débloqué)
 
@@ -339,7 +339,7 @@ Un script `npm run loadtest -- --rooms 25 --players 8 --duration 120` lance de f
 - Décodeur binaire avec vérification des bornes. Taille maximale d'un message : 1 Ko (client → serveur). Un message invalide est jeté, et 20 messages invalides font déconnecter.
 - Messages JSON validés par zod (types stricts, longueurs bornées, énumérations).
 - **Pseudo** : 2 à 16 caractères, normalisé en Unicode NFKC, caractères de contrôle et zéro-largeur retirés, un filtre de mots offensants simple (une liste FR et EN dans le dépôt), et du texte seulement à l'affichage (pas de `innerHTML`).
-- **Limites de débit** : création de salle (3 par minute et par IP), essais de code de salon (10 par minute et par IP, contre la recherche par force brute), emotes (1 par seconde), connexions par IP.
+- **Limites de débit** : création de salle (3 par minute et par IP), essais de code de salon (10 par minute et par IP, contre la recherche par force brute), emotes (1 toutes les 3 s), connexions par IP.
 - **IP réelle** : lire `X-Forwarded-For` **uniquement** si la requête vient du réseau Docker de Caddy (proxy de confiance configurable).
 - WebSocket : vérification de l'`Origin` (`https://stickyclaude.sayk.fr`, plus `localhost` en dev), heartbeat (ping toutes les 10 s, déconnexion après 30 s sans réponse).
 - En-têtes HTTP : `Content-Security-Policy` stricte (`default-src 'self'`, `connect-src 'self' wss://stickyclaude.sayk.fr`, pas d'`unsafe-inline` pour les scripts), `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` (vibration et gamepad autorisés, le reste coupé).

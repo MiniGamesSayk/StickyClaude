@@ -135,6 +135,7 @@ async function main(): Promise<void> {
   const fxEnv: FxEnv = {
     nowMs: 0,
     playerPos: () => ({ x: 560, y: 1000 }),
+    overheadPos: () => ({ x: 560, y: 940, right: false }),
     colorOf: (s) => legibleInk(INK_COLORS[s % 12], paper, 3),
     reducedMotion: false,
     density: 1,

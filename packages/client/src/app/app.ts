@@ -1,5 +1,5 @@
 import { effect } from '@preact/signals';
-import { GamePhase, getArena, INK_COLORS, TICK_HZ } from '@stickyclaude/shared';
+import { EMOTE_COOLDOWN_MS, GamePhase, getArena, INK_COLORS, TICK_HZ } from '@stickyclaude/shared';
 import { COUNTDOWN_TICKS } from '@stickyclaude/sim';
 import type { ArenaData, Look } from '@stickyclaude/shared';
 import { h, render } from 'preact';
@@ -25,6 +25,7 @@ import { SoloSource } from './solo.ts';
 import type { Haptics, RenderSource } from './source.ts';
 import {
   actions,
+  emoteReadyAt,
   EMPTY_HUD,
   hud,
   lobby,
@@ -215,6 +216,10 @@ export async function startApp(): Promise<void> {
     },
     deleteLevel: (id: string) => online.client?.deleteArena(id),
     emote: (id: number) => {
+      const now = performance.now();
+      if (now < emoteReadyAt.value) return;
+      // petite marge : le serveur compte le délai entre deux messages reçus
+      emoteReadyAt.value = now + EMOTE_COOLDOWN_MS + 150;
       if (solo) solo.emote(id);
       else online.client?.emote(id);
     },

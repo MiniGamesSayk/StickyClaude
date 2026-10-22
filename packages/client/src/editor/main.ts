@@ -271,7 +271,7 @@ const KEYS: Record<string, number> = {
   ArrowDown: Input.DOWN,
   Space: Input.JUMP,
   KeyJ: Input.ATTACK,
-  KeyK: Input.BLOCK,
+  KeyE: Input.BLOCK,
   KeyL: Input.PICKUP,
 };
 window.addEventListener('keydown', (e) => {
@@ -350,7 +350,7 @@ function buildTools(): void {
     toolsEl.append(b);
   }
   const play = document.createElement('button');
-  play.textContent = world ? '■ Arrêter le test' : '▶ Tester ici (flèches, espace, J K L)';
+  play.textContent = world ? '■ Arrêter le test' : '▶ Tester ici (flèches, espace, J E L)';
   play.addEventListener('click', () => {
     if (world) world = null;
     else startPlay();

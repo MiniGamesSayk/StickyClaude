@@ -270,7 +270,7 @@ describe('événements fiables', () => {
     expect(eventsOf(a, SimEvent.SPAWN).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('une emote est un événement fiable, limité à une par seconde', () => {
+  it('une emote est un événement fiable, limité à une toutes les 3 s', () => {
     const h = harness();
     const a = h.connect();
     const code = h.create(a);
@@ -282,7 +282,7 @@ describe('événements fiables', () => {
     h.advance(10);
     expect(eventsOf(b, SimEvent.EMOTE)).toEqual([[0, 2]]);
     expect(h.server.metrics.emotesLimited).toBe(1);
-    h.advance(70);
+    h.advance(190);
     h.send(a, { t: 'emote', id: 5 });
     h.advance(6);
     expect(eventsOf(b, SimEvent.EMOTE)).toEqual([

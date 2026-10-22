@@ -125,7 +125,7 @@ puis <http://localhost:5173/editor>. La page n'existe **qu'en développement** :
 - **Charger** une arène existante dans la liste, ou repartir d'une arène neuve (cadre plein, 8 apparitions, colline et cages).
 - **Plateformes mobiles et décor** : champs JSON.
 - **Validation** : le panneau de droite affiche en continu les erreurs de schéma, puis celles de l'analyse (« ✓ valide · 60 positions debout, 60 atteignables »).
-- **Tester ici** : lance la vraie simulation dans la page avec un stickman (flèches ou WASD, Espace, J, K, L) et un mannequin à frapper.
+- **Tester ici** : lance la vraie simulation dans la page avec un stickman (flèches ou WASD, Espace, J, E, L) et un mannequin à frapper.
 - **Exporter** : « Copier le JSON » ou « Télécharger le JSON » ; **importer** en collant un JSON.
 
 Le modèle de l'éditeur (`packages/client/src/editor/model.ts`) est pur et testé : importer puis exporter une arène existante ne change rien.

@@ -118,6 +118,11 @@ export class Renderer {
   private readonly view = new Float32Array(4);
   private readonly markCells: number[] = [];
   private readonly pos = new Map<number, { x: number; y: number; frame: number }>();
+  /** Ancre au-dessus du pseudo (là où va la bulle d'emote), par emplacement. */
+  private readonly over = new Map<
+    number,
+    { x: number; y: number; right: boolean; frame: number }
+  >();
   private fxEnv!: FxEnv;
   private winners = 0;
   /** Image courante : instant, durée, tremblé. */
@@ -187,6 +192,10 @@ export class Renderer {
       nowMs: 0,
       playerPos: (slot) => {
         const e = this.pos.get(slot);
+        return e !== undefined && e.frame === this.frameNo ? e : null;
+      },
+      overheadPos: (slot) => {
+        const e = this.over.get(slot);
         return e !== undefined && e.frame === this.frameNo ? e : null;
       },
       colorOf: (slot) => this.colorOf(slot),
@@ -362,6 +371,7 @@ export class Renderer {
     this.ragdolls.clear();
     this.fx.clear();
     this.pos.clear();
+    this.over.clear();
     this.winners = 0;
     this.camera.snap();
     this.pageWorld = null;
@@ -1224,7 +1234,18 @@ export class Renderer {
       label.position.set(vis.headX, y - 1);
       y -= 15;
     }
-    if (p.self && !p.mannequin) this.drawSelfMarker(pen, vis.headX, y, p);
+    const marker = p.self && !p.mannequin;
+    if (marker) this.drawSelfMarker(pen, vis.headX, y, p);
+    // la bulle d'emote se pose à droite de la flèche, ou centrée au-dessus du pseudo
+    let o = this.over.get(p.slot);
+    if (!o) {
+      o = { x: 0, y: 0, right: false, frame: 0 };
+      this.over.set(p.slot, o);
+    }
+    o.x = vis.headX;
+    o.y = marker ? y - 7 : y - 12;
+    o.right = marker;
+    o.frame = this.frameNo;
   }
 
   private labelColor(p: DrawPlayer): number {

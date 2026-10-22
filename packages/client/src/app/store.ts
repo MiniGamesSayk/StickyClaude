@@ -132,6 +132,9 @@ export const training = signal<Objective[] | null>(null);
 /** Essai d'un niveau du créateur en cours : le bouton de sortie ramène à l'éditeur. */
 export const testingLevel = signal(false);
 
+/** Instant (ms, `performance.now`) où l'on pourra de nouveau faire une emote. */
+export const emoteReadyAt = signal(0);
+
 // --- Actions (branchées par l'application) ----------------------------------------------------------
 
 export interface Actions {

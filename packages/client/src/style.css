@@ -684,6 +684,46 @@ html[data-touch='on'] .hud-self {
   gap: 8px;
   align-items: center;
 }
+.hud-dead {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  max-width: min(320px, 70vw);
+}
+.hud-dead .dead-title {
+  font-family: var(--display);
+  font-size: 1.1rem;
+}
+.hud-dead .dead-line {
+  font-size: 0.85rem;
+}
+.hud-dead kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 5px;
+  text-align: center;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+}
+.dead-cd {
+  width: 100%;
+  height: 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(34, 38, 46, 0.12);
+}
+.dead-cd span {
+  display: block;
+  height: 100%;
+  background: #6b7280;
+}
+.dead-cd span.ready {
+  background: #2f9e44;
+}
 .hpbar {
   display: inline-flex;
   gap: 2px;

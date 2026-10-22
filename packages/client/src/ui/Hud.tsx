@@ -9,11 +9,12 @@ import {
   weaponDef,
 } from '@stickyclaude/shared';
 import type { JSX } from 'preact';
-import { COUNTDOWN_TICKS } from '@stickyclaude/sim';
+import { COUNTDOWN_TICKS, GHOST_COOLDOWN_TICKS } from '@stickyclaude/sim';
 import { options } from '../app/options.ts';
 import {
   actions,
   banner,
+  emoteReadyAt,
   hud,
   killFeed,
   lobby,
@@ -24,9 +25,11 @@ import {
   selfSlot,
   toast,
 } from '../app/store.ts';
+import { keyLabel } from '../input/bindings.ts';
 import { pick, t } from '../i18n/index.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import { Button, HpBar, Tally } from './components.tsx';
+import { touchActive } from './device.ts';
 import { colorOfCss, nameOf, teamColorCss, teamLabel } from './format.ts';
 
 function clock(sec: number): string {
@@ -204,20 +207,55 @@ function Banner(): JSX.Element | null {
   );
 }
 
+/** Éliminé, fantôme ou spectateur : recharge du dessin, emotes et actions possibles. */
+function DeadPanel(): JSX.Element {
+  const h = hud.value;
+  const spectator = selfSlot.value < 0;
+  const o = options.value;
+  const touch = touchActive();
+  const key = (a: 'attack' | 'block'): string =>
+    touch
+      ? t(a === 'attack' ? 'touch.attack' : 'touch.block')
+      : keyLabel(o.bindings[a][0], o.layout, t('act.jump'));
+  const title = spectator ? t('hud.spectator') : h.ghost ? t('hud.ghost') : t('hud.dead');
+  const cd = h.ghost && !spectator ? h.ghostCd : 0;
+  const sec = Math.ceil(cd / TICK_HZ);
+  const emoteSec = Math.ceil(Math.max(0, emoteReadyAt.value - performance.now()) / 1000);
+  return (
+    <div class="hud-self hud-dead">
+      <div class="dead-title">{title}</div>
+      {spectator && <div class="dead-line">{t('hud.spectator_help')}</div>}
+      {!spectator && h.ghost && (
+        <>
+          <div class="dead-cd" role="progressbar" aria-valuemin={0} aria-valuemax={100}>
+            <span
+              style={{ width: `${Math.round((1 - cd / GHOST_COOLDOWN_TICKS) * 100)}%` }}
+              class={cd > 0 ? '' : 'ready'}
+            />
+          </div>
+          <div class="dead-line">
+            {sec > 0 ? t('hud.ghost_next', { s: sec }) : t('hud.ghost_ready_short')}
+          </div>
+          <div class="dead-line">
+            <kbd>{key('attack')}</kbd> {t('hud.ghost_line')} · <kbd>{key('block')}</kbd>{' '}
+            {t('hud.ghost_drop')}
+          </div>
+        </>
+      )}
+      {!spectator && !h.ghost && <div class="dead-line">{t('hud.dead_help')}</div>}
+      {!spectator && (
+        <div class="dead-line">
+          {touch ? t('touch.emote') : <kbd>1–9</kbd>} {t('hud.emotes')}
+          {emoteSec > 0 ? ` · ${t('hud.emote_wait', { s: emoteSec })}` : ''}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SelfStats(): JSX.Element {
   const h = hud.value;
-  if (selfSlot.value < 0) {
-    return <div class="hud-self">{t('hud.spectator')}</div>;
-  }
-  if (h.ghost) {
-    const sec = Math.ceil(h.ghostCd / TICK_HZ);
-    return (
-      <div class="hud-self">
-        {t('hud.ghost')} · {sec > 0 ? t('hud.ghost_next', { s: sec }) : t('hud.ghost_ready')}
-      </div>
-    );
-  }
-  if (h.dead) return <div class="hud-self">{t('hud.dead')}</div>;
+  if (selfSlot.value < 0 || h.ghost || h.dead) return <DeadPanel />;
   const w = weaponDef(h.weapon);
   return (
     <div class="hud-self">

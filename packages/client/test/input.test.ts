@@ -88,8 +88,17 @@ describe('touches du clavier', () => {
     expect(m.get('ArrowLeft')).toBe(Input.LEFT);
     expect(m.get('Space')).toBe(Input.JUMP);
     expect(m.get('KeyJ')).toBe(Input.ATTACK);
-    expect(m.get('KeyK')).toBe(Input.BLOCK);
+    expect(m.get('KeyE')).toBe(Input.BLOCK);
     expect(m.get('KeyL')).toBe(Input.PICKUP);
+  });
+
+  it('l’ancienne touche de parade par défaut (K) devient E', () => {
+    expect(DEFAULT_BINDINGS.block[0]).toBe('KeyE');
+    const o = sanitizeOptions({ bindings: { block: ['KeyK', ''] } });
+    expect(o.bindings.block).toEqual(['KeyE', '']);
+    expect(sanitizeOptions({ bindings: { block: ['KeyK', 'KeyP'] } }).bindings.block[0]).toBe(
+      'KeyK',
+    );
   });
 
   it('reconfigurer retire la touche à l’ancienne action et ne laisse aucune action sans touche', () => {

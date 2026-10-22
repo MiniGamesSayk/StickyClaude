@@ -70,8 +70,8 @@ export const IDLE_PLAYING_MS = 60_000;
 export const IDLE_LOBBY_MS = 10 * 60_000;
 /** Un salon public en attente se lance seul après ce délai, dès que 2 joueurs sont prêts. */
 export const AUTOSTART_MS = 20_000;
-/** Emotes : au plus une par seconde et par joueur. */
-export const EMOTE_COOLDOWN_MS = 1000;
+/** Emotes : au plus une toutes les 3 s par joueur (anti-spam). */
+export const EMOTE_COOLDOWN_MS = 3000;
 
 /** Quantification des positions et vitesses dans les snapshots : 1/8 d'unité. */
 export const POS_SCALE = 8;

@@ -32,7 +32,7 @@ export const DEFAULT_BINDINGS: Readonly<Bindings> = {
   down: ['KeyS', 'ArrowDown'],
   jump: ['Space', ''],
   attack: ['KeyJ', ''],
-  block: ['KeyK', ''],
+  block: ['KeyE', ''],
   pickup: ['KeyL', ''],
 };
 
@@ -127,6 +127,8 @@ export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()):
     const pair = Array.isArray(rb[a]) ? (rb[a] as unknown[]) : [];
     bindings[a] = [code(pair[0], b[a][0]), code(pair[1], b[a][1])];
   }
+  // ancienne touche de parade par défaut (K) : on passe à la nouvelle (E)
+  if (bindings.block[0] === 'KeyK' && bindings.block[1] === '') bindings.block = ['KeyE', ''];
   return {
     lang: pick(r.lang, ['fr', 'en'] as const, base.lang),
     master: num(r.master, 0, 1, base.master),

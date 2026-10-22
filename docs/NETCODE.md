@@ -233,7 +233,7 @@ Client → serveur (validés par zod : types stricts, longueurs bornées, énum�
 | `{"t":"teams","assign":[…],"shuffle":true}`                  | équipes (hôte, mode équipes)                                                                                                                         |
 | `{"t":"kick","slot":3}`                                      | expulse un joueur (hôte)                                                                                                                             |
 | `{"t":"look","look":{…}}`                                    | change d'apparence : couleur, trait, chapeau, emote de victoire                                                                                      |
-| `{"t":"emote","id":2}`                                       | emote prédéfinie (1 par seconde)                                                                                                                     |
+| `{"t":"emote","id":2}`                                       | emote prédéfinie (1 toutes les 3 s)                                                                                                                     |
 | `{"t":"tune","k":"runSpeed","val":200}`                      | réglage d'une constante de mouvement (`DEV_TOOLS=1` seulement)                                                                                       |
 
 Serveur → client (`packages/shared/src/messages.ts`) :

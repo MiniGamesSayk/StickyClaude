@@ -23,7 +23,7 @@ import type { TextPool } from './textpool.ts';
 
 export const MAX_PARTICLES = 360;
 const MAX_RINGS = 32;
-const MAX_LINES = 24;
+const MAX_LINES = 40;
 const MAX_ONO = 8;
 const MAX_BLOTS = 48;
 const MAX_BUBBLES = 8;
@@ -56,6 +56,8 @@ export interface FxEnv {
   nowMs: number;
   /** Position (pieds) d'un joueur à l'écran, ou null. */
   playerPos(slot: number): { x: number; y: number } | null;
+  /** Point au-dessus du pseudo (centre) ; `right` : le joueur porte une flèche, la bulle va à sa droite. */
+  overheadPos(slot: number): { x: number; y: number; right: boolean } | null;
   colorOf(slot: number): number;
   reducedMotion: boolean;
   /** Densité des particules : 1 (haute), 0,5 (basse). */
@@ -365,6 +367,54 @@ export class FxSystem {
     this.ring(x, y, 4, 34, 0.26, INK.gold, true);
   }
 
+  /**
+   * Impact d'un coup qui porte : trois traits dans l'axe attaquant → victime, dans la couleur de
+   * l'attaquant (on lit qui frappe et dans quel sens), et des gouttes d'encre de la victime
+   * projetées dans le même sens. Sobre : quelques traits, une seule teinte par joueur.
+   */
+  private impact(
+    x: number,
+    y: number,
+    attacker: number,
+    victim: number,
+    dmg: number,
+    big: boolean,
+    victimColor: number,
+    env: FxEnv,
+  ): void {
+    const from = attacker !== 255 && attacker !== victim ? env.playerPos(attacker) : null;
+    const to = env.playerPos(victim);
+    let dx = 0;
+    let dy = -1;
+    if (from && to) {
+      dx = to.x - from.x;
+      dy = to.y - from.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 1) {
+        dx /= len;
+        dy /= len;
+      } else {
+        dx = 0;
+        dy = -1;
+      }
+    }
+    const col = attacker !== 255 ? env.colorOf(attacker) : INK.black;
+    const reach = big ? 30 : dmg >= 8 ? 22 : 16;
+    const base = Math.atan2(dy, dx);
+    for (let k = -1; k <= 1; k++) {
+      const a = base + k * 0.38;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const r0 = 6 + (k === 0 ? 0 : 2);
+      const r1 = reach * (k === 0 ? 1 : 0.7);
+      this.line(x + c * r0, y + s * r0, x + c * r1, y + s * r1, big ? 3 : 2.2, 0.16, col);
+    }
+    if (dmg >= 5 && !env.reducedMotion) {
+      this.spray(PK.DROP, big ? 5 : 3, x, y, 110, 2.2, 0.45, victimColor, env, dx, dy, 1.0);
+    }
+    if (big) this.flash(x, y, env);
+  }
+
   // --- Événements -----------------------------------------------------------------------------
 
   /** Transforme un événement de la simulation en effets, hit-stop, secousse, ragdoll. */
@@ -384,6 +434,7 @@ export class FxSystem {
         this.ring(x, y, 3, heavy ? 22 : 13, 0.22, INK.black, false);
         this.spray(PK.SPARK, heavy ? 8 : 5, x, y, 130, 5, 0.22, INK.black, env);
         if (blocked) break;
+        this.impact(x, y, attacker, e.slot, dmg, heavy || lethal, color, env);
         let ms = 0;
         if (lethal || heavy || dmg >= 12) ms = 90;
         else if (dmg >= 8) ms = 60;
@@ -729,13 +780,14 @@ export class FxSystem {
         this.bslot[i] = -1;
         continue;
       }
-      const p = env.playerPos(this.bslot[i]);
+      const p = env.overheadPos(this.bslot[i]);
       if (!p) continue;
       this.bubble(
         pen,
         labels,
         p.x,
-        p.y - 46,
+        p.y,
+        p.right,
         this.bemote[i],
         Math.min(1, this.blife[i] * 4, (2 - this.blife[i]) * 8),
       );
@@ -809,17 +861,21 @@ export class FxSystem {
   private bubble(
     pen: Pen,
     labels: TextPool,
-    x: number,
+    ax: number,
     y: number,
+    right: boolean,
     emote: number,
     alpha: number,
   ): void {
     const text = EMOTE_TEXT[emote] ?? '?';
     const t = labels.get(text, 13, 0x22262e, false);
-    t.position.set(x, y);
-    t.alpha = alpha;
     const w = Math.max(26, t.width + 12);
     const h = 19;
+    // à droite de la flèche du joueur local, sinon centrée au-dessus de son pseudo
+    const x = right ? ax + 11 + w / 2 : ax;
+    const tail = right ? -w / 2 + 6 : 0;
+    t.position.set(x, y);
+    t.alpha = alpha;
     const pts = this.scratch;
     // bulle : rectangle arrondi (8 points) et queue vers le bas
     const x0 = x - w / 2;
@@ -836,11 +892,11 @@ export class FxSystem {
     pts[7] = y1 - 4;
     pts[8] = x1 - 4;
     pts[9] = y1;
-    pts[10] = x + 6;
+    pts[10] = x + tail + 6;
     pts[11] = y1;
-    pts[12] = x + 1;
+    pts[12] = x + tail + 1;
     pts[13] = y1 + 8;
-    pts[14] = x - 2;
+    pts[14] = x + tail - 2;
     pts[15] = y1;
     pts[16] = x0 + 4;
     pts[17] = y1;

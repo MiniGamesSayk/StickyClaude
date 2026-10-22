@@ -125,7 +125,7 @@ while (Date.now() - t0 < seconds * 1000) {
     await page.keyboard.press('KeyJ');
     await page.waitForTimeout(120);
   }
-  await page.keyboard.press('KeyK');
+  await page.keyboard.press('KeyE');
   await page.waitForTimeout(250);
   await page.keyboard.up(dir);
 }

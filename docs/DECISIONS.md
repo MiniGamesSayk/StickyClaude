@@ -416,3 +416,11 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - **Historique** : une action (`begin` / `end`) ne s'inscrit que si `sameLevel` voit une différence : gommer du vide, ou reposer ce qui existe déjà, ne crée plus d'étape « annuler » sans effet visible. Un trait de pinceau entier est une seule étape.
 - **Symétrie** (`mirrorCells`, `mirrorRects`) : une pose est reproduite sur les cases miroir avant d'être inscrite à l'historique, donc annulée en bloc. Les objets et apparitions (qui se tiennent debout) ne se reflètent que gauche ↔ droite ; la colline devient symétrique ; une cage dessinée donne l'autre.
 - **Anneau au sol du joueur local** : seulement quand il est posé (il restait visible en l'air).
+
+### D69. Ombre supprimée, emotes anti-spam, panneau des éliminés, impacts sobres, parade sur E
+
+- **Plus d'ombre ni d'anneau au sol** sous les personnages (ils restaient visibles en l'air) ; le joueur local garde sa lueur et sa flèche.
+- **Emotes** : une toutes les 3 s (`EMOTE_COOLDOWN_MS`, serveur ET client : `actions.emote` refuse avant l'envoi, avec 150 ms de marge pour la gigue réseau). La bulle se pose au-dessus du pseudo, **à droite de la flèche** du joueur local, centrée au-dessus du pseudo pour les autres (`FxEnv.overheadPos`).
+- **Éliminé / fantôme / spectateur** : un panneau (`DeadPanel`) montre la barre de recharge du dessin, les touches de trait et de goutte d'encre (selon les touches réglées, ou les boutons tactiles), les emotes et leur délai.
+- **Impacts** : à chaque coup qui porte, trois traits dans l'axe attaquant → victime (couleur de l'attaquant), quelques gouttes de l'encre de la victime dans le même sens, et un éclat doré seulement pour les gros coups. Aucun effet n'est ajouté aux coups parés ni aux mouvements.
+- **Parade par défaut : E** (était K). Un réglage enregistré avec l'ancien défaut (K, sans touche secondaire) est migré.
