@@ -459,7 +459,7 @@ export function decodeSnapshot(buf: Uint8Array, out: Snapshot): void {
     const o = out.objects[i];
     o.uid = r.u16();
     o.type = r.u8();
-    if (o.type < ObjType.WEAPON || o.type > ObjType.BALL) throw new DecodeError('bad object type');
+    if (o.type < ObjType.WEAPON || o.type > ObjType.HEART) throw new DecodeError('bad object type');
     o.x = r.i16() / POS_SCALE;
     o.y = r.i16() / POS_SCALE;
     o.vx = r.i16() / POS_SCALE;

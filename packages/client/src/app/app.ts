@@ -35,6 +35,7 @@ import {
   roster,
   say,
   screen,
+  testingLevel as testingLevelSignal,
   training,
   urlCode,
   vote,
@@ -160,6 +161,7 @@ export async function startApp(): Promise<void> {
   const startSolo = (arena?: ArenaData): void => {
     const look = profile.value.look;
     testingLevel = arena !== undefined;
+    testingLevelSignal.value = testingLevel;
     solo = new SoloSource({
       name: profile.value.name,
       look,
@@ -245,6 +247,7 @@ export async function startApp(): Promise<void> {
       training.value = null;
       overlay.value = testingLevel ? 'creator' : null;
       testingLevel = false;
+      testingLevelSignal.value = false;
       showMenu();
     },
     resetTraining: () => solo?.resetProgress(),
@@ -390,6 +393,7 @@ export async function startApp(): Promise<void> {
     const mask = playing ? input.sample() : 0;
     if (!playing) input.sample();
     source.update(mask, now, dt);
+    source.scene.debug = debug;
     renderer.render(source.scene);
     if (now - moodAt > 250) {
       moodAt = now;

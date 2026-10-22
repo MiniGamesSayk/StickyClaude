@@ -270,6 +270,7 @@ export function hashWorld(world: World): number {
   h = mix(h, g.mode);
   h = mix(h, g.roundTick);
   h = mix(h, g.weaponTimer);
+  h = mix(h, g.healTimer);
   for (let i = 0; i < MAX_PLAYERS; i++) h = mix(h, g.scores[i] & 0xffff);
   for (let i = 0; i < 8; i++) h = mix(h, g.modeData[i] >>> 0);
   h = mixF(h, g.inkY);

@@ -115,10 +115,19 @@ function Controls(): JSX.Element {
         onChange={(v) => setOptions({ touch: v })}
       />
       <Slider
+        label={t('opt.stick_size')}
+        value={o.stickSize}
+        min={0.6}
+        max={1.8}
+        step={0.05}
+        onChange={(v) => setOptions({ stickSize: v })}
+        format={pct}
+      />
+      <Slider
         label={t('opt.touch_size')}
         value={o.touchSize}
-        min={0.7}
-        max={1.5}
+        min={0.6}
+        max={1.8}
         step={0.05}
         onChange={(v) => setOptions({ touchSize: v })}
         format={pct}
@@ -127,6 +136,11 @@ function Controls(): JSX.Element {
         label={t('opt.touch_swap')}
         checked={o.touchSwap}
         onChange={(v) => setOptions({ touchSwap: v })}
+      />
+      <Check
+        label={t('opt.show_scores')}
+        checked={o.showScores}
+        onChange={(v) => setOptions({ showScores: v })}
       />
       <Check
         label={t('opt.vibration')}

@@ -29,6 +29,9 @@ import { emit } from './world.ts';
 import type { Obj, Player, World } from './world.ts';
 import { damageObject, dropWeaponAt, kickBall, triggerMine } from './objects.ts';
 
+/** Demi-largeur perdue par la boîte du corps depuis le réglage des allonges (12,8 → 9). */
+const MELEE_BODY_BONUS = 1.9;
+
 export const HitFlag = { PIERCE: 1, RANGED: 2, HEAVY: 4, UNBLOCKABLE: 8 } as const;
 
 // --- Historique des positions (compensation de latence) ---------------------------------------
@@ -423,11 +426,14 @@ function meleeBox(world: World, p: Player): void {
     box.b = p.y - h * 0.3;
     return;
   }
+  // Le corps est plus mince que lorsque les allonges ont été réglées (12,8 → 9) : on garde la même
+  // portée depuis le centre en ajoutant ce que la demi-largeur a perdu.
+  const reach = spec.reach + MELEE_BODY_BONUS;
   if (p.facing > 0) {
     box.l = p.x;
-    box.r = p.x + hw + spec.reach;
+    box.r = p.x + hw + reach;
   } else {
-    box.l = p.x - hw - spec.reach;
+    box.l = p.x - hw - reach;
     box.r = p.x;
   }
   if (spec.halfHeight > 0) {

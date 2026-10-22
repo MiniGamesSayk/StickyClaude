@@ -129,6 +129,8 @@ export interface Objective {
   goal: number;
 }
 export const training = signal<Objective[] | null>(null);
+/** Essai d'un niveau du créateur en cours : le bouton de sortie ramène à l'éditeur. */
+export const testingLevel = signal(false);
 
 // --- Actions (branchées par l'application) ----------------------------------------------------------
 

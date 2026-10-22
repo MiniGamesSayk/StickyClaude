@@ -20,21 +20,18 @@ let stickAng: number | null = null;
 /** Position du pouce par rapport au centre du joystick (pour dessiner la boule), −1 à 1. */
 export const stick = signal({ x: 0, y: 0, active: false });
 
-/** Convertit un déplacement (px) en bits de direction ; 8 directions, zone morte. */
+/**
+ * Convertit un déplacement (px) du joystick en bits de direction : seulement gauche et droite. Le
+ * joystick sert à se déplacer et à viser (voir `touchAimAngle`) ; s'accroupir est un bouton.
+ */
 export function stickToBits(dx: number, dy: number, radius = STICK_RADIUS): number {
-  const len = Math.hypot(dx, dy);
-  if (len < radius * DEAD) return 0;
-  const ang = Math.atan2(dy, dx);
-  // secteurs de 45° : droite, bas-droite, bas, bas-gauche, gauche, haut-gauche, haut, haut-droite
-  const sector = Math.round(ang / (Math.PI / 4));
-  const s = ((sector % 8) + 8) % 8;
-  let m = 0;
-  if (s === 0 || s === 1 || s === 7) m |= Input.RIGHT;
-  if (s === 3 || s === 4 || s === 5) m |= Input.LEFT;
-  if (s === 1 || s === 2 || s === 3) m |= Input.DOWN;
-  if (s === 5 || s === 6 || s === 7) m |= Input.UP;
-  return m;
+  if (Math.hypot(dx, dy) < radius * DEAD) return 0;
+  if (Math.abs(dx) < radius * DEAD) return 0;
+  return dx > 0 ? Input.RIGHT : Input.LEFT;
 }
+
+/** Cône (rad) autour de la verticale dans lequel « attaquer » devient un coup vers le haut. */
+const UP_CONE = 0.7;
 
 export function setStick(dx: number, dy: number, active: boolean, radius = STICK_RADIUS): void {
   stickBits = active ? stickToBits(dx, dy, radius) : 0;
@@ -54,8 +51,16 @@ export function setButton(bit: number, down: boolean): void {
 
 /** Masque d'entrées tactiles de l'image courante. */
 export function touchMask(): number {
-  const m = stickBits | buttonBits | edge;
+  let m = stickBits | buttonBits | edge;
   edge = 0;
+  // joystick vers le haut + attaque : coup vers le haut (le joystick n'envoie plus « haut »)
+  if (
+    (m & Input.ATTACK) !== 0 &&
+    stickAng !== null &&
+    Math.abs(stickAng + Math.PI / 2) <= UP_CONE
+  ) {
+    m |= Input.UP;
+  }
   return m;
 }
 

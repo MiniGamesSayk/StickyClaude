@@ -236,6 +236,8 @@ export interface GameState {
   /** Largeur déchirée de chaque bord (unités). */
   tear: number;
   weaponTimer: number;
+  /** Délai avant la prochaine apparition d'un cœur de soin (ticks). */
+  healTimer: number;
   /** Données propres au mode (voir `modes.ts`). */
   modeData: Int32Array;
   commonWeapon: number;
@@ -472,6 +474,7 @@ function createGame(): GameState {
     inkY: GRID_H * CELL,
     tear: 0,
     weaponTimer: 0,
+    healTimer: 15 * 60,
     modeData: new Int32Array(8),
     commonWeapon: 0,
     lastArena: -1,

@@ -22,20 +22,34 @@ import {
   touchMask,
 } from '../src/input/touch.ts';
 
-describe('touche virtuelle : joystick à 8 directions', () => {
+describe('touche virtuelle : le joystick déplace et vise, il ne s’accroupit pas', () => {
   const r = 56;
   it('zone morte au centre', () => {
     expect(stickToBits(3, -2, r)).toBe(0);
   });
-  it('les huit secteurs', () => {
+  it('seulement gauche et droite : haut et bas ne donnent aucune touche', () => {
     expect(stickToBits(40, 0, r)).toBe(Input.RIGHT);
     expect(stickToBits(-40, 0, r)).toBe(Input.LEFT);
-    expect(stickToBits(0, -40, r)).toBe(Input.UP);
-    expect(stickToBits(0, 40, r)).toBe(Input.DOWN);
-    expect(stickToBits(30, 30, r)).toBe(Input.RIGHT | Input.DOWN);
-    expect(stickToBits(-30, 30, r)).toBe(Input.LEFT | Input.DOWN);
-    expect(stickToBits(30, -30, r)).toBe(Input.RIGHT | Input.UP);
-    expect(stickToBits(-30, -30, r)).toBe(Input.LEFT | Input.UP);
+    expect(stickToBits(0, -40, r)).toBe(0);
+    expect(stickToBits(0, 40, r)).toBe(0);
+    expect(stickToBits(30, 30, r)).toBe(Input.RIGHT);
+    expect(stickToBits(-30, -30, r)).toBe(Input.LEFT);
+  });
+  it('joystick vers le haut + attaque : coup vers le haut, sinon rien', () => {
+    resetTouch();
+    setStick(0, -50, true);
+    setButton(Input.ATTACK, true);
+    expect(touchMask() & Input.UP).toBe(Input.UP);
+    setButton(Input.ATTACK, false);
+    touchMask();
+    expect(touchMask() & Input.UP).toBe(0);
+    // joystick à plat + attaque : pas de coup vers le haut
+    setStick(50, 0, true);
+    setButton(Input.ATTACK, true);
+    expect(touchMask() & Input.UP).toBe(0);
+    setButton(Input.ATTACK, false);
+    resetTouch();
+    touchMask();
   });
   it('un appui plus court qu’une image est quand même vu une fois', () => {
     setButton(Input.JUMP, true);
@@ -132,7 +146,8 @@ describe('options', () => {
     expect(o.textScale).toBe(100);
     expect(o.bindings.left).toEqual(['KeyQ', DEFAULT_BINDINGS.left[1]]);
     expect(o.bindings.jump).toEqual(DEFAULT_BINDINGS.jump);
-    expect(o.touchSize).toBe(1.5);
+    expect(o.touchSize).toBe(1.8);
+    expect(o.stickSize).toBe(1.8);
     expect(Object.keys(o)).toEqual(Object.keys(d));
   });
 

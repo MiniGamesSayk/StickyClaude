@@ -1,5 +1,5 @@
 import { INPUT_MASK_USED, MAX_PLAYERS, rewindOf, GamePhase } from '@stickyclaude/shared';
-import { bodyHeight, moveX, moveY } from './collision.ts';
+import { bodyHeight, EPS, moveX, moveY } from './collision.ts';
 import { applyHits, recordHistory, resolveMelee } from './combat.ts';
 import { stepGame, stepGameClient } from './game.ts';
 import { stepGhost } from './ghost.ts';
@@ -93,6 +93,35 @@ function updateMovers(world: World): void {
     m.dy = moverPos.y - m.y;
     m.x = moverPos.x;
     m.y = moverPos.y;
+  }
+  if (world.moverCount > 0) pushOutOfMovers(world);
+}
+
+/**
+ * Une plateforme mobile est pleine : si elle vient d'entrer dans un joueur (hors de celui qu'elle
+ * porte), elle le repousse par la plus petite pénétration, sans le faire traverser un mur.
+ */
+function pushOutOfMovers(world: World): void {
+  const hw = world.params.width * 0.5;
+  for (let s = 0; s < MAX_PLAYERS; s++) {
+    const p = world.players[s];
+    if (!p.active || p.dead || p.ghost || p.dropTimer > 0) continue;
+    for (let i = 0; i < world.moverCount; i++) {
+      if (p.groundMover === i) continue; // porté : `carry` s'en charge
+      const m = world.movers[i];
+      const h = bodyHeight(world, p);
+      const ox = Math.min(p.x + hw, m.x + m.w) - Math.max(p.x - hw, m.x);
+      const oy = Math.min(p.y, m.y + m.h) - Math.max(p.y - h, m.y);
+      if (ox <= EPS || oy <= EPS) continue;
+      if (ox < oy) {
+        const dir = p.x < m.x + m.w * 0.5 ? -1 : 1;
+        moveX(world, p, dir * ox);
+      } else if (p.y - h * 0.5 < m.y + m.h * 0.5) {
+        moveY(world, p, -oy);
+      } else {
+        moveY(world, p, oy);
+      }
+    }
   }
 }
 

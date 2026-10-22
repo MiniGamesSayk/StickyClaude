@@ -56,9 +56,12 @@ export interface Options {
   layout: KeyboardLayout;
   bindings: Bindings;
   touch: TouchMode;
-  /** Taille des boutons tactiles (0,7 à 1,5) et côté du joystick (-1 gauche, 1 droite). */
+  /** Taille des boutons tactiles et du joystick (0,6 à 1,8), joystick à droite ou à gauche. */
   touchSize: number;
+  stickSize: number;
   touchSwap: boolean;
+  /** Tableau des scores (marge de gauche) affiché ou masqué. */
+  showScores: boolean;
   vibration: boolean;
   padRumble: boolean;
   /** Plein écran au lancement d'une partie (mobile). */
@@ -85,7 +88,9 @@ export function defaultOptions(navLang?: string): Options {
     bindings: structuredClone(DEFAULT_BINDINGS),
     touch: 'auto',
     touchSize: 1,
+    stickSize: 1,
     touchSwap: false,
+    showScores: true,
     vibration: true,
     padRumble: true,
     autoFullscreen: true,
@@ -135,8 +140,11 @@ export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()):
     layout: pick(r.layout, ['auto', 'azerty', 'qwerty'] as const, base.layout),
     bindings,
     touch: pick(r.touch, ['auto', 'on', 'off'] as const, base.touch),
-    touchSize: num(r.touchSize, 0.7, 1.5, base.touchSize),
+    touchSize: num(r.touchSize, 0.6, 1.8, base.touchSize),
+    // à défaut, le joystick garde l'ancienne taille unique
+    stickSize: num(r.stickSize, 0.6, 1.8, num(r.touchSize, 0.6, 1.8, base.stickSize)),
     touchSwap: bool(r.touchSwap, base.touchSwap),
+    showScores: bool(r.showScores, base.showScores),
     vibration: bool(r.vibration, base.vibration),
     padRumble: bool(r.padRumble, base.padRumble),
     autoFullscreen: bool(r.autoFullscreen, base.autoFullscreen),

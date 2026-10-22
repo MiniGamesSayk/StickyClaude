@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import {
   addMover,
   checkLevel,
+  fillRect,
   finalizeLevel,
+  floodFill,
   newLevel,
   placeSpawns,
 } from '../src/creator/model.ts';
@@ -72,5 +74,30 @@ describe('créateur de niveau', () => {
     const arena = finalizeLevel(s, 'niveau-mobile');
     expect(arenaSchema.safeParse(arena).success).toBe(true);
     expect(checkLevel(s).ok).toBe(true);
+  });
+
+  it('seau : remplit une zone fermée sans déborder, et ne fait rien si la case est déjà du bon type', () => {
+    const s = newLevel('x');
+    // une boîte fermée de 5 × 3 cases vides
+    fillRect(s, 20, 10, 26, 14, Cell.SOLID);
+    fillRect(s, 21, 11, 25, 13, Cell.EMPTY, true);
+    const n = floodFill(s, 22, 12, Cell.PAPER);
+    expect(n).toBe(5 * 3);
+    expect(s.cells[12 * GRID_W + 22]).toBe(Cell.PAPER);
+    expect(s.cells[10 * GRID_W + 22]).toBe(Cell.SOLID);
+    expect(floodFill(s, 22, 12, Cell.PAPER)).toBe(0);
+    // gomme au seau : la zone redevient vide
+    expect(floodFill(s, 22, 12, Cell.EMPTY, true)).toBe(15);
+  });
+
+  it('rectangle : remplit ou vide, retire les marqueurs sous une case pleine ou gommée', () => {
+    const s = newLevel('x');
+    const before = s.spawns.length;
+    const [sx, sy] = s.spawns[0];
+    fillRect(s, sx, sy, sx, sy, Cell.SOLID);
+    expect(s.spawns.length).toBe(before - 1);
+    // un trou dans le sol : le vide
+    fillRect(s, 30, 34, 33, 35, Cell.EMPTY, true);
+    expect(s.cells[35 * GRID_W + 31]).toBe(Cell.EMPTY);
   });
 });

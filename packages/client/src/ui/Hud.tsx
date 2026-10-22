@@ -127,7 +127,7 @@ function Margin(): JSX.Element | null {
   const lob = lobby.value;
   const r = round.value;
   const h = hud.value;
-  if (!lob || !r || !h.inMatch) return null;
+  if (!lob || !r || !h.inMatch || !options.value.showScores) return null;
   const teams = lob.settings.mode === 'teams';
   const goal = lob.settings.roundsToWin;
   const rows: { key: string; label: string; color: string; score: number }[] = [];

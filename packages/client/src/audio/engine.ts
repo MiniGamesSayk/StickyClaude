@@ -350,6 +350,9 @@ export class AudioEngine implements AudioSink {
       case SimEvent.PICKUP:
         this.play('pickup', { vol: (a[0] ?? -1) === own ? 1 : 0.6 });
         break;
+      case SimEvent.HEAL:
+        this.play('pickup', { x: a[0], vol: e.slot === own ? 1 : 0.55 });
+        break;
       case SimEvent.THROW:
         this.play('throw', { vol: (a[0] ?? -1) === own ? 1 : 0.7 });
         break;

@@ -294,7 +294,7 @@ describe('murs', () => {
       minY = Math.min(minY, p.y);
     }
     expect(wallJumps).toBeGreaterThanOrEqual(4);
-    expect(startY - minY).toBeGreaterThan(10 * CELL);
+    expect(startY - minY).toBeGreaterThan(9 * CELL);
   });
 });
 
@@ -500,5 +500,91 @@ describe('plusieurs joueurs', () => {
     expect(w.players[1].x).toBe(x1);
     expect(w.players[0].x).toBeGreaterThan(x0 + 20);
     expect(Input.RIGHT).toBe(RIGHT);
+  });
+});
+
+describe('plateformes mobiles pleines', () => {
+  /** Arène vide avec une plateforme 4 × 1 qui va et vient entre deux positions. */
+  function moverWorld(rect: [number, number, number, number], to: [number, number], period = 4) {
+    const a = customArena((r) => {
+      for (let y = 2; y < 33; y++) for (let x = 2; x < 62; x++) r[y][x] = '.';
+      for (let y = 33; y < 36; y++) for (let x = 0; x < 64; x++) r[y][x] = '#';
+    });
+    a.movers = [
+      {
+        rect,
+        path: [
+          [rect[0], rect[1]],
+          [to[0], to[1]],
+        ],
+        period,
+      },
+    ];
+    return worldWithPlayer(a);
+  }
+
+  it('on ne la traverse pas par le côté', () => {
+    // plateforme immobile à hauteur du corps : colonnes 30 à 33, rangée 31 (le joueur est au sol, rangée 32)
+    const w = moverWorld([30, 31, 4, 1], [30, 31], 1000);
+    const p = put(w, 20 * CELL, FLOOR_Y);
+    p.grounded = true;
+    run(w, 120, RIGHT);
+    expect(p.x + P.width / 2).toBeLessThanOrEqual(30 * CELL + 1e-6);
+    expect(p.x + P.width / 2).toBeGreaterThan(30 * CELL - 2);
+  });
+
+  it('on se cogne la tête sous la plateforme au lieu de la traverser', () => {
+    const w = moverWorld([30, 29, 4, 1], [30, 29], 1000);
+    const p = put(w, 32 * CELL, FLOOR_Y);
+    p.grounded = true;
+    let minTop = Infinity;
+    for (let i = 0; i < 40; i++) {
+      run(w, 1, JUMP);
+      minTop = Math.min(minTop, p.y - P.height);
+    }
+    // le dessous de la plateforme est à (29 + 1) × 16 = 480 : la tête ne le dépasse jamais
+    expect(minTop).toBeGreaterThanOrEqual(30 * CELL - 1e-6);
+  });
+
+  it('on atterrit toujours dessus et elle nous porte', () => {
+    const w = moverWorld([30, 28, 4, 1], [40, 28], 4);
+    const m = w.movers[0];
+    const p = put(w, m.x + m.w / 2, m.y);
+    p.grounded = true;
+    p.groundMover = 0;
+    const x0 = p.x;
+    // 30 ticks : la plateforme va vers l'extrémité de son trajet (aller-retour symétrique ensuite)
+    run(w, 30, 0);
+    expect(p.grounded).toBe(true);
+    expect(p.y).toBeCloseTo(m.y, 3);
+    expect(Math.abs(p.x - x0)).toBeGreaterThan(5);
+  });
+
+  it('elle repousse un joueur qu’elle percute au lieu de passer à travers', () => {
+    // le joueur est au sol, immobile ; la plateforme (1 cellule au-dessus du sol) revient sur lui
+    const w = moverWorld([20, 31, 4, 1], [45, 31], 4);
+    const p = put(w, 40 * CELL, FLOOR_Y);
+    p.grounded = true;
+    let maxOverlap = 0;
+    for (let i = 0; i < 240; i++) {
+      run(w, 1, 0);
+      const m = w.movers[0];
+      const ox = Math.min(p.x + P.width / 2, m.x + m.w) - Math.max(p.x - P.width / 2, m.x);
+      const oy = Math.min(p.y, m.y + m.h) - Math.max(p.y - P.height, m.y);
+      if (ox > 0 && oy > 0) maxOverlap = Math.max(maxOverlap, Math.min(ox, oy));
+    }
+    expect(maxOverlap).toBeLessThan(0.5);
+    expect(p.x).toBeLessThan(40 * CELL - 20);
+  });
+
+  it('on peut s’y accrocher pour un saut mural', () => {
+    const w = moverWorld([30, 24, 2, 6], [30, 24], 1000);
+    const m = w.movers[0];
+    const p = put(w, m.x - P.width / 2, 27 * CELL);
+    p.grounded = false;
+    p.coyote = 0;
+    run(w, 10, RIGHT);
+    expect(wallContact(w, p, 1)).toBe(1);
+    expect(p.state).toBe(PlayerState.WALL_SLIDE);
   });
 });

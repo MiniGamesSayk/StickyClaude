@@ -338,7 +338,14 @@ async function main(): Promise<void> {
       );
       label(WEAPONS[i].name.fr.slice(0, 18), x - 28, y + 14, 9);
     }
-    const objs = [ObjType.CRATE, ObjType.BALLOON, ObjType.TACK, ObjType.MINE, ObjType.BALL];
+    const objs = [
+      ObjType.CRATE,
+      ObjType.BALLOON,
+      ObjType.TACK,
+      ObjType.MINE,
+      ObjType.BALL,
+      ObjType.HEART,
+    ];
     objs.forEach((t, i) => {
       const x = 760 + i * 52;
       const shape = OBJECT_SHAPES[t];
@@ -360,7 +367,7 @@ async function main(): Promise<void> {
         boil,
       );
     });
-    label('caisse · ballon · punaise · mine · boule', 700, 702, 9);
+    label('caisse · ballon · punaise · mine · boule · cœur', 700, 702, 9);
     [ProjType.PELLET, ProjType.PLANE, ProjType.ROCKET, ProjType.ERASER].forEach((t, i) => {
       const s = PROJECTILE_SHAPES[t];
       if (s)

@@ -108,6 +108,9 @@ export const COMBAT = {
   emptyThrowDamage: 5,
   crateThrowDamage: 15,
   pickupReach: 14,
+  /** Cœurs de soin : points rendus, durée de vie au sol (ticks). */
+  healAmount: 35,
+  heartLifeTicks: 25 * 60,
   pickupCooldownTicks: 18,
 } as const;
 

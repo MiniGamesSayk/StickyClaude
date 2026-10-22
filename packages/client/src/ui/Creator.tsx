@@ -7,7 +7,9 @@ import { actions, levels, mode, overlay, say } from '../app/store.ts';
 import {
   addMover,
   applySpawns,
+  fillRect,
   finalizeLevel,
+  floodFill,
   fromArena,
   levelCheck,
   newLevel,
@@ -16,15 +18,24 @@ import {
 } from '../creator/model.ts';
 import { LevelChecker } from '../creator/checker.ts';
 import type { EditorState, LevelCheck } from '../creator/model.ts';
-import { applyRect, applyTool, RECT_TOOLS, Tool, toArena } from '../editor/model.ts';
+import { applyRect, applyTool, CELL_TOOLS, RECT_TOOLS, Tool, toArena } from '../editor/model.ts';
 import type { Rect, ToolId } from '../editor/model.ts';
 import { pick, t } from '../i18n/index.ts';
 import type { MessageKey } from '../i18n/index.ts';
-import { css, themeOf } from '../render/palette.ts';
+import { drawHazard, drawPlayerSpawn, drawProp, drawWeaponSpawn } from '../creator/draw2d.ts';
+import { renderPage } from '../render/page.ts';
 import { Button, Select } from './components.tsx';
 
 /** Outil du créateur : ceux de l'éditeur, plus la plateforme mobile. */
 type CTool = ToolId | 'mover';
+/** Manière de poser une case : au pinceau, en rectangle ou au seau. */
+type PoseMode = 'brush' | 'rect' | 'bucket';
+
+const MODES: [PoseMode, MessageKey][] = [
+  ['brush', 'cr.mode_brush'],
+  ['rect', 'cr.mode_rect'],
+  ['bucket', 'cr.mode_bucket'],
+];
 
 const GROUPS: { title: MessageKey; tools: [CTool, MessageKey][] }[] = [
   {
@@ -60,17 +71,11 @@ const GROUPS: { title: MessageKey; tools: [CTool, MessageKey][] }[] = [
       [Tool.GOAL_B, 'cr.tool_goal_b'],
     ],
   },
-  {
-    title: 'cr.group_edit',
-    tools: [
-      [Tool.EMPTY, 'cr.tool_empty'],
-      [Tool.ERASE, 'cr.tool_erase'],
-    ],
-  },
+  { title: 'cr.group_edit', tools: [[Tool.ERASE, 'cr.tool_erase']] },
 ];
 
-const PAINTABLE: ReadonlySet<CTool> = new Set([
-  Tool.EMPTY,
+/** Outils qui posent des cases : ils suivent le mode (pinceau, rectangle, seau). */
+const CELL_TOOL_IDS: ReadonlySet<CTool> = new Set([
   Tool.SOLID,
   Tool.PAPER,
   Tool.ONEWAY,
@@ -78,9 +83,33 @@ const PAINTABLE: ReadonlySet<CTool> = new Set([
   Tool.ERASE,
 ]);
 
+/** Valeur de case d'un outil de cases (la gomme vide la case). */
+function cellValue(tool: CTool): number {
+  return tool === Tool.ERASE ? Cell.EMPTY : (CELL_TOOLS[tool as ToolId] ?? Cell.EMPTY);
+}
+
 /** Le brouillon survit à la fermeture du créateur (test du niveau, puis retour). */
 let draft: EditorState | null = null;
 let draftId = '';
+/** Historique du brouillon (annuler / rétablir), conservé avec lui. */
+let undoStack: EditorState[] = [];
+let redoStack: EditorState[] = [];
+const MAX_HISTORY = 100;
+
+function snapshot(s: EditorState): EditorState {
+  return structuredClone(s);
+}
+
+/** Fonds de page (papier, lignes, marges du thème), dessinés une fois par thème. */
+const backgrounds = new Map<string, HTMLCanvasElement>();
+function backgroundOf(theme: string): HTMLCanvasElement {
+  let c = backgrounds.get(theme);
+  if (!c) {
+    c = renderPage({ id: 'creator', theme, decor: [] } as unknown as ArenaData, 1);
+    backgrounds.set(theme, c);
+  }
+  return c;
+}
 
 const THEME_KEYS: Record<(typeof THEME_IDS)[number], MessageKey> = {
   'graph-paper': 'theme.graph-paper',
@@ -125,30 +154,16 @@ function dashedRect(
   label(ctx, text, (r[0] + r[2] / 2) * CELL, r[1] * CELL - 3, color);
 }
 
-/** Dessine le niveau : papier du fond choisi, grille, cases, marqueurs, plateformes mobiles. */
+/** Dessine le niveau : vrai fond du thème, centre, cases, objets du jeu, marqueurs, plateformes. */
 function draw(
   ctx: CanvasRenderingContext2D,
   s: EditorState,
   hover: { x: number; y: number },
   drag: { x: number; y: number } | null,
-  tool: CTool,
+  rectLike: boolean,
   pending: Rect | null,
 ): void {
-  const th = themeOf(s.theme);
-  ctx.fillStyle = css(th.paper);
-  ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-  ctx.strokeStyle = 'rgba(80,110,180,0.22)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let x = 0; x <= GRID_W; x++) {
-    ctx.moveTo(x * CELL + 0.5, 0);
-    ctx.lineTo(x * CELL + 0.5, WORLD_H);
-  }
-  for (let y = 0; y <= GRID_H; y++) {
-    ctx.moveTo(0, y * CELL + 0.5);
-    ctx.lineTo(WORLD_W, y * CELL + 0.5);
-  }
-  ctx.stroke();
+  ctx.drawImage(backgroundOf(s.theme), 0, 0, WORLD_W, WORLD_H);
   for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID_W; x++) {
       const c = s.cells[y * GRID_W + x];
@@ -158,23 +173,49 @@ function draw(
         ctx.fillStyle = '#1b2a5e';
         ctx.fillRect(px, py, CELL, CELL);
       } else if (c === Cell.PAPER) {
-        ctx.fillStyle = '#d8c79a';
-        ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
+        ctx.fillStyle = '#e9d9a8';
+        ctx.fillRect(px, py, CELL, CELL);
         ctx.strokeStyle = '#8a6a2b';
-        ctx.strokeRect(px + 1.5, py + 1.5, CELL - 3, CELL - 3);
-      } else if (c === Cell.ONEWAY) {
-        ctx.fillStyle = '#1f4fd1';
-        ctx.fillRect(px, py, CELL, 4);
-      } else if (c === Cell.HAZARD) {
-        ctx.fillStyle = '#d6322e';
+        ctx.lineWidth = 1.4;
+        ctx.strokeRect(px + 0.7, py + 0.7, CELL - 1.4, CELL - 1.4);
         ctx.beginPath();
-        ctx.moveTo(px, py + CELL);
-        ctx.lineTo(px + CELL / 2, py + 2);
-        ctx.lineTo(px + CELL, py + CELL);
-        ctx.fill();
+        ctx.moveTo(px + 3, py + 13);
+        ctx.lineTo(px + 13, py + 3);
+        ctx.stroke();
+      } else if (c === Cell.ONEWAY) {
+        ctx.strokeStyle = '#1f4fd1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(px, py + 1.4);
+        ctx.lineTo(px + CELL, py + 1.4);
+        ctx.moveTo(px, py + 4.8);
+        ctx.lineTo(px + CELL, py + 4.8);
+        ctx.stroke();
+      } else if (c === Cell.HAZARD) {
+        drawHazard(ctx, x, y);
       }
     }
   }
+  // le centre de la page : repère pour équilibrer le niveau (symétrie des apparitions)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(214,50,46,0.55)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath();
+  ctx.moveTo(WORLD_W / 2 + 0.5, 0);
+  ctx.lineTo(WORLD_W / 2 + 0.5, WORLD_H);
+  ctx.moveTo(0, WORLD_H / 2 + 0.5);
+  ctx.lineTo(WORLD_W, WORLD_H / 2 + 0.5);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(WORLD_W / 2, WORLD_H / 2, 7, 0, Math.PI * 2);
+  ctx.moveTo(WORLD_W / 2 - 11, WORLD_H / 2);
+  ctx.lineTo(WORLD_W / 2 + 11, WORLD_H / 2);
+  ctx.moveTo(WORLD_W / 2, WORLD_H / 2 - 11);
+  ctx.lineTo(WORLD_W / 2, WORLD_H / 2 + 11);
+  ctx.stroke();
+  ctx.restore();
   for (const m of s.movers) {
     ctx.strokeStyle = 'rgba(31,79,209,0.7)';
     ctx.lineWidth = 2;
@@ -187,30 +228,15 @@ function draw(
     });
     ctx.stroke();
     for (const [x, y] of m.path) {
-      ctx.fillStyle = 'rgba(31,79,209,0.35)';
+      ctx.fillStyle = 'rgba(31,79,209,0.3)';
       ctx.fillRect(x * CELL, y * CELL, m.rect[2] * CELL, m.rect[3] * CELL);
       ctx.strokeStyle = '#1f4fd1';
       ctx.strokeRect(x * CELL + 0.5, y * CELL + 0.5, m.rect[2] * CELL - 1, m.rect[3] * CELL - 1);
     }
   }
-  s.spawns.forEach(([x, y], i) => {
-    ctx.strokeStyle = '#1f9d55';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc((x + 0.5) * CELL, (y + 0.5) * CELL, 6, 0, Math.PI * 2);
-    ctx.stroke();
-    label(ctx, String(i + 1), (x + 0.5) * CELL, (y + 0.5) * CELL + 4, '#1f9d55');
-  });
-  for (const [x, y] of s.weaponSpawns) {
-    ctx.strokeStyle = '#e8801a';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x * CELL + 3, y * CELL + 3, CELL - 6, CELL - 6);
-    label(ctx, 'A', (x + 0.5) * CELL, (y + 0.5) * CELL + 4, '#e8801a');
-  }
-  for (const p of s.props) {
-    const letter = p.type === 'crate' ? 'C' : p.type === 'balloon' ? 'B' : 'P';
-    label(ctx, letter, (p.at[0] + 0.5) * CELL, (p.at[1] + 0.5) * CELL + 4, '#7a4a2b');
-  }
+  for (const p of s.props) drawProp(ctx, p.type, p.at[0], p.at[1]);
+  for (const [x, y] of s.weaponSpawns) drawWeaponSpawn(ctx, x, y);
+  s.spawns.forEach(([x, y], i) => drawPlayerSpawn(ctx, x, y, i + 1));
   dashedRect(ctx, s.koth, '#c9a227', 'colline');
   dashedRect(ctx, s.goalA, '#1f4fd1', 'cage A');
   dashedRect(ctx, s.goalB, '#d6322e', 'cage B');
@@ -224,7 +250,7 @@ function draw(
   }
   ctx.strokeStyle = 'rgba(34,38,46,0.7)';
   ctx.lineWidth = 1;
-  if (drag && (tool === 'mover' || RECT_TOOLS.has(tool))) {
+  if (drag && rectLike) {
     const x = Math.min(drag.x, hover.x);
     const y = Math.min(drag.y, hover.y);
     ctx.strokeRect(
@@ -241,29 +267,45 @@ function draw(
 /**
  * Créateur de niveau : plateformes, fond, pièges, source de la mort subite. Les niveaux gardés
  * dans le navigateur peuvent être testés (entraînement) puis proposés au salon, où ils entrent
- * dans le vote des cartes.
+ * dans le vote des cartes. Annuler / rétablir : Ctrl+Z, Ctrl+Y (ou Maj+Ctrl+Z).
  */
 export function Creator(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   if (draft === null) {
     draft = newLevel(t('cr.default_name'));
     draftId = newLevelId();
+    undoStack = [];
+    redoStack = [];
   }
   const state = draft;
   const [tool, setTool] = useState<CTool>(Tool.SOLID);
+  const [poseMode, setPoseMode] = useState<PoseMode>('brush');
   const [, setRev] = useState(0);
   const [check, setCheck] = useState<LevelCheck | null>(null);
   const hover = useRef({ x: 0, y: 0 });
-  const drag = useRef<{ x: number; y: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; tool: CTool } | null>(null);
   const painting = useRef(false);
   const pending = useRef<Rect | null>(null);
   const timer = useRef(0);
   const checker = useRef<LevelChecker | null>(null);
   const canTest = mode.value === 'menu';
+  const cellTool = CELL_TOOL_IDS.has(tool);
+  /** Outil et mode lus par les écouteurs (qui ne se réabonnent pas à chaque rendu). */
+  const live = useRef({ undo: (): void => undefined, redo: (): void => undefined });
 
+  const rectLike = (): boolean =>
+    tool === 'mover' || RECT_TOOLS.has(tool) || (cellTool && poseMode === 'rect');
   const redraw = (): void => {
     const ctx = canvasRef.current?.getContext('2d');
-    if (ctx) draw(ctx, state, hover.current, drag.current, tool, pending.current);
+    if (ctx && draft) draw(ctx, draft, hover.current, drag.current, rectLike(), pending.current);
+  };
+  /** Analyse du niveau dans un worker (plusieurs secondes sur un terrain très ouvert). */
+  const verify = async (): Promise<void> => {
+    const c = (checker.current ??= new LevelChecker());
+    const d = draft;
+    if (!d) return;
+    const report = await c.check(toArena(d));
+    if (report && draft === d) setCheck(levelCheck(d.nameFr, report));
   };
   const changed = (): void => {
     redraw();
@@ -271,17 +313,56 @@ export function Creator(): JSX.Element {
     setCheck(null);
     timer.current = window.setTimeout(() => void verify(), 350);
   };
-  /** Analyse du niveau dans un worker (plusieurs secondes sur un terrain très ouvert). */
-  const verify = async (): Promise<void> => {
-    const c = (checker.current ??= new LevelChecker());
-    const report = await c.check(toArena(state));
-    if (report) setCheck(levelCheck(state.nameFr, report));
+  const rev = (): void => setRev((n) => n + 1);
+
+  /** À appeler avant toute modification : garde l'état actuel pour « annuler ». */
+  const commit = (): void => {
+    if (!draft) return;
+    undoStack.push(snapshot(draft));
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack = [];
+    rev();
   };
+  const undo = (): void => {
+    const prev = undoStack.pop();
+    if (!prev || !draft) return;
+    redoStack.push(snapshot(draft));
+    draft = prev;
+    pending.current = null;
+    rev();
+    changed();
+  };
+  const redo = (): void => {
+    const next = redoStack.pop();
+    if (!next || !draft) return;
+    undoStack.push(snapshot(draft));
+    draft = next;
+    pending.current = null;
+    rev();
+    changed();
+  };
+  live.current = { undo, redo };
 
   useEffect(() => {
     redraw();
     void verify();
     const onKey = (e: KeyboardEvent): void => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
+      if ((e.ctrlKey || e.metaKey) && !typing) {
+        if (e.code === 'KeyZ') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.shiftKey) live.current.redo();
+          else live.current.undo();
+          return;
+        }
+        if (e.code === 'KeyY') {
+          e.preventDefault();
+          e.stopPropagation();
+          live.current.redo();
+          return;
+        }
+      }
       if (e.code !== 'Escape') return;
       e.stopPropagation();
       if (pending.current) {
@@ -296,7 +377,7 @@ export function Creator(): JSX.Element {
       checker.current?.dispose();
     };
   }, []);
-  useEffect(redraw, [tool, state.theme]);
+  useEffect(redraw, [tool, poseMode, state.theme]);
 
   const cellAt = (e: PointerEvent): { x: number; y: number } => {
     const r = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
@@ -307,34 +388,46 @@ export function Creator(): JSX.Element {
   };
 
   const onDown = (e: PointerEvent): void => {
+    if (!draft) return;
     (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     const c = cellAt(e);
     hover.current = c;
     const tl: CTool = e.button === 2 ? Tool.ERASE : tool;
     if (pending.current && tl === 'mover') {
-      const ok = addMover(state, pending.current, c.x, c.y);
+      commit();
+      const ok = addMover(draft, pending.current, c.x, c.y);
       pending.current = null;
-      if (!ok) say(t('cr.mover_bad'));
+      if (!ok) {
+        undoStack.pop();
+        say(t('cr.mover_bad'));
+      }
       changed();
       return;
     }
-    if (tl === 'mover' || RECT_TOOLS.has(tl)) {
-      drag.current = c;
+    const isCell = CELL_TOOL_IDS.has(tl);
+    if (tl === 'mover' || RECT_TOOLS.has(tl) || (isCell && poseMode === 'rect')) {
+      drag.current = { ...c, tool: tl };
       redraw();
       return;
     }
+    commit();
+    if (isCell && poseMode === 'bucket') {
+      floodFill(draft, c.x, c.y, cellValue(tl), tl === Tool.ERASE);
+      changed();
+      return;
+    }
     painting.current = true;
-    if (tl === Tool.ERASE) removeMoverAt(state, c.x, c.y);
-    applyTool(state, tl, c.x, c.y);
+    if (tl === Tool.ERASE) removeMoverAt(draft, c.x, c.y);
+    applyTool(draft, tl, c.x, c.y);
     changed();
   };
   const onMove = (e: PointerEvent): void => {
     const c = cellAt(e);
     hover.current = c;
-    if (painting.current) {
+    if (painting.current && draft) {
       const tl: CTool = e.buttons === 2 ? Tool.ERASE : tool;
-      if (PAINTABLE.has(tl)) {
-        applyTool(state, tl as ToolId, c.x, c.y);
+      if (CELL_TOOL_IDS.has(tl) && poseMode === 'brush') {
+        applyTool(draft, tl as ToolId, c.x, c.y);
         changed();
         return;
       }
@@ -345,22 +438,26 @@ export function Creator(): JSX.Element {
     const c = cellAt(e);
     const d = drag.current;
     drag.current = null;
-    if (d) {
-      if (tool === 'mover') {
+    if (d && draft) {
+      if (d.tool === 'mover') {
         const x = Math.min(d.x, c.x);
         const y = Math.min(d.y, c.y);
         pending.current = [x, y, Math.abs(c.x - d.x) + 1, Math.abs(c.y - d.y) + 1];
         say(t('cr.mover_end'));
         redraw();
+      } else if (RECT_TOOLS.has(d.tool)) {
+        commit();
+        applyRect(draft, d.tool, d.x, d.y, c.x, c.y);
+        changed();
       } else {
-        applyRect(state, tool, d.x, d.y, c.x, c.y);
+        commit();
+        fillRect(draft, d.x, d.y, c.x, c.y, cellValue(d.tool), d.tool === Tool.ERASE);
         changed();
       }
     }
     painting.current = false;
   };
 
-  const rev = (): void => setRev((n) => n + 1);
   const validCount = state.spawns.length;
   const saved = levels.value;
 
@@ -376,6 +473,7 @@ export function Creator(): JSX.Element {
     say(t('cr.saved'));
   };
   const load = (a: ArenaData): void => {
+    commit();
     draft = fromArena(a);
     draftId = a.id;
     pending.current = null;
@@ -383,6 +481,7 @@ export function Creator(): JSX.Element {
     changed();
   };
   const fresh = (): void => {
+    commit();
     draft = newLevel(t('cr.default_name'));
     draftId = newLevelId();
     pending.current = null;
@@ -410,6 +509,26 @@ export function Creator(): JSX.Element {
             changed();
           }}
         />
+        <Button
+          small
+          secondary
+          label={t('cr.undo')}
+          title={`${t('cr.undo')} (Ctrl+Z)`}
+          disabled={undoStack.length === 0}
+          onClick={undo}
+        >
+          ↶
+        </Button>
+        <Button
+          small
+          secondary
+          label={t('cr.redo')}
+          title={`${t('cr.redo')} (Ctrl+Y)`}
+          disabled={redoStack.length === 0}
+          onClick={redo}
+        >
+          ↷
+        </Button>
         <Button small secondary onClick={fresh}>
           {t('cr.new')}
         </Button>
@@ -430,6 +549,26 @@ export function Creator(): JSX.Element {
       </header>
       <div class="creator-body">
         <nav class="creator-tools" aria-label={t('cr.tools')}>
+          <section>
+            <h2>{t('cr.group_mode')}</h2>
+            <div class="modes">
+              {MODES.map(([id, key]) => (
+                <button
+                  key={id}
+                  type="button"
+                  class={`tool${poseMode === id ? ' on' : ''}`}
+                  aria-pressed={poseMode === id}
+                  disabled={!cellTool}
+                  onClick={(e) => {
+                    setPoseMode(id);
+                    e.currentTarget.blur();
+                  }}
+                >
+                  {t(key)}
+                </button>
+              ))}
+            </div>
+          </section>
           {GROUPS.map((g) => (
             <section key={g.title}>
               <h2>{t(g.title)}</h2>
@@ -469,6 +608,7 @@ export function Creator(): JSX.Element {
             value={state.theme}
             options={themeOptions}
             onChange={(v) => {
+              commit();
               state.theme = v;
               rev();
               changed();
@@ -482,6 +622,7 @@ export function Creator(): JSX.Element {
               { value: 'tear-edges', label: t('cr.death_tear') },
             ]}
             onChange={(v) => {
+              commit();
               state.suddenDeath = v;
               rev();
               changed();
@@ -497,8 +638,9 @@ export function Creator(): JSX.Element {
                 const c = (checker.current ??= new LevelChecker());
                 setCheck(null);
                 void c.spawns(toArena(state)).then((sug) => {
-                  if (!sug) return;
-                  if (applySpawns(state, sug) < 8) say(t('cr.auto_fail'));
+                  if (!sug || !draft) return;
+                  commit();
+                  if (applySpawns(draft, sug) < 8) say(t('cr.auto_fail'));
                   rev();
                   changed();
                 });

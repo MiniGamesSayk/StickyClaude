@@ -1,6 +1,7 @@
 import { GamePhase } from '@stickyclaude/shared';
 import type { JSX } from 'preact';
 import {
+  actions,
   banner,
   hud,
   lobby,
@@ -10,6 +11,7 @@ import {
   podium,
   round,
   screen,
+  testingLevel,
   training,
 } from '../app/store.ts';
 import { t } from '../i18n/index.ts';
@@ -21,6 +23,7 @@ import { LobbyPanel } from './Lobby.tsx';
 import { OptionsModal } from './Options.tsx';
 import { ConnectionOverlay, CreditsModal, HelpModal, PauseModal } from './Overlays.tsx';
 import { TouchControls } from './TouchControls.tsx';
+import { Button } from './components.tsx';
 import { Training } from './Training.tsx';
 import { Vote } from './Vote.tsx';
 
@@ -70,6 +73,11 @@ export function App(): JSX.Element {
           <>
             <Hud solo />
             {training.value !== null && <Training touch={touch} />}
+            {testingLevel.value && (
+              <div class="bottomleft" style={touch ? { top: '8px', bottom: 'auto' } : undefined}>
+                <Button onClick={() => actions.quitSolo()}>{t('cr.back')}</Button>
+              </div>
+            )}
           </>
         )}
         {touch && ov === null && <TouchControls />}

@@ -1,7 +1,7 @@
 import { EMOTES, Input } from '@stickyclaude/shared';
 import type { JSX } from 'preact';
 import { useRef, useState } from 'preact/hooks';
-import { options } from '../app/options.ts';
+import { options, setOptions } from '../app/options.ts';
 import { actions, overlay } from '../app/store.ts';
 import { pick, t } from '../i18n/index.ts';
 import { resetTouch, setButton, setStick, STICK_RADIUS, vibrate } from '../input/touch.ts';
@@ -54,7 +54,7 @@ function Stick(): JSX.Element {
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const radius = Math.max(STICK_RADIUS * o.touchSize, r.width / 2);
+    const radius = Math.max(STICK_RADIUS * o.stickSize, r.width / 2);
     let dx = e.clientX - (r.left + r.width / 2);
     let dy = e.clientY - (r.top + r.height / 2);
     const len = Math.hypot(dx, dy);
@@ -111,7 +111,10 @@ export function TouchControls(): JSX.Element {
   const o = options.value;
   const [emotes, setEmotes] = useState(false);
   return (
-    <div class="touch" style={{ '--touch-size': String(o.touchSize) }}>
+    <div
+      class="touch"
+      style={{ '--touch-size': String(o.touchSize), '--stick-size': String(o.stickSize) }}
+    >
       <Stick />
       <div class={`tbtns${o.touchSwap ? ' swap' : ''}`}>
         <Btn cls="jump" bit={Input.JUMP} label={t('touch.jump')}>
@@ -122,6 +125,9 @@ export function TouchControls(): JSX.Element {
         </Btn>
         <Btn cls="block" bit={Input.BLOCK} label={t('touch.block')}>
           🛡
+        </Btn>
+        <Btn cls="crouch" bit={Input.DOWN} label={t('touch.crouch')}>
+          ⤓
         </Btn>
         <Btn cls="pickup" bit={Input.PICKUP} label={t('touch.pickup')}>
           ✋
@@ -136,6 +142,16 @@ export function TouchControls(): JSX.Element {
           pressed={emotes}
         >
           ☺
+        </Button>
+        <Button
+          small
+          secondary
+          label={t('touch.scores')}
+          title={t('touch.scores')}
+          pressed={o.showScores}
+          onClick={() => setOptions({ showScores: !o.showScores })}
+        >
+          🏆
         </Button>
         <Button small secondary label={t('touch.fullscreen')} onClick={enterFullscreen}>
           ⛶

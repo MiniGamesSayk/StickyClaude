@@ -81,6 +81,74 @@ export function removeMoverAt(s: EditorState, x: number, y: number): boolean {
   return true;
 }
 
+/** Retire apparitions, objets et marqueurs posés dans la cellule (elle devient pleine ou dangereuse). */
+function clearMarkers(s: EditorState, x: number, y: number): void {
+  const same = (c: [number, number]): boolean => c[0] === x && c[1] === y;
+  s.spawns = s.spawns.filter((c) => !same(c));
+  s.weaponSpawns = s.weaponSpawns.filter((c) => !same(c));
+  s.props = s.props.filter((p) => !(p.at[0] === x && p.at[1] === y));
+  if (s.ballSpawn && same(s.ballSpawn)) s.ballSpawn = null;
+}
+
+/**
+ * Change une case. Les marqueurs qu'elle porte sont retirés quand elle devient pleine ou
+ * dangereuse, ou si `clear` le demande (gomme).
+ */
+function paintCell(s: EditorState, x: number, y: number, value: number, clear: boolean): void {
+  s.cells[y * GRID_W + x] = value;
+  if (clear || (value !== Cell.EMPTY && value !== Cell.ONEWAY)) {
+    clearMarkers(s, x, y);
+  }
+}
+
+/**
+ * Seau : remplit avec `value` la zone de même nature (cases identiques, voisines par un côté) que
+ * la case cliquée. Retourne le nombre de cases changées.
+ */
+export function floodFill(
+  s: EditorState,
+  x: number,
+  y: number,
+  value: number,
+  clear = false,
+): number {
+  if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return 0;
+  const from = s.cells[y * GRID_W + x];
+  if (from === value) return 0;
+  const stack: number[] = [y * GRID_W + x];
+  let n = 0;
+  while (stack.length > 0) {
+    const i = stack.pop()!;
+    if (s.cells[i] !== from) continue;
+    const cx = i % GRID_W;
+    const cy = (i - cx) / GRID_W;
+    paintCell(s, cx, cy, value, clear);
+    n++;
+    if (cx > 0) stack.push(i - 1);
+    if (cx < GRID_W - 1) stack.push(i + 1);
+    if (cy > 0) stack.push(i - GRID_W);
+    if (cy < GRID_H - 1) stack.push(i + GRID_W);
+  }
+  return n;
+}
+
+/** Remplit le rectangle entre deux cases (bornes comprises) avec `value`. */
+export function fillRect(
+  s: EditorState,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  value: number,
+  clear = false,
+): void {
+  for (let y = Math.max(0, Math.min(y0, y1)); y <= Math.min(GRID_H - 1, Math.max(y0, y1)); y++) {
+    for (let x = Math.max(0, Math.min(x0, x1)); x <= Math.min(GRID_W - 1, Math.max(x0, x1)); x++) {
+      paintCell(s, x, y, value, clear);
+    }
+  }
+}
+
 /**
  * Place les apparitions des joueurs et des armes automatiquement (par simulation : positions
  * atteignables dans les deux sens). Retourne le nombre d'apparitions de joueurs trouvées.

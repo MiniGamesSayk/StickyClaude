@@ -12,7 +12,9 @@ import {
 import type { ArenaData } from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import {
-  MAX_GROUND_WEAPONS,
+  itemInterval,
+  maxGroundHearts,
+  maxGroundWeapons,
   randomWeapon,
   spawnObj,
   spawnProps,
@@ -218,20 +220,111 @@ describe('apparition des armes', () => {
     expect(appearedAt).toBeGreaterThanOrEqual(WEAPON_DRAW_TICKS - 2);
   });
 
-  it('au plus 3 armes au sol, une toutes les 6 à 10 s', () => {
-    const w = weaponWorld();
+  /** Joue `seconds` secondes avec `n` joueurs : maximum d'armes au sol et nombre d'apparitions. */
+  function play(n: number, seconds = 90): { max: number; spawns: number } {
+    const a = boxArena();
+    a.spawns.weapons = [
+      [10, 32],
+      [30, 32],
+      [50, 32],
+    ];
+    const w = fightWorld({ n, arena: a, weapons: true });
+    for (const o of w.objects) o.active = false;
+    for (const s of w.spawns) s.active = false;
+    w.game.weaponTimer = 400;
     let max = 0;
-    let events = 0;
-    for (let i = 0; i < 90 * 60; i++) {
+    let spawns = 0;
+    for (let i = 0; i < seconds * 60; i++) {
       tick(w);
-      events += eventCount(w, SimEvent.WEAPON_SPAWN);
-      const n = w.objects.filter((o) => o.active && o.type === ObjType.WEAPON).length;
-      max = Math.max(max, n);
+      spawns += eventCount(w, SimEvent.WEAPON_SPAWN);
+      const c = w.objects.filter((o) => o.active && o.type === ObjType.WEAPON).length;
+      max = Math.max(max, c);
     }
-    expect(max).toBeLessThanOrEqual(MAX_GROUND_WEAPONS);
-    expect(max).toBeGreaterThanOrEqual(2);
-    expect(events).toBeGreaterThanOrEqual(8);
-    expect(events).toBeLessThanOrEqual(16 + MAX_GROUND_WEAPONS);
+    return { max, spawns };
+  }
+
+  it('le nombre d’armes au sol et leur rythme suivent le nombre de joueurs', () => {
+    expect(maxGroundWeapons(2)).toBe(2);
+    expect(maxGroundWeapons(8)).toBe(5);
+    expect(maxGroundWeapons(8)).toBeGreaterThan(maxGroundWeapons(4));
+    expect(itemInterval(8)).toBeLessThan(itemInterval(2));
+    const two = play(2);
+    const eight = play(8);
+    expect(two.max).toBeLessThanOrEqual(maxGroundWeapons(2));
+    expect(eight.max).toBeLessThanOrEqual(maxGroundWeapons(8));
+    expect(two.max).toBeGreaterThanOrEqual(2);
+    expect(eight.max).toBeGreaterThan(two.max);
+    expect(eight.spawns).toBeGreaterThan(two.spawns);
+  });
+
+  describe('cœurs de soin', () => {
+    function heartWorld(n = 2): ReturnType<typeof fightWorld> {
+      const a = boxArena();
+      a.spawns.weapons = [
+        [10, 32],
+        [30, 32],
+        [50, 32],
+      ];
+      const w = fightWorld({ n, arena: a, weapons: false });
+      for (const o of w.objects) o.active = false;
+      w.game.healTimer = 30 * 60;
+      return w;
+    }
+    const hearts = (w: ReturnType<typeof fightWorld>): number =>
+      w.objects.filter((o) => o.active && o.type === ObjType.HEART).length;
+
+    it('un cœur apparaît en combat même sans armes, et pas dans le salon', () => {
+      const w = heartWorld();
+      w.game.healTimer = 5;
+      ticks(w, 60);
+      expect(hearts(w)).toBe(1);
+      const lobby = heartWorld();
+      lobby.game.phase = GamePhase.LOBBY;
+      lobby.game.healTimer = 0;
+      ticks(lobby, 600);
+      expect(hearts(lobby)).toBe(0);
+    });
+
+    it('toucher un cœur rend des points de vie, sans dépasser le maximum', () => {
+      const w = heartWorld();
+      spawnObj(w, ObjType.HEART, pl(w, 0).x, FLOOR, 12, 12, 0, 0);
+      pl(w, 0).hp = 50;
+      expect(countEvents(w, 2, SimEvent.HEAL)).toBe(1);
+      expect(pl(w, 0).hp).toBe(50 + COMBAT.healAmount);
+      expect(hearts(w)).toBe(0);
+      spawnObj(w, ObjType.HEART, pl(w, 1).x, FLOOR, 12, 12, 0, 0);
+      pl(w, 1).hp = COMBAT.maxHp - 10;
+      ticks(w, 2);
+      expect(pl(w, 1).hp).toBe(COMBAT.maxHp);
+    });
+
+    it('un joueur en pleine forme ne gaspille pas le cœur', () => {
+      const w = heartWorld();
+      spawnObj(w, ObjType.HEART, pl(w, 0).x, FLOOR, 12, 12, 0, 0);
+      ticks(w, 30);
+      expect(hearts(w)).toBe(1);
+      expect(pl(w, 0).hp).toBe(COMBAT.maxHp);
+    });
+
+    it('au plus un cœur à 2 joueurs, deux à 8, et ils disparaissent s’ils sont oubliés', () => {
+      expect(maxGroundHearts(2)).toBe(1);
+      expect(maxGroundHearts(8)).toBe(2);
+      for (const n of [2, 8]) {
+        const w = heartWorld(n);
+        let max = 0;
+        for (let i = 0; i < 180 * 60; i++) {
+          tick(w);
+          max = Math.max(max, hearts(w));
+        }
+        expect(max).toBeLessThanOrEqual(maxGroundHearts(n));
+        expect(max).toBeGreaterThanOrEqual(1);
+      }
+      const w = heartWorld();
+      const o = spawnObj(w, ObjType.HEART, 300, FLOOR, 12, 12, 0, 0)!;
+      o.life = COMBAT.heartLifeTicks;
+      ticks(w, COMBAT.heartLifeTicks + 5);
+      expect(o.active).toBe(false);
+    });
   });
 
   it('rien quand les armes sont désactivées', () => {
