@@ -202,11 +202,10 @@ await step('accueil, personnalisation, options, aide, anglais', async () => {
 
   // anglais : tout l'écran doit changer de langue
   await page.getByLabel('Langue / Language').click(); // le bouton bascule FR ↔ EN
-  await page.getByRole('button', { name: 'Quick match' }).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Create a room' }).count(), 1);
+  await page.getByRole('button', { name: 'Create a room' }).waitFor();
   await shot(page, '06-accueil-en');
   await page.getByLabel('Langue / Language').click();
-  await page.getByRole('button', { name: 'Partie rapide' }).waitFor();
+  await page.getByRole('button', { name: 'Créer un salon' }).waitFor();
   await page.context().close();
 });
 

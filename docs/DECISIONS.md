@@ -424,3 +424,10 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - **Éliminé / fantôme / spectateur** : un panneau (`DeadPanel`) montre la barre de recharge du dessin, les touches de trait et de goutte d'encre (selon les touches réglées, ou les boutons tactiles), les emotes et leur délai.
 - **Impacts** : à chaque coup qui porte, trois traits dans l'axe attaquant → victime (couleur de l'attaquant), quelques gouttes de l'encre de la victime dans le même sens, et un éclat doré seulement pour les gros coups. Aucun effet n'est ajouté aux coups parés ni aux mouvements.
 - **Parade par défaut : E** (était K). Un réglage enregistré avec l'ancien défaut (K, sans touche secondaire) est migré.
+
+### D70. Accueil allégé, pastilles sans motif, créateur compact
+
+- **Accueil** : « Partie rapide » retiré (on rejoint par un code ou la liste des salons publics) ; l'entraînement passe tout en bas, juste au-dessus d'Options / Comment jouer. Le serveur garde la logique « salon le plus rempli » (`quick`), simplement sans bouton.
+- **Pastilles d'encre** : uniquement la couleur, sans motif (le motif de poitrine du joueur avait déjà disparu du dessin).
+- **Personnalisation** : choisir une emote de victoire la joue aussitôt (avant, il fallait presser « Essayer »).
+- **Créateur** : pinceau / rectangle / seau en pictogrammes sur une seule ligne (info-bulle et `aria-label` pour le nom) ; symétries en grille 2 × 2.

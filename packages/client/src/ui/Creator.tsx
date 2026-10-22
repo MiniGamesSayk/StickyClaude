@@ -35,6 +35,41 @@ type CTool = ToolId | 'mover';
 /** Manière de poser une case : au pinceau, en rectangle ou au seau. */
 type PoseMode = 'brush' | 'rect' | 'bucket';
 
+/** Pictogrammes des modes de pose : pinceau, rectangle, seau (ils prennent la couleur du texte). */
+function ModeIcon(p: { mode: PoseMode }): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      {p.mode === 'brush' && (
+        <>
+          <path d="M20 4 11 13" />
+          <path d="M9.5 11.5c-2.5 0-3.5 2-3.5 3.5 0 1.5-1 2.5-2.5 3 3.5 1.5 8 .5 8.5-3.5.2-1.7-.8-3-2.5-3Z" />
+        </>
+      )}
+      {p.mode === 'rect' && <path d="M4 6h16v12H4z" stroke-dasharray="3 2.4" />}
+      {p.mode === 'bucket' && (
+        <>
+          <path d="m6 11 6-7 7 7-6 6a2 2 0 0 1-2.8 0L6 13.8a2 2 0 0 1 0-2.8Z" />
+          <path d="M5 11h14" />
+          <path
+            d="M20.5 15.5s1.5 1.8 1.5 3a1.5 1.5 0 0 1-3 0c0-1.2 1.5-3 1.5-3Z"
+            fill="currentColor"
+          />
+        </>
+      )}
+    </svg>
+  );
+}
+
 const MODES: [PoseMode, MessageKey][] = [
   ['brush', 'cr.mode_brush'],
   ['rect', 'cr.mode_rect'],
@@ -643,27 +678,29 @@ export function Creator(): JSX.Element {
         <nav class="creator-tools" aria-label={t('cr.tools')}>
           <section>
             <h2>{t('cr.group_mode')}</h2>
-            <div class="modes">
+            <div class="modes icons">
               {MODES.map(([id, key]) => (
                 <button
                   key={id}
                   type="button"
                   class={`tool${poseMode === id ? ' on' : ''}`}
                   aria-pressed={poseMode === id}
+                  aria-label={t(key)}
+                  title={t(key)}
                   disabled={!cellTool}
                   onClick={(e) => {
                     setPoseMode(id);
                     e.currentTarget.blur();
                   }}
                 >
-                  {t(key)}
+                  <ModeIcon mode={id} />
                 </button>
               ))}
             </div>
           </section>
           <section>
             <h2>{t('cr.group_sym')}</h2>
-            <div class="modes">
+            <div class="modes pair">
               {SYMMETRIES.map(([id, key]) => (
                 <button
                   key={id}

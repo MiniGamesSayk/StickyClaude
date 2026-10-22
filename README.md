@@ -25,7 +25,7 @@ npm run dev
 Ouvre <http://localhost:5173>. Trois façons de jouer :
 
 - **Entraînement** : seul, sans serveur, avec des mannequins et un carnet de 18 objectifs (courir, double saut, saut mural, parade parfaite, armes…).
-- **Partie rapide** : te place dans le salon public le plus rempli, sinon en crée un.
+- **Salons publics** : la liste sous « Créer un salon » permet de rejoindre une partie en un clic (le bouton « Partie rapide » a été retiré de l’accueil).
 - **Créer un niveau** (accueil ou salon) : plateformes, fond, pièges, source de la mort subite, apparitions automatiques, essai en entraînement, sauvegarde dans le navigateur ; un niveau proposé au salon entre dans le **vote de la carte** qui précède chaque manche.
 - **Créer un salon** : donne un code de 5 caractères (et un lien « Copier le lien ») ; un deuxième onglet le rejoint avec ce code ou ce lien. Dans le salon, on peut déjà sauter, se battre et ramasser des armes (les dégâts n'y comptent pas) ; chacun se déclare « Prêt », l'hôte règle la partie (mode, équipes, tir ami, manches à gagner, arènes, armes, mort subite, modes bonus, fantômes, salon public) et la lance.
 

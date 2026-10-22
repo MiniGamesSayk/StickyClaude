@@ -418,10 +418,6 @@ a.btn {
   outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
-.swatch svg {
-  width: 62%;
-  height: 62%;
-}
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -1369,6 +1365,30 @@ table.table td {
   padding: 0.25rem 0.5rem;
   margin-bottom: 0.25rem;
   width: 100%;
+}
+.creator-tools .modes.icons {
+  display: flex;
+  gap: 0.25rem;
+}
+.creator-tools .modes.icons .tool {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 0.2rem 0;
+  margin-bottom: 0;
+}
+.creator-tools .modes.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+}
+.creator-tools .modes.pair .tool {
+  margin-bottom: 0;
+  padding: 0.25rem 0.3rem;
+  text-align: center;
+}
+.creator-tools .tool:disabled {
+  opacity: 0.4;
 }
 .creator-tools .tool.on {
   background: var(--ink);

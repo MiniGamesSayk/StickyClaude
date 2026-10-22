@@ -1,7 +1,6 @@
 import { INK_COLORS } from '@stickyclaude/shared';
 import type { ComponentChildren, JSX } from 'preact';
 import { useRef } from 'preact/hooks';
-import { PATTERN_SHAPES } from '../render/shapes.ts';
 import { legibleInk } from '../render/palette.ts';
 
 /** Petits composants d'interface : bouton, case, curseur, choix, pastille d'encre, bâtons de comptage. */
@@ -154,34 +153,7 @@ export function Choice<T extends string | number>(p: {
   );
 }
 
-/** Motif de poitrine (daltoniens) dessiné en SVG à partir des polylignes du rendu. */
-export function PatternIcon(p: { index: number; color: string }): JSX.Element {
-  const shape = PATTERN_SHAPES[p.index % PATTERN_SHAPES.length];
-  const paths = shape.strokes.map((s, k) => {
-    let d = '';
-    for (let i = 0; i < s.length; i += 2)
-      d += `${i === 0 ? 'M' : 'L'}${s[i].toFixed(2)} ${s[i + 1].toFixed(2)} `;
-    if (shape.closed[k]) d += 'Z';
-    return d;
-  });
-  return (
-    <svg viewBox="-3.4 -3.4 6.8 6.8" aria-hidden="true">
-      {paths.map((d, i) => (
-        <path
-          key={i}
-          d={d}
-          fill="none"
-          stroke={p.color}
-          stroke-width="0.9"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      ))}
-    </svg>
-  );
-}
-
-/** Pastilles des 12 encres, chacune avec son motif. */
+/** Pastilles des 12 encres : uniquement la couleur. */
 export function Swatches(p: {
   value: number;
   onChange: (i: number) => void;
@@ -205,9 +177,7 @@ export function Swatches(p: {
             p.onChange(i);
             e.currentTarget.blur();
           }}
-        >
-          <PatternIcon index={i} color="#ffffff" />
-        </button>
+        />
       ))}
     </div>
   );

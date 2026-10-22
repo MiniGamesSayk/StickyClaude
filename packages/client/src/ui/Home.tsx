@@ -153,7 +153,6 @@ export function Home(): JSX.Element {
             onKeyDown={(e) => {
               if (e.key !== 'Enter') return;
               if (code.trim() !== '') join(code);
-              else actions.quick();
             }}
           />
           <span class="hint" id="name-hint">
@@ -161,20 +160,7 @@ export function Home(): JSX.Element {
           </span>
         </label>
         <div class="row">
-          <Button class="grow" onClick={() => actions.quick()} disabled={busy}>
-            {t('home.quick')}
-          </Button>
-          <Button secondary onClick={() => (screen.value = 'customize')}>
-            {t('home.customize')}
-          </Button>
-        </div>
-        <div class="row">
-          <Button secondary class="grow" onClick={() => (overlay.value = 'creator')}>
-            {t('home.create_level')}
-          </Button>
-        </div>
-        <div class="row">
-          <Button secondary class="grow" onClick={() => actions.create(isPublic)} disabled={busy}>
+          <Button class="grow" onClick={() => actions.create(isPublic)} disabled={busy}>
             {t('home.create')}
           </Button>
           <Check label={t('home.public')} checked={isPublic} onChange={setPublic} />
@@ -203,9 +189,14 @@ export function Home(): JSX.Element {
         <div class="error" role="alert">
           {missing ? t('home.code_missing') : (n.error ?? '')}
         </div>
-        <Button secondary block onClick={() => actions.solo()} title={t('home.solo_hint')}>
-          ✏️ {t('home.solo')} <span class="hint">· {t('home.solo_hint')}</span>
-        </Button>
+        <div class="row">
+          <Button secondary class="grow" onClick={() => (screen.value = 'customize')}>
+            {t('home.customize')}
+          </Button>
+          <Button secondary class="grow" onClick={() => (overlay.value = 'creator')}>
+            {t('home.create_level')}
+          </Button>
+        </div>
         <h2>{t('home.rooms')}</h2>
         <div class="rooms">
           {list.length === 0 ? (
@@ -229,6 +220,9 @@ export function Home(): JSX.Element {
             ))
           )}
         </div>
+        <Button secondary block onClick={() => actions.solo()} title={t('home.solo_hint')}>
+          ✏️ {t('home.solo')} <span class="hint">· {t('home.solo_hint')}</span>
+        </Button>
         <div class="row" style={{ justifyContent: 'center' }}>
           <button type="button" class="link" onClick={() => (overlay.value = 'options')}>
             {t('home.options')}
@@ -258,8 +252,10 @@ export function Customize(): JSX.Element {
   const prof = profile.value;
   const emote = (id: number): void => actions.preview(prof.look, id, -1);
   const change = (look: Look): void => {
+    const victoryChanged = look.victory !== prof.look.victory;
     setProfile({ look });
-    actions.preview(look, 0, -1);
+    // choisir une emote de victoire la joue aussitôt
+    actions.preview(look, 0, victoryChanged ? look.victory : -1);
   };
   return (
     <div class="screen left">
