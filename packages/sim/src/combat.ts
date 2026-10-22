@@ -5,6 +5,7 @@ import {
   AttackKind,
   Cause,
   COMBAT,
+  CROUCH_PUNCH,
   FIST,
   GamePhase,
   HISTORY_TICKS,
@@ -15,6 +16,7 @@ import {
   PlayerState,
   SimEvent,
   SillyDeath,
+  UPPER,
   WeaponKind,
   weaponDef,
 } from '@stickyclaude/shared';
@@ -113,6 +115,11 @@ export function applyHits(world: World): void {
   world.hitCount = 0;
 }
 
+/** La parade vient d'être levée : le coup est annulé en entier. */
+function perfectWindow(v: Player): boolean {
+  return v.blockTicks <= COMBAT.perfectParryTicks;
+}
+
 function applyHit(world: World, index: number): void {
   const h = world.hits[index];
   const v = world.players[h.victim];
@@ -138,7 +145,10 @@ function applyHit(world: World, index: number): void {
 
   if (!h.unblockable) {
     const w = weaponDef(v.weapon);
-    const front = (h.x - v.x) * v.facing >= -2;
+    // Un coup venu de dessus ou de dessous (coup de pied plongeant, coup vers le haut) est paré
+    // s'il arrive dans l'aplomb du corps, même dans le dos.
+    const dxh = h.x - v.x;
+    const front = dxh * v.facing >= -2 || Math.abs(dxh) <= world.params.width * 0.5;
     if (h.ranged && w.kind === WeaponKind.SHIELD && v.ammo > 0 && front) {
       v.ammo--;
       if (v.ammo === 0) {
@@ -147,42 +157,33 @@ function applyHit(world: World, index: number): void {
       emit(world, SimEvent.BLOCKED, h.victim, v.x, v.y - 14, attacker < 0 ? NO_SLOT : attacker, 0);
       return;
     }
-    if (v.blockTicks > 0 && front) {
-      if (!h.ranged && v.blockTicks <= COMBAT.perfectParryTicks) {
-        // Parade parfaite : le coup est annulé, l'attaquant est étourdi.
-        if (a && a !== v && a.stunImmune === 0 && !a.dead) {
-          a.stun = COMBAT.parryStunTicks;
-          cancelActions(a);
-          a.blockTicks = 0;
-          a.hitMask = 0;
-        }
-        emit(
-          world,
-          SimEvent.BLOCKED,
-          h.victim,
-          v.x,
-          v.y - 14,
-          attacker < 0 ? NO_SLOT : attacker,
-          1,
-        );
-        return;
+    if (v.blockTicks > 0 && front && (!h.pierce || (!h.ranged && perfectWindow(v)))) {
+      const perfect = !h.ranged && perfectWindow(v);
+      // La parade n'encaisse qu'un coup : elle retombe et ne reviendra qu'après la recharge.
+      v.blockTicks = 0;
+      v.blockCd = COMBAT.parryCooldownTicks;
+      // Un coup de mêlée paré étourdit celui qui l'a porté (0,4 s), quelle que soit sa direction.
+      if (!h.ranged && a && a !== v && !a.dead) {
+        a.stun = COMBAT.parryStunTicks;
+        cancelActions(a);
+        a.blockTicks = 0;
+        a.hitMask = 0;
       }
-      if (!h.pierce) {
-        damage *= COMBAT.blockDamageTaken;
-        kbx *= COMBAT.blockKnockbackMul;
-        kby *= COMBAT.blockKnockbackMul;
-        stun = 0;
-        blocked = true;
-        emit(
-          world,
-          SimEvent.BLOCKED,
-          h.victim,
-          v.x,
-          v.y - 14,
-          attacker < 0 ? NO_SLOT : attacker,
-          0,
-        );
-      }
+      emit(
+        world,
+        SimEvent.BLOCKED,
+        h.victim,
+        v.x,
+        v.y - 14,
+        attacker < 0 ? NO_SLOT : attacker,
+        perfect ? 1 : 0,
+      );
+      if (perfect) return;
+      damage *= COMBAT.blockDamageTaken;
+      kbx *= COMBAT.blockKnockbackMul;
+      kby *= COMBAT.blockKnockbackMul;
+      stun = 0;
+      blocked = true;
     }
   }
 
@@ -358,6 +359,19 @@ function meleeSpec(p: Player): boolean {
       spec.cause = Cause.MELEE;
       return true;
     }
+    case AttackKind.UPPER:
+    case AttackKind.CROUCH: {
+      const a = p.atkKind === AttackKind.UPPER ? UPPER : CROUCH_PUNCH;
+      spec.damage = a.damage;
+      spec.kbx = a.kbx;
+      spec.kby = a.kby;
+      spec.stun = a.stun;
+      spec.reach = a.reach;
+      spec.halfHeight = 0;
+      spec.flags = 0;
+      spec.cause = Cause.MELEE;
+      return true;
+    }
     case AttackKind.KICK: {
       const k = COMBAT.kick;
       spec.damage = k.damage;
@@ -399,6 +413,14 @@ function meleeBox(world: World, p: Player): void {
     box.r = p.x + COMBAT.kick.reachX;
     box.t = p.y - 6;
     box.b = p.y + COMBAT.kick.reachDown;
+    return;
+  }
+  if (p.atkKind === AttackKind.UPPER) {
+    // au-dessus de la tête, un peu vers l'avant
+    box.l = p.x - hw - 4 - (p.facing < 0 ? 8 : 0);
+    box.r = p.x + hw + 4 + (p.facing > 0 ? 8 : 0);
+    box.t = p.y - h - spec.reach;
+    box.b = p.y - h * 0.3;
     return;
   }
   if (p.facing > 0) {
@@ -445,7 +467,12 @@ export function resolveMelee(world: World): void {
       if (r < box.l || l > box.r || b < box.t || t > box.b) continue;
       p.hitMask |= 1 << v;
       hitAny = true;
-      const dir = p.atkKind === AttackKind.KICK ? (q.x >= p.x ? 1 : -1) : p.facing;
+      const dir =
+        p.atkKind === AttackKind.KICK || p.atkKind === AttackKind.UPPER
+          ? q.x >= p.x
+            ? 1
+            : -1
+          : p.facing;
       queueHit(
         world,
         v,

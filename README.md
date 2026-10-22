@@ -24,17 +24,17 @@ npm run dev
 
 Ouvre <http://localhost:5173>. Trois façons de jouer :
 
-- **Entraînement** : seul, sans serveur, avec des mannequins et un carnet de 16 objectifs (courir, double saut, saut mural, parade parfaite, armes…).
+- **Entraînement** : seul, sans serveur, avec des mannequins et un carnet de 18 objectifs (courir, double saut, saut mural, parade parfaite, armes…).
 - **Partie rapide** : te place dans le salon public le plus rempli, sinon en crée un.
 - **Créer un salon** : donne un code de 5 caractères (et un lien « Copier le lien ») ; un deuxième onglet le rejoint avec ce code ou ce lien. Dans le salon, on peut déjà sauter, se battre et ramasser des armes (les dégâts n'y comptent pas) ; chacun se déclare « Prêt », l'hôte règle la partie (mode, équipes, tir ami, manches à gagner, arènes, armes, mort subite, modes bonus, fantômes, salon public) et la lance.
 
 `npm run dev` lance le serveur (port 3000, avec les outils de développement) et Vite (port 5173, qui relaie `/ws` et `/api`).
 
-**Touches** (modifiables dans Options, par `event.code` : AZERTY et QWERTY partagent les emplacements) : flèches ou WASD/ZQSD pour bouger et viser (8 directions), Espace pour sauter (deux fois : double saut ; contre un mur : saut mural), ↓ + Espace sur une plateforme fine pour la traverser, **J** frapper (enchaînement de 3 coups, maintenu : coup chargé, ↓ en l'air : coup de pied plongeant ; avec une arme : l'utiliser), **K** parer (une parade parfaite annule le coup et étourdit l'attaquant), **L** ramasser ou lancer (↓ + L : lâcher), **1 à 9** emotes, Échap pause, F3 graphe réseau. Éliminé, on devient un fantôme-crayon : J pose un trait, K une goutte d'encre.
+**Touches** (modifiables dans Options, par `event.code` : AZERTY et QWERTY partagent les emplacements) : flèches ou WASD/ZQSD pour bouger, **la souris pour viser** (clic gauche : frapper, clic droit : parer ; sans souris, la visée suit la direction tenue), Espace pour sauter (deux fois : double saut ; contre un mur : saut mural, qui projette peu pour pouvoir revenir sur la plateforme), ↓ sur une plateforme fine pour la traverser, **J** frapper (enchaînement de 3 coups, maintenu : coup chargé ; ↑ + J : coup vers le haut ; ↓ + J au sol : coup accroupi, plus long, qui projette vers le haut ; ↓ + J en l'air : coup de pied plongeant ; avec une arme : l'utiliser), **K** parer (la parade n'encaisse qu'un coup et étourdit l'attaquant 0,4 s, puis 0,5 s de recharge ; juste après l'appui, la parade parfaite annule le coup), **L** ramasser ou lancer (↓ + L : lâcher), **1 à 9** emotes, Échap pause, F3 graphe réseau. Éliminé, on devient un fantôme-crayon : J pose un trait, K une goutte d'encre.
 
-**Manette** : stick ou croix, A saut, X attaque, B parade, Y ramasser ; la croix et A naviguent dans les menus ; la manette vibre sur les gros coups. **Tactile** : joystick à gauche (8 directions), boutons à droite, emotes, plein écran ; en portrait, un message demande de tourner le téléphone.
+**Manette** : stick ou croix, A saut, X attaque, B parade, Y ramasser ; la croix et A naviguent dans les menus ; la manette vibre sur les gros coups. **Tactile** : joystick à gauche (déplacement, et la visée suit l'angle du pouce), boutons à droite, emotes, plein écran ; en portrait, un message demande de tourner le téléphone.
 
-**Accessibilité** : mouvement réduit (coupe le tremblement d'écran, le tremblé des traits et l'arrêt sur coup), motif de poitrine par encre et par équipe pour les daltoniens, contraste AA, texte de 90 à 130 %, navigation au clavier et à la manette.
+**Accessibilité** : mouvement réduit (coupe le tremblement d'écran, le tremblé des traits et l'arrêt sur coup), contraste AA, texte de 90 à 130 %, navigation au clavier et à la manette.
 
 **Tester un mauvais réseau** : ajoute `?lag=150&jitter=30&loss=2` à l'adresse (latence aller-retour 150 ms, gigue ± 30 ms, 2 % de pertes). Plusieurs onglets dans le même salon suffisent pour voir le résultat. Autres paramètres : `?solo=1` (entraînement), `?salon=CODE`, `?auto=1&name=…` (entre directement dans un salon), `?debug=1`.
 

@@ -60,7 +60,7 @@ export class PreviewSource implements RenderSource {
     d.hp = 100;
     d.weapon = 0;
     d.ammo = 0;
-    d.aim = 4;
+    d.aim = 8;
     d.self = false;
     d.name = '';
     d.color = this.look.color;

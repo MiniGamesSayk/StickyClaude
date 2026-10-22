@@ -224,7 +224,6 @@ export function Customize(): JSX.Element {
       <div class="card main">
         <h1>{t('custom.title')}</h1>
         <LookEditor look={prof.look} onChange={change} />
-        <p class="hint">{t('custom.pattern_hint')}</p>
         <p class="hint">{t('custom.unique')}</p>
         <div class="row">
           <Button small secondary onClick={() => emote(6)}>

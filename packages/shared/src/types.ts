@@ -57,6 +57,10 @@ export const AttackKind = {
   THROW: 8,
   /** Coup de bouclier. */
   BASH: 9,
+  /** Coup vers le haut. */
+  UPPER: 10,
+  /** Coup accroupi : allonge longue, projette vers le haut. */
+  CROUCH: 11,
 } as const;
 export type AttackKindId = (typeof AttackKind)[keyof typeof AttackKind];
 

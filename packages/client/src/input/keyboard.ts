@@ -35,6 +35,10 @@ export class KeyboardInput {
   /** Les touches de jeu sont ignorées (menus, saisie de texte). */
   enabled = true;
   private mouse = 0;
+  /** Dernière position de la souris (px de la fenêtre), connue seulement après un mouvement. */
+  private mouseX = 0;
+  private mouseY = 0;
+  private mouseSeen = false;
 
   constructor(target: Window) {
     target.addEventListener('keydown', (e) => this.onKey(e, true));
@@ -45,6 +49,13 @@ export class KeyboardInput {
     });
     target.addEventListener('pointerdown', (e) => this.onPointer(e, true));
     target.addEventListener('pointerup', (e) => this.onPointer(e, false));
+    target.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch') return;
+      this.mouseX = e.clientX;
+      this.mouseY = e.clientY;
+      this.mouseSeen = true;
+    });
+    document.documentElement.addEventListener('pointerleave', () => (this.mouseSeen = false));
     target.addEventListener('contextmenu', (e) => {
       if (e.target instanceof HTMLCanvasElement) e.preventDefault();
     });
@@ -60,6 +71,18 @@ export class KeyboardInput {
     this.captureCb = cb;
   }
 
+  /**
+   * Angle (radians, 0 = droite, y vers le bas) de la souris vu depuis `ox, oy` (px de la fenêtre),
+   * ou null tant que la souris n'a pas bougé.
+   */
+  mouseAngle(ox: number, oy: number): number | null {
+    if (!this.mouseSeen) return null;
+    const dx = this.mouseX - ox;
+    const dy = this.mouseY - oy;
+    if (dx * dx + dy * dy < 16) return null;
+    return Math.atan2(dy, dx);
+  }
+
   private reset(): void {
     this.held = 0;
     this.edges = 0;
@@ -70,6 +93,9 @@ export class KeyboardInput {
     if (e.pointerType === 'touch' || !(e.target instanceof HTMLCanvasElement)) return;
     const bit = e.button === 0 ? Input.ATTACK : e.button === 2 ? Input.BLOCK : 0;
     if (bit === 0) return;
+    this.mouseX = e.clientX;
+    this.mouseY = e.clientY;
+    this.mouseSeen = true;
     if (down && this.enabled) {
       this.mouse |= bit;
       this.edges |= bit;

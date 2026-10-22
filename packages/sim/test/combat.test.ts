@@ -2,10 +2,12 @@ import {
   AtkPhase,
   AttackKind,
   COMBAT,
+  CROUCH_PUNCH,
   FIST,
   GamePhase,
   PlayerState,
   SimEvent,
+  UPPER,
 } from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import {
@@ -16,6 +18,7 @@ import {
   JUMP,
   LEFT,
   RIGHT,
+  UP,
   countEvents,
   eventCount,
   fightWorld,
@@ -158,6 +161,54 @@ describe('coup de pied sauté vers le bas', () => {
   });
 });
 
+describe('coup accroupi et coup vers le haut', () => {
+  it('accroupi, le coup porte plus loin que le jab et projette vers le haut', () => {
+    const w = fightWorld();
+    // hors de portée du jab (à 26 unités du corps : x_cible - 6,4 - 20 > x), dans celle du coup accroupi
+    expect(FIST[0].reach).toBeLessThan(CROUCH_PUNCH.reach);
+    pl(w, 1).x = 300 + 6.4 + FIST[0].reach + 6.4 + 8;
+    ticks(w, 14, ATTACK);
+    expect(pl(w, 1).hp).toBe(100);
+    const w2 = fightWorld();
+    pl(w2, 1).x = 300 + 6.4 + FIST[0].reach + 6.4 + 8;
+    tick(w2, DOWN | ATTACK);
+    expect(pl(w2, 0).atkKind).toBe(AttackKind.CROUCH);
+    expect(pl(w2, 0).crouching).toBe(true);
+    let sawUp = false;
+    for (let i = 0; i < 16; i++) {
+      tick(w2, DOWN);
+      if (pl(w2, 1).vy < -100) sawUp = true;
+    }
+    expect(pl(w2, 1).hp).toBe(100 - CROUCH_PUNCH.damage);
+    expect(sawUp).toBe(true);
+    expect(pl(w2, 0).crouching).toBe(true);
+  });
+
+  it('haut + attaquer frappe au-dessus de la tête et projette vers le haut', () => {
+    const w = fightWorld();
+    const q = pl(w, 1);
+    q.x = 304;
+    q.y = FLOOR - 30; // en l'air, juste au-dessus de l'attaquant
+    q.grounded = false;
+    tick(w, UP | ATTACK);
+    expect(pl(w, 0).atkKind).toBe(AttackKind.UPPER);
+    let minVy = 0;
+    for (let i = 0; i < 12; i++) {
+      tick(w, UP);
+      minVy = Math.min(minVy, q.vy);
+    }
+    expect(q.hp).toBe(100 - UPPER.damage);
+    expect(minVy).toBeLessThan(-150);
+  });
+
+  it('haut + attaquer ne touche pas un adversaire au sol à côté', () => {
+    const w = fightWorld();
+    pl(w, 1).x = 330;
+    ticks(w, 14, UP | ATTACK);
+    expect(pl(w, 1).hp).toBe(100);
+  });
+});
+
 describe('parade', () => {
   it('bloquer de face réduit les dégâts à 30 %', () => {
     const w = fightWorld();
@@ -199,6 +250,64 @@ describe('parade', () => {
     expect(q.hp).toBe(100);
     expect(pl(w, 0).stun).toBeGreaterThan(0);
     expect(pl(w, 0).stun).toBeLessThanOrEqual(COMBAT.parryStunTicks);
+  });
+
+  it('une parade qui fonctionne étourdit l attaquant 0,4 s, même hors de la fenêtre parfaite', () => {
+    const w = fightWorld();
+    const q = pl(w, 1);
+    q.facing = -1;
+    ticks(w, 20, 0, BLOCK);
+    pl(w, 0).x = 300;
+    q.x = 330;
+    ticks(w, 12, ATTACK, BLOCK);
+    expect(pl(w, 0).stun).toBeGreaterThan(0);
+    expect(COMBAT.parryStunTicks).toBe(24);
+    expect(pl(w, 0).stun).toBeLessThanOrEqual(COMBAT.parryStunTicks);
+  });
+
+  it('la parade n encaisse qu un coup, puis 0,5 s de recharge avant de parer de nouveau', () => {
+    const w = fightWorld();
+    const q = pl(w, 1);
+    q.facing = -1;
+    ticks(w, 20, 0, BLOCK);
+    pl(w, 0).x = 300;
+    q.x = 330;
+    // premier coup : paré (dégâts réduits), la parade retombe d'elle-même
+    ticks(w, 12, ATTACK, BLOCK);
+    const afterFirst = q.hp;
+    expect(afterFirst).toBe(100 - Math.round(FIST[0].damage * COMBAT.blockDamageTaken));
+    expect(q.blockTicks).toBe(0);
+    expect(q.blockCd).toBeGreaterThan(0);
+    // tenir le bouton ne ré-engage pas la parade pendant la recharge
+    ticks(w, COMBAT.parryCooldownTicks - 2, 0, BLOCK);
+    expect(q.blockTicks).toBe(0);
+    // l'attaquant est sorti de son étourdissement : le coup suivant passe en entier
+    pl(w, 0).stun = 0;
+    pl(w, 0).stunImmune = 0;
+    pl(w, 0).x = 300;
+    q.x = 330;
+    q.vx = 0;
+    ticks(w, 12, ATTACK, BLOCK);
+    expect(q.hp).toBeLessThan(afterFirst - FIST[0].damage + 1);
+    // relâcher puis rappuyer après la recharge : la parade revient
+    ticks(w, COMBAT.parryCooldownTicks + 20, 0, 0);
+    tick(w, 0, BLOCK);
+    expect(q.blockTicks).toBe(1);
+  });
+
+  it('le coup de pied plongeant est paré et étourdit celui qui le porte', () => {
+    const w = fightWorld();
+    const q = pl(w, 1);
+    q.facing = -1;
+    ticks(w, 20, 0, BLOCK);
+    const a = pl(w, 0);
+    a.x = q.x - 2;
+    a.y = FLOOR - 70;
+    a.grounded = false;
+    a.vy = 0;
+    ticks(w, 40, DOWN | ATTACK, BLOCK);
+    expect(q.hp).toBeGreaterThan(100 - 10);
+    expect(a.stun + a.stunImmune).toBeGreaterThan(0);
   });
 
   it('recharge de 0,5 s : pas de parade parfaite en rafale', () => {

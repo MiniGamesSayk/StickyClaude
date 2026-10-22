@@ -135,7 +135,7 @@ describe('tentatives de triche : aucun message ne fixe un état', () => {
       h.advance(1);
     }
     const p = room.world.players[slot];
-    expect(p.prevInput & 0xff00).toBe(0);
+    expect(p.prevInput & 0xe000).toBe(0);
   });
 
   it('une compensation de latence énorme ne sert qu à rattraper 250 ms au plus', () => {

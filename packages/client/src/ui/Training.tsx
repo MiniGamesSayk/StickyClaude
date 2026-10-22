@@ -17,6 +17,8 @@ const KEY: Record<string, MessageKey> = {
   combo: 'train.combo',
   charged: 'train.charged',
   kick: 'train.kick',
+  lowpunch: 'train.lowpunch',
+  upper: 'train.upper',
   block: 'train.block',
   parry: 'train.parry',
   pickup: 'train.pickup',

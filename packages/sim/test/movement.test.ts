@@ -84,7 +84,7 @@ describe('sol et course', () => {
 });
 
 describe('sauts', () => {
-  it('le saut atteint la hauteur attendue (≈ 3,2 cellules)', () => {
+  it('le saut atteint la hauteur attendue (≈ 3,9 cellules)', () => {
     const w = worldWithPlayer();
     const p = w.players[0];
     let minY = p.y;
@@ -242,6 +242,36 @@ describe('murs', () => {
     expect(p.facing).toBe(1);
   });
 
+  it('après un saut mural, on revient sur la plateforme sans double saut', () => {
+    // Pilier plein de 6 cellules (colonnes 30-33), dont le haut est à la rangée 27.
+    const a = customArena((r) => {
+      for (const row of r.slice(2, 33)) row.fill('.', 2, 62);
+      fill(r, 30, 27, 33, 32, '#');
+    }, 'test-flat');
+    const top = 27 * CELL;
+    for (const startBelow of [24, 34, 44]) {
+      const w = worldWithPlayer(a);
+      const p = put(w, 30 * CELL - P.width / 2, top + startBelow);
+      p.grounded = false;
+      p.vy = 0;
+      p.doubleAvailable = false;
+      p.coyote = 0;
+      const seen = new Set<number>();
+      let landed = false;
+      for (let i = 0; i < 120 && !landed; i++) {
+        inputs.fill(0);
+        // contre le mur, saut, puis on retourne vers le pilier en tenant le saut
+        inputs[0] = i < 2 ? RIGHT | JUMP : i < 30 ? RIGHT | JUMP : RIGHT;
+        step(w, inputs);
+        for (const t of eventTypes(w)) seen.add(t);
+        landed = p.grounded && Math.abs(p.y - top) < 0.01;
+      }
+      expect(seen.has(SimEvent.WALL_JUMP)).toBe(true);
+      expect(seen.has(SimEvent.DOUBLE_JUMP)).toBe(false);
+      expect(landed).toBe(true);
+    }
+  });
+
   it('on peut monter le puits en alternant les murs', () => {
     const w = worldWithPlayer();
     const p = put(w, shaftLeftWallX + P.width / 2, 30 * CELL);
@@ -320,16 +350,35 @@ describe('plateformes à sens unique et mobiles', () => {
     expect(landedOnTop).toBe(true);
   });
 
-  it('bas + saut traverse la plateforme vers le bas', () => {
+  it('bas seul traverse la plateforme vers le bas', () => {
     const w = worldWithPlayer();
     const p = put(w, 20 * CELL, 28 * CELL);
     p.grounded = true;
     run(w, 2, 0);
     expect(p.y).toBeCloseTo(28 * CELL, 3);
-    const types = runCollect(w, 1, () => DOWN | JUMP);
+    const types = runCollect(w, 1, () => DOWN);
     expect(types.has(SimEvent.DROP_THROUGH)).toBe(true);
     run(w, 60, 0);
     expect(p.y).toBeCloseTo(FLOOR_Y, 3);
+  });
+
+  it('bas ne traverse pas le sol plein : on s accroupit', () => {
+    const w = worldWithPlayer();
+    const p = w.players[0];
+    const types = runCollect(w, 10, () => DOWN);
+    expect(types.has(SimEvent.DROP_THROUGH)).toBe(false);
+    expect(p.crouching).toBe(true);
+    expect(p.y).toBeCloseTo(FLOOR_Y, 3);
+  });
+
+  it('atterrir sur une plateforme en tenant bas ne la traverse pas (il faut un nouvel appui)', () => {
+    const w = worldWithPlayer();
+    const p = put(w, 20 * CELL, 28 * CELL - 40);
+    p.grounded = false;
+    run(w, 1, DOWN);
+    const types = runCollect(w, 40, () => DOWN);
+    expect(types.has(SimEvent.DROP_THROUGH)).toBe(false);
+    expect(p.y).toBeCloseTo(28 * CELL, 3);
   });
 
   it('une plateforme mobile entraîne le joueur', () => {

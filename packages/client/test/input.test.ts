@@ -13,7 +13,14 @@ import {
 import type { Bindings } from '../src/app/options.ts';
 import { detectLayout, keyLabel } from '../src/input/bindings.ts';
 import { buildKeymap } from '../src/input/keyboard.ts';
-import { setButton, setStick, stickToBits, touchMask } from '../src/input/touch.ts';
+import {
+  resetTouch,
+  setButton,
+  setStick,
+  stickToBits,
+  touchAimAngle,
+  touchMask,
+} from '../src/input/touch.ts';
 
 describe('touche virtuelle : joystick à 8 directions', () => {
   const r = 56;
@@ -41,6 +48,22 @@ describe('touche virtuelle : joystick à 8 directions', () => {
     expect(touchMask() & Input.RIGHT).toBe(Input.RIGHT);
     setStick(0, 0, false);
     expect(touchMask()).toBe(0);
+  });
+});
+
+describe('visée au joystick tactile', () => {
+  it('suit l’angle exact du pouce, au repos il n’y a pas de visée', () => {
+    resetTouch();
+    expect(touchAimAngle()).toBeNull();
+    setStick(0, -50, true);
+    expect(touchAimAngle()).toBeCloseTo(-Math.PI / 2, 6);
+    setStick(30, 30, true);
+    expect(touchAimAngle()).toBeCloseTo(Math.PI / 4, 6);
+    setStick(2, 2, true); // zone morte
+    expect(touchAimAngle()).toBeNull();
+    setStick(40, 0, false);
+    expect(touchAimAngle()).toBeNull();
+    resetTouch();
   });
 });
 

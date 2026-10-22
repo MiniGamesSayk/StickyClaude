@@ -447,7 +447,7 @@ export function decodeSnapshot(buf: Uint8Array, out: Snapshot): void {
     p.vx = r.i16() / POS_SCALE;
     p.vy = r.i16() / POS_SCALE;
     p.aim = r.u8();
-    if (p.aim > 7) throw new DecodeError('bad aim');
+    if (p.aim > 15) throw new DecodeError('bad aim');
     p.hp = r.u8();
     p.weapon = r.u8();
     p.ammo = r.u8();

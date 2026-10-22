@@ -370,7 +370,7 @@ describe('snapshot', () => {
     b11[SNAPSHOT_HEADER_BYTES + 3 * PLAYER_BYTES + 2 * OBJ_BYTES + 2] = 0; // type de projectile
     expectDecodeError(() => decodeSnapshot(b11, d));
     const b12 = buf.slice(0, n);
-    b12[SNAPSHOT_HEADER_BYTES + 11] = 9; // visée hors des 8 directions
+    b12[SNAPSHOT_HEADER_BYTES + 11] = 17; // visée hors des 16 secteurs
     expectDecodeError(() => decodeSnapshot(b12, d));
   });
 
@@ -454,7 +454,7 @@ describe('fuzzing', () => {
       y: fc.integer({ min: -4000 * 8, max: 4000 * 8 }).map((v) => v / 8),
       vx: fc.integer({ min: -4000 * 8, max: 4000 * 8 }).map((v) => v / 8),
       vy: fc.integer({ min: -4000 * 8, max: 4000 * 8 }).map((v) => v / 8),
-      aim: fc.integer({ min: 0, max: 7 }),
+      aim: fc.integer({ min: 0, max: 15 }),
       hp: fc.integer({ min: 0, max: 255 }),
       weapon: fc.integer({ min: 0, max: 255 }),
       ammo: fc.integer({ min: 0, max: 255 }),

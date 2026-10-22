@@ -60,16 +60,16 @@ export const DEFAULT_MOVEMENT: Readonly<MovementParams> = {
   maxFallSpeed: 620,
   fastFallGravityMul: 1.8,
   fastFallSpeed: 820,
-  jumpSpeed: 360, // ≈ 3,2 cellules de haut
-  doubleJumpSpeed: 320, // ≈ 2,6 cellules de haut
+  jumpSpeed: 395, // ≈ 3,9 cellules de haut
+  doubleJumpSpeed: 340, // ≈ 2,9 cellules de haut
   jumpCut: 0.45,
   coyoteTicks: 6, // 100 ms
   jumpBufferTicks: 6, // 100 ms
 
   wallSlideSpeed: 90,
-  wallJumpSpeedX: 210,
-  wallJumpSpeedY: 340,
-  wallLockTicks: 9,
+  wallJumpSpeedX: 120,
+  wallJumpSpeedY: 375,
+  wallLockTicks: 5,
   wallCoyoteTicks: 5,
 
   dropThroughTicks: 14,

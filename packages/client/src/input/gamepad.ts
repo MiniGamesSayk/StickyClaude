@@ -1,6 +1,8 @@
 import { Input } from '@stickyclaude/shared';
 
 const DEADZONE = 0.35;
+/** Inclinaison minimale du stick pour viser dans sa direction. */
+const AIM_DEADZONE = 0.4;
 
 /** Un déplacement dans les menus ou un bouton de menu. */
 export interface PadNav {
@@ -28,6 +30,8 @@ export class GamepadInput {
   connected = false;
   /** Vibration autorisée (option). */
   rumbleEnabled = true;
+  /** Direction du stick (radians, 0 = droite, y vers le bas) tant qu'il est incliné, sinon null. */
+  aimAngle: number | null = null;
   private lastNav = 0;
   private navHeld = false;
   private prevButtons = 0;
@@ -44,9 +48,11 @@ export class GamepadInput {
     let m = 0;
     const pads = this.pads();
     this.connected = pads.length > 0;
+    this.aimAngle = null;
     for (const pad of pads) {
       const ax = pad.axes[0] ?? 0;
       const ay = pad.axes[1] ?? 0;
+      if (Math.hypot(ax, ay) > AIM_DEADZONE) this.aimAngle = Math.atan2(ay, ax);
       const b = (i: number): boolean => pad.buttons[i]?.pressed === true;
       if (ax < -DEADZONE || b(14)) m |= Input.LEFT;
       if (ax > DEADZONE || b(15)) m |= Input.RIGHT;

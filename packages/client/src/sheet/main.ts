@@ -273,7 +273,7 @@ async function main(): Promise<void> {
       ['lancer', atk(AttackKind.THROW, AtkPhase.ACTIVE, 0)],
       ['pistolet', { weapon: 4, ...atk(AttackKind.SHOOT, AtkPhase.ACTIVE, 0), aim: 0 }],
       ['règle', { weapon: 1, ...atk(AttackKind.WEAPON, AtkPhase.ACTIVE, 2) }],
-      ['bazooka', { weapon: 8, aim: 7 }],
+      ['bazooka', { weapon: 8, aim: 14 }],
     ];
     row2.forEach(([n, o], i) => {
       const x = 60 + i * 108;

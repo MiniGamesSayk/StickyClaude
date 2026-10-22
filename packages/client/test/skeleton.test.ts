@@ -157,6 +157,31 @@ describe('Rig', () => {
     expect(dist(pt(r, J.HNR), [r.gripX, r.gripY])).toBeLessThan(0.5);
   });
 
+  it('le coup vers le haut lève le poing au-dessus de la tête', () => {
+    const r = new Rig();
+    const p = createPoseInput();
+    p.state = PlayerState.ATTACK;
+    p.variant = AttackKind.UPPER | (AtkPhase.ACTIVE << 4);
+    p.animProg = 3;
+    run(r, p, 0.3);
+    expect(pt(r, J.HNR)[1]).toBeLessThan(pt(r, J.HEAD)[1] - 3);
+  });
+
+  it('le coup accroupi reste bas et tend le bras plus loin que le jab', () => {
+    const jab = new Rig();
+    const low = new Rig();
+    const p = createPoseInput();
+    p.state = PlayerState.ATTACK;
+    p.animProg = 2;
+    p.variant = AttackKind.FIST1 | (AtkPhase.ACTIVE << 4);
+    run(jab, p, 0.3);
+    p.variant = AttackKind.CROUCH | (AtkPhase.ACTIVE << 4);
+    run(low, p, 0.3);
+    expect(pt(low, J.HEAD)[1]).toBeGreaterThan(-16);
+    expect(pt(low, J.HNR)[0]).toBeGreaterThan(pt(jab, J.HNR)[0]);
+    for (const v of low.joints) expect(Number.isFinite(v)).toBe(true);
+  });
+
   it('le saut périlleux soulève les pieds puis revient au sol', () => {
     const r = new Rig();
     const p = createPoseInput();

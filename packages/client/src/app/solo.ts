@@ -57,6 +57,8 @@ export const TRAINING_OBJECTIVES: readonly ObjectiveDef[] = [
   { id: 'combo', goal: 1 },
   { id: 'charged', goal: 1 },
   { id: 'kick', goal: 1 },
+  { id: 'lowpunch', goal: 1 },
+  { id: 'upper', goal: 1 },
   { id: 'block', goal: 1 },
   { id: 'parry', goal: 1 },
   { id: 'pickup', goal: 1 },
@@ -185,6 +187,8 @@ export class TrainingTracker {
           add('punch');
           if (this.lastAttackKind === AttackKind.CHARGED) add('charged');
           if (this.lastAttackKind === AttackKind.KICK) add('kick');
+          if (this.lastAttackKind === AttackKind.CROUCH) add('lowpunch');
+          if (this.lastAttackKind === AttackKind.UPPER) add('upper');
         }
         break;
       }

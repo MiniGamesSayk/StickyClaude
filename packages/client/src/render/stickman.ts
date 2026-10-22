@@ -16,7 +16,7 @@ import type { Boil } from './draw.ts';
 import { INK } from './palette.ts';
 import { PEN_WIDTH, PenStyle } from './penStyle.ts';
 import type { Pen } from './pen.ts';
-import { HAT_SHAPES, PATTERN_SHAPES, PENCIL, TARGET, WEAPON_INK, WEAPON_SHAPES } from './shapes.ts';
+import { HAT_SHAPES, PENCIL, WEAPON_INK, WEAPON_SHAPES } from './shapes.ts';
 import { BODY, createPoseInput, J, Rig } from './skeleton.ts';
 import type { PoseInput } from './skeleton.ts';
 import type { DrawPlayer } from './types.ts';
@@ -119,7 +119,6 @@ function joints(
 }
 
 /** Tremblés réutilisés (aucune allocation par image). */
-const NO_BOIL: Boil = { variant: 0, amp: 0, seed: 0 };
 const hatBoil: Boil = { variant: 0, amp: 0, seed: 0 };
 const weaponBoil: Boil = { variant: 0, amp: 0, seed: 0 };
 
@@ -209,8 +208,8 @@ export class StickmanPainter {
     pose.crouching = p.crouching;
     pose.weapon = p.weapon;
     pose.weaponKind = weaponDef(p.weapon).kind;
-    pose.aimX = AIM_DX[p.aim & 7] * facing;
-    pose.aimY = AIM_DY[p.aim & 7];
+    pose.aimX = AIM_DX[p.aim & 15] * facing;
+    pose.aimY = AIM_DY[p.aim & 15];
     const n = Math.hypot(pose.aimX, pose.aimY) || 1;
     pose.aimX /= n;
     pose.aimY /= n;
@@ -383,47 +382,6 @@ export class StickmanPainter {
     seg(pen, w, style, J.SHR, J.ELR, wd, ink, alpha);
     seg(pen, w, style, J.ELR, J.HNR, wd, ink, alpha);
     joints(pen, w, style, wd, ink, alpha, J.ELR, J.HNR, -1);
-
-    // badge de poitrine : motif (daltoniens) ou cible (mannequin)
-    const bx = (w[J.NECK * 2] + w[J.PEL * 2]) / 2;
-    const by = (w[J.NECK * 2 + 1] + w[J.PEL * 2 + 1]) / 2;
-    if (p.mannequin) {
-      drawShape(
-        pen,
-        TARGET,
-        bx,
-        by,
-        1,
-        0,
-        0,
-        0,
-        3.4,
-        1.0,
-        INK.red,
-        alpha,
-        PenStyle.BALLPOINT,
-        NO_BOIL,
-      );
-    } else {
-      pen.disc(bx + facing * 2.3, by, 3.2, 3.2, 0xffffff, 0.9 * alpha);
-      const pattern = PATTERN_SHAPES[(p.team >= 0 ? 5 + p.team : p.color) % PATTERN_SHAPES.length];
-      drawShape(
-        pen,
-        pattern,
-        bx + facing * 2.3,
-        by,
-        1,
-        0,
-        0,
-        0,
-        1.0,
-        0.9,
-        ink,
-        alpha,
-        PenStyle.BALLPOINT,
-        NO_BOIL,
-      );
-    }
   }
 
   /** Fantôme-crayon : un crayon incliné, tracé en graphite, avec une croix de visée. */

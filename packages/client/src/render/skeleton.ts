@@ -1,4 +1,13 @@
-import { AtkPhase, AttackKind, COMBAT, FIST, PlayerState, WeaponKind } from '@stickyclaude/shared';
+import {
+  AtkPhase,
+  AttackKind,
+  COMBAT,
+  CROUCH_PUNCH,
+  FIST,
+  PlayerState,
+  UPPER,
+  WeaponKind,
+} from '@stickyclaude/shared';
 
 /**
  * Squelette du stickman : 13 points, poses-clés par état, mélange, IK à deux os pour les pieds et
@@ -142,6 +151,15 @@ export function attackPhaseTicks(
           ? c.active
           : c.recovery;
     }
+    case AttackKind.UPPER:
+    case AttackKind.CROUCH: {
+      const a = kind === AttackKind.UPPER ? UPPER : CROUCH_PUNCH;
+      return phase === AtkPhase.STARTUP
+        ? a.startup
+        : phase === AtkPhase.ACTIVE
+          ? a.active
+          : a.recovery;
+    }
     case AttackKind.KICK:
       return phase === AtkPhase.RECOVERY ? COMBAT.kick.recovery : 0;
     case AttackKind.THROW:
@@ -159,6 +177,8 @@ export function fistReach(kind: number): number {
   if (kind >= AttackKind.FIST1 && kind <= AttackKind.FIST3)
     return FIST[kind - AttackKind.FIST1].reach;
   if (kind === AttackKind.CHARGED) return COMBAT.charged.reach;
+  if (kind === AttackKind.CROUCH) return CROUCH_PUNCH.reach;
+  if (kind === AttackKind.UPPER) return UPPER.reach;
   return 20;
 }
 
@@ -528,6 +548,42 @@ export class Rig {
           set(o, T_HNL, 0.0, -11.0);
           o[T_LEAN] = (big ? 0.5 : 0.3) * e + 0.12;
         }
+        break;
+      }
+      case AttackKind.CROUCH: {
+        // accroupi, le poing part du sol vers l'avant et monte (long bras, projette vers le haut)
+        const k =
+          phase === AtkPhase.STARTUP
+            ? 0
+            : phase === AtkPhase.ACTIVE
+              ? 0.3 + 0.7 * ease(t)
+              : 1 - ease(t);
+        set(o, T_PEL, -1.0, -5.6);
+        set(o, T_HEAD, 3.0, -13.4);
+        set(o, T_NECK, 1.6, -8.7);
+        set(o, T_SHL, 0.4, -8.2);
+        set(o, T_SHR, 3.0, -8.0);
+        set(o, T_FTL, -4.0, 0);
+        set(o, T_FTR, 4.5, 0);
+        set(o, T_HNR, lerp(0.6, 6.4 + reach * 0.85, k), lerp(-2.0, -10.5, k));
+        set(o, T_HNL, 5.0, -4.5);
+        o[T_LEAN] = 0.1 + 0.12 * k;
+        break;
+      }
+      case AttackKind.UPPER: {
+        // coup vers le haut : le poing monte au-dessus de la tête, le corps se cambre
+        const k =
+          phase === AtkPhase.STARTUP
+            ? 0
+            : phase === AtkPhase.ACTIVE
+              ? 0.3 + 0.7 * ease(t)
+              : 1 - ease(t);
+        set(o, T_PEL, 0.2, -10.6 - 0.8 * k);
+        set(o, T_HNR, lerp(2.4, 4.6, k), lerp(-12.0, -35.0, k));
+        set(o, T_HNL, 1.0, -13.5);
+        set(o, T_FTL, -4.4, 0);
+        set(o, T_FTR, 4.6, 0);
+        o[T_LEAN] = -0.1 - 0.12 * k;
         break;
       }
       case AttackKind.KICK:

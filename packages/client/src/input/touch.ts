@@ -14,6 +14,8 @@ const DEAD = 0.28;
 let stickBits = 0;
 let buttonBits = 0;
 let edge = 0;
+/** Angle du pouce (radians, 0 = droite, y vers le bas) tant que le joystick est sorti de sa zone morte. */
+let stickAng: number | null = null;
 
 /** Position du pouce par rapport au centre du joystick (pour dessiner la boule), −1 à 1. */
 export const stick = signal({ x: 0, y: 0, active: false });
@@ -36,6 +38,7 @@ export function stickToBits(dx: number, dy: number, radius = STICK_RADIUS): numb
 
 export function setStick(dx: number, dy: number, active: boolean, radius = STICK_RADIUS): void {
   stickBits = active ? stickToBits(dx, dy, radius) : 0;
+  stickAng = active && Math.hypot(dx, dy) >= radius * DEAD ? Math.atan2(dy, dx) : null;
   const len = Math.hypot(dx, dy) || 1;
   const k = Math.min(1, len / radius);
   stick.value = { x: active ? (dx / len) * k : 0, y: active ? (dy / len) * k : 0, active };
@@ -56,7 +59,13 @@ export function touchMask(): number {
   return m;
 }
 
+/** Direction de visée du joystick (radians), ou null s'il est au repos. */
+export function touchAimAngle(): number | null {
+  return stickAng;
+}
+
 export function resetTouch(): void {
+  stickAng = null;
   stickBits = 0;
   buttonBits = 0;
   edge = 0;

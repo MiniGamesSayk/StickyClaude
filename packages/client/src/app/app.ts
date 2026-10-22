@@ -76,6 +76,16 @@ export async function startApp(): Promise<void> {
   }
 
   const input = new InputManager();
+  // La visée à la souris part du joueur local, tel qu'il est dessiné.
+  input.origin = () => {
+    const sc = source.scene;
+    for (let i = 0; i < sc.playerCount; i++) {
+      const p = sc.players[i];
+      if (p.self) return renderer.worldToClient(p.x, p.y - 17);
+    }
+    return null;
+  };
+  renderer.canvas.style.cursor = 'crosshair';
   const audio = new AudioEngine();
   const haptics: Haptics = {
     hit: (strength) => {

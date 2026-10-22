@@ -211,6 +211,17 @@ export class Renderer {
     return this.app.canvas;
   }
 
+  /** Point du monde → position à l'écran en px de la fenêtre (origine de la visée à la souris). */
+  worldToClient(wx: number, wy: number): { x: number; y: number } {
+    const scale = this.baseScale * this.camera.zoom;
+    const rect = this.app.canvas.getBoundingClientRect();
+    const k = this.app.screen.width > 0 ? rect.width / this.app.screen.width : 1;
+    return {
+      x: rect.left + (this.worldLayer.position.x + wx * scale) * k,
+      y: rect.top + (this.worldLayer.position.y + wy * scale) * k,
+    };
+  }
+
   /** Couches et outils pour la planche de référence et les mesures. */
   get internals(): {
     pen: Pen;

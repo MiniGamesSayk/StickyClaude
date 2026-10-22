@@ -20,7 +20,10 @@ import {
   sanitizeLook,
   SimEvent,
   WEAPONS,
+  aimOfInput,
+  aimSectorOfAngle,
   rewindOf,
+  withAim,
   withRewind,
   aimFromInput,
   Input,
@@ -96,24 +99,36 @@ describe('événements réseau génériques', () => {
 });
 
 describe('compensation de latence dans le masque', () => {
-  it('les bits 12 à 15 portent le retard, les boutons restent intacts', () => {
+  it('les bits 13 à 15 portent le retard (pas de 2 ticks), boutons et visée restent intacts', () => {
     const m = withRewind(0xffff, 9);
-    expect(rewindOf(m)).toBe(9);
-    expect(m & 0xff).toBe(0xff);
-    expect(m & 0x0f00).toBe(0);
-    expect(rewindOf(withRewind(0, 99))).toBe(15);
+    expect(rewindOf(m)).toBe(10);
+    expect(m & 0x1fff).toBe(0x1fff);
+    expect(rewindOf(withRewind(0, 8))).toBe(8);
+    expect(rewindOf(withRewind(0, 99))).toBe(14);
     expect(rewindOf(withRewind(0, -4))).toBe(0);
   });
 
-  it('huit directions de visée', () => {
+  it('huit directions de visée au clavier, rangées dans les seize secteurs', () => {
     expect(aimFromInput(0)).toBe(-1);
     expect(aimFromInput(Input.RIGHT)).toBe(0);
-    expect(aimFromInput(Input.LEFT)).toBe(4);
-    expect(aimFromInput(Input.UP)).toBe(6);
-    expect(aimFromInput(Input.DOWN)).toBe(2);
-    expect(aimFromInput(Input.RIGHT | Input.UP)).toBe(7);
-    expect(aimFromInput(Input.LEFT | Input.DOWN)).toBe(3);
+    expect(aimFromInput(Input.LEFT)).toBe(8);
+    expect(aimFromInput(Input.UP)).toBe(12);
+    expect(aimFromInput(Input.DOWN)).toBe(4);
+    expect(aimFromInput(Input.RIGHT | Input.UP)).toBe(14);
+    expect(aimFromInput(Input.LEFT | Input.DOWN)).toBe(6);
     expect(aimFromInput(Input.LEFT | Input.RIGHT)).toBe(-1);
+  });
+
+  it('la visée explicite (souris, joystick) l emporte sur les touches de direction', () => {
+    expect(aimOfInput(Input.UP)).toBe(12);
+    expect(aimOfInput(withAim(Input.UP, 0))).toBe(0);
+    expect(aimOfInput(withAim(0, 5))).toBe(5);
+    expect(aimOfInput(withAim(withAim(0, 5), 11))).toBe(11);
+    expect(aimSectorOfAngle(0)).toBe(0);
+    expect(aimSectorOfAngle(Math.PI / 2)).toBe(4);
+    expect(aimSectorOfAngle(-Math.PI / 2)).toBe(12);
+    expect(aimSectorOfAngle(Math.PI)).toBe(8);
+    expect(aimSectorOfAngle(0.2)).toBe(1);
   });
 });
 

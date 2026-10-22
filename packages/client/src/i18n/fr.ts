@@ -52,7 +52,6 @@ export const fr = {
   'custom.emote_dance': 'Danser',
   'custom.emote_laugh': 'Rire',
   'custom.done': 'Terminé',
-  'custom.pattern_hint': 'Chaque encre a son motif de poitrine, pour les daltoniens.',
   'custom.unique':
     'Dans un salon, chaque encre est unique : la plus proche de libre est attribuée.',
 
@@ -189,12 +188,14 @@ export const fr = {
   'train.jump': 'Saute',
   'train.double': 'Fais un double saut',
   'train.wall': 'Saute contre un mur (saut mural)',
-  'train.drop': 'Descends d’une plateforme (↓ + saut)',
+  'train.drop': 'Descends d’une plateforme (↓)',
   'train.crouch': 'Accroupis-toi une demi-seconde',
   'train.punch': 'Frappe un mannequin',
   'train.combo': 'Enchaîne 3 coups',
   'train.charged': 'Frappe avec un coup chargé (maintiens l’attaque)',
   'train.kick': 'Coup de pied plongeant (en l’air, ↓ + attaque)',
+  'train.lowpunch': 'Coup accroupi, longue portée (↓ au sol + attaque)',
+  'train.upper': 'Coup vers le haut (↑ + attaque)',
   'train.block': 'Pare un coup',
   'train.parry': 'Réussis une parade parfaite',
   'train.pickup': 'Ramasse une arme',
@@ -302,7 +303,7 @@ export const fr = {
   'help.move':
     'Bouger : flèches ou WASD/ZQSD, manette, joystick. Sauter deux fois = double saut ; contre un mur = saut mural.',
   'help.fight':
-    'Attaquer : 3 coups enchaînés, maintenir pour charger. Parer juste après l’appui = parade parfaite.',
+    'Attaquer : 3 coups enchaînés, maintenir pour charger ; ↑ + attaque : coup vers le haut ; ↓ + attaque : coup accroupi (au sol) ou plongeant (en l’air). Parer : un seul coup encaissé, il étourdit l’attaquant 0,4 s, puis 0,5 s de recharge ; juste après l’appui = parade parfaite. La visée suit la souris (ou le joystick).',
   'help.weapons':
     'Ramasser / lancer une arme : touche de ramassage ; ↓ + ramassage pour la lâcher.',
   'help.ghost':

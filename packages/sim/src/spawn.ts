@@ -83,7 +83,7 @@ export function spawnPlayerAt(
   p.wallSide = 0;
   p.state = PlayerState.FALL;
   p.stateTicks = 0;
-  p.aim = p.facing > 0 ? 0 : 4;
+  p.aim = p.facing > 0 ? 0 : 8;
   resetCombatState(p);
   p.invuln = invuln;
   p.respawns = (p.respawns + 1) & 0xffff;

@@ -1,14 +1,16 @@
 import {
-  aimFromInput,
+  aimOfInput,
   AIM_DX,
   AtkPhase,
   AttackKind,
   COMBAT,
+  CROUCH_PUNCH,
   DT,
   FIST,
   Input,
   PlayerState,
   SimEvent,
+  UPPER,
   WeaponId,
   WeaponKind,
   weaponDef,
@@ -62,6 +64,15 @@ export function phaseTicks(p: Player, phase: number): number {
         : phase === AtkPhase.ACTIVE
           ? ch.active
           : ch.recovery;
+    case AttackKind.UPPER:
+    case AttackKind.CROUCH: {
+      const a = p.atkKind === AttackKind.UPPER ? UPPER : CROUCH_PUNCH;
+      return phase === AtkPhase.STARTUP
+        ? a.startup
+        : phase === AtkPhase.ACTIVE
+          ? a.active
+          : a.recovery;
+    }
     case AttackKind.KICK:
       return phase === AtkPhase.STARTUP ? 0 : phase === AtkPhase.ACTIVE ? 0 : COMBAT.kick.recovery;
     case AttackKind.THROW:
@@ -120,6 +131,8 @@ function onActiveStart(world: World, p: Player, slot: number): void {
     if (Math.abs(p.vx) < a.lunge) p.vx = dir * a.lunge;
   } else if (k === AttackKind.CHARGED) {
     if (Math.abs(p.vx) < COMBAT.charged.lunge) p.vx = dir * COMBAT.charged.lunge;
+  } else if (k === AttackKind.CROUCH) {
+    if (Math.abs(p.vx) < CROUCH_PUNCH.lunge) p.vx = dir * CROUCH_PUNCH.lunge;
   } else if (k === AttackKind.THROW) {
     // L'arme quitte la main tout de suite (prédit) ; la passe d'autorité crée le projectile.
     p.throwW = p.weapon;
@@ -175,8 +188,8 @@ function startThrow(p: Player): void {
 function stepActions(world: World, p: Player, slot: number, input: number, pressed: number): void {
   const weapon = weaponDef(p.weapon);
 
-  const a = aimFromInput(input);
-  p.aim = a >= 0 ? a : p.facing > 0 ? 0 : 4;
+  const a = aimOfInput(input);
+  p.aim = a >= 0 ? a : p.facing > 0 ? 0 : 8;
 
   if ((input & Input.ATTACK) !== 0) {
     if (p.attackHeld < 255) p.attackHeld++;
@@ -285,6 +298,10 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
   if (fists) {
     if ((input & Input.DOWN) !== 0 && !p.grounded && !p.kicking) {
       startKick(world, p, slot);
+    } else if ((input & Input.DOWN) !== 0 && p.grounded) {
+      startSpecial(p, AttackKind.CROUCH);
+    } else if ((input & Input.UP) !== 0) {
+      startSpecial(p, AttackKind.UPPER);
     } else {
       const next = p.comboWindow > 0 && p.combo >= 1 && p.combo <= 2 ? p.combo : 0;
       startFist(p, next);
@@ -294,6 +311,16 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
   } else {
     startWeaponUse(p, weapon);
   }
+}
+
+/** Coup vers le haut ou coup accroupi : jamais enchaîné, pas de fenêtre de combo. */
+function startSpecial(p: Player, kind: number): void {
+  p.atkKind = kind;
+  p.atkPhase = AtkPhase.STARTUP;
+  p.atkTicks = 0;
+  p.atkBuffer = 0;
+  p.combo = 0;
+  p.comboWindow = 0;
 }
 
 function startKick(_world: World, p: Player, _slot: number): void {
@@ -337,6 +364,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   const pressed = input & ~p.prevInput;
   const jumpHeld = (input & Input.JUMP) !== 0;
   const downHeld = (input & Input.DOWN) !== 0;
+  const downPressed = (pressed & Input.DOWN) !== 0;
   p.prevInput = input;
 
   // --- Minuteries -----------------------------------------------------------------------------
@@ -391,8 +419,8 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     p.coyote--;
   }
 
-  // Traversée vers le bas d'une plateforme à sens unique : bas + saut.
-  if (jumpPressed && downHeld && p.grounded && (ground & GROUND_SOLID) === 0) {
+  // Traversée vers le bas d'une plateforme à sens unique : un appui sur « bas » suffit.
+  if (downPressed && !p.jumpLocked && p.grounded && (ground & GROUND_SOLID) === 0) {
     if ((ground & GROUND_ONEWAY) !== 0 || p.groundMover >= 0) {
       p.dropTimer = P.dropThroughTicks;
       p.jumpBuffer = 0;
@@ -404,7 +432,12 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   }
 
   // --- Accroupi -------------------------------------------------------------------------------
-  if (p.grounded && downHeld && !p.ctrlLocked && p.atkPhase === AtkPhase.NONE) {
+  if (
+    p.grounded &&
+    downHeld &&
+    !p.ctrlLocked &&
+    (p.atkPhase === AtkPhase.NONE || p.atkKind === AttackKind.CROUCH)
+  ) {
     p.crouching = true;
   } else if (p.crouching && hasHeadroom(world, p)) {
     p.crouching = false;

@@ -36,9 +36,15 @@ export const COMBAT = {
   /** Parade : part des dégâts subis de face, et des projections. */
   blockDamageTaken: 0.3,
   blockKnockbackMul: 0.4,
-  /** Parade parfaite : fenêtre après l'appui, étourdissement de l'attaquant, recharge. */
+  /**
+   * Parade : elle n'encaisse qu'un seul coup (puis elle retombe), l'attaquant dont le coup de
+   * mêlée est paré est étourdi 0,4 s, et il faut attendre 0,5 s avant de parer de nouveau.
+   * Parade parfaite : fenêtre après l'appui, pendant laquelle le coup n'inflige rien.
+   */
   perfectParryTicks: 6,
   parryStunTicks: 24,
+  parryCooldownTicks: 30,
+  /** Recharge après avoir relâché la parade sans avoir été touché. */
   blockCooldownTicks: 30,
   /** Vitesse de déplacement pendant les actions (multiplicateur de la vitesse de course). */
   blockSpeedMul: 0.45,
@@ -104,6 +110,38 @@ export const COMBAT = {
   pickupReach: 14,
   pickupCooldownTicks: 18,
 } as const;
+
+/**
+ * Coup vers le haut (haut + attaquer) : `reach` est l'allonge au-dessus de la tête. Il projette
+ * presque à la verticale.
+ */
+export const UPPER: MeleeAttack = {
+  startup: 4,
+  active: 3,
+  recovery: 13,
+  damage: 8,
+  kbx: 50,
+  kby: -330,
+  stun: 0,
+  reach: 18,
+  lunge: 0,
+};
+
+/**
+ * Coup accroupi (bas + attaquer au sol) : plus long que les poings debout (20 à 26) et il projette
+ * vers le haut.
+ */
+export const CROUCH_PUNCH: MeleeAttack = {
+  startup: 4,
+  active: 3,
+  recovery: 14,
+  damage: 8,
+  kbx: 70,
+  kby: -320,
+  stun: 0,
+  reach: 36,
+  lunge: 30,
+};
 
 /** Coups à mains nues : jab, crochet, final (projette). */
 export const FIST: readonly MeleeAttack[] = [
