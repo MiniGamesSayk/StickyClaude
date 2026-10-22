@@ -1,14 +1,19 @@
-import { Cell, GRID_W } from '@stickyclaude/shared';
+import { Cell, GRID_H, GRID_W } from '@stickyclaude/shared';
 import { arenaSchema } from '@stickyclaude/shared/schemas';
 import { describe, expect, it } from 'vitest';
 import {
   addMover,
   checkLevel,
+  eraseAt,
   fillRect,
   finalizeLevel,
   floodFill,
+  mirrorCells,
+  mirrorRects,
   newLevel,
   placeSpawns,
+  sameLevel,
+  toggleSpawnAt,
 } from '../src/creator/model.ts';
 import { applyTool, Tool } from '../src/editor/model.ts';
 
@@ -99,5 +104,79 @@ describe('créateur de niveau', () => {
     // un trou dans le sol : le vide
     fillRect(s, 30, 34, 33, 35, Cell.EMPTY, true);
     expect(s.cells[35 * GRID_W + 31]).toBe(Cell.EMPTY);
+  });
+
+  it('la gomme retire la colline, les cages et les plateformes mobiles qu’elle touche', () => {
+    const s = newLevel('x');
+    s.koth = [28, 20, 8, 4];
+    s.goalA = [3, 28, 3, 4];
+    s.goalB = [58, 28, 3, 4];
+    addMover(s, [10, 12, 4, 1], 20, 12);
+    eraseAt(s, 30, 21);
+    expect(s.koth).toBeNull();
+    expect(s.goalA).not.toBeNull();
+    eraseAt(s, 4, 29);
+    eraseAt(s, 59, 30);
+    expect(s.goalA).toBeNull();
+    expect(s.goalB).toBeNull();
+    eraseAt(s, 11, 12);
+    expect(s.movers).toHaveLength(0);
+  });
+
+  it('une apparition fait 2 cases de haut : la tête se clique comme les pieds', () => {
+    const s = newLevel('x');
+    const [x, y] = s.spawns[0];
+    const n = s.spawns.length;
+    eraseAt(s, x, y - 1);
+    expect(s.spawns).toHaveLength(n - 1);
+    toggleSpawnAt(s, x, y); // repose
+    expect(s.spawns).toHaveLength(n);
+    toggleSpawnAt(s, x, y - 1); // retire en cliquant la tête
+    expect(s.spawns).toHaveLength(n - 1);
+  });
+
+  it('gommer du vide ne change rien : rien à inscrire à l’historique', () => {
+    const s = newLevel('x');
+    const before = structuredClone(s);
+    eraseAt(s, 30, 10);
+    expect(sameLevel(before, s)).toBe(true);
+    eraseAt(s, 0, 0); // le cadre : là, il y a un vrai changement
+    expect(sameLevel(before, s)).toBe(false);
+  });
+
+  it('symétrie : reflets gauche ↔ droite, haut ↕ bas, ou les deux, sans doublon', () => {
+    expect(mirrorCells(10, 5, 'none')).toEqual([[10, 5]]);
+    expect(mirrorCells(10, 5, 'h')).toEqual([
+      [10, 5],
+      [GRID_W - 11, 5],
+    ]);
+    expect(mirrorCells(10, 5, 'v')).toEqual([
+      [10, 5],
+      [10, GRID_H - 6],
+    ]);
+    expect(mirrorCells(10, 5, 'hv')).toHaveLength(4);
+    // sur l'axe : pas de doublon
+    expect(mirrorCells(GRID_W - 1 - 10, 5, 'h').length).toBe(2);
+    expect(mirrorCells(31, 5, 'h')).toEqual([
+      [31, 5],
+      [32, 5],
+    ]);
+    // les objets et apparitions ne se retournent pas la tête en bas
+    expect(mirrorCells(10, 5, 'hv', true)).toHaveLength(2);
+    expect(mirrorCells(10, 5, 'v', true)).toEqual([[10, 5]]);
+  });
+
+  it('symétrie : un rectangle posé d’un côté est reproduit de l’autre', () => {
+    const s = newLevel('x');
+    for (const [x0, y0, x1, y1] of mirrorRects([5, 10, 8, 12], 'h')) {
+      fillRect(s, x0, y0, x1, y1, Cell.SOLID);
+    }
+    for (let y = 10; y <= 12; y++) {
+      for (let x = 5; x <= 8; x++) {
+        expect(s.cells[y * GRID_W + x]).toBe(Cell.SOLID);
+        expect(s.cells[y * GRID_W + (GRID_W - 1 - x)]).toBe(Cell.SOLID);
+      }
+    }
+    expect(mirrorRects([5, 10, 8, 12], 'hv')).toHaveLength(4);
   });
 });

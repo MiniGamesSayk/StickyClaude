@@ -7,17 +7,21 @@ import { actions, levels, mode, overlay, say } from '../app/store.ts';
 import {
   addMover,
   applySpawns,
+  eraseAt,
   fillRect,
   finalizeLevel,
   floodFill,
+  mirrorCells,
+  mirrorRects,
   fromArena,
   levelCheck,
   newLevel,
-  removeMoverAt,
+  sameLevel,
+  toggleSpawnAt,
   THEME_IDS,
 } from '../creator/model.ts';
 import { LevelChecker } from '../creator/checker.ts';
-import type { EditorState, LevelCheck } from '../creator/model.ts';
+import type { EditorState, LevelCheck, Symmetry } from '../creator/model.ts';
 import { applyRect, applyTool, CELL_TOOLS, RECT_TOOLS, Tool, toArena } from '../editor/model.ts';
 import type { Rect, ToolId } from '../editor/model.ts';
 import { pick, t } from '../i18n/index.ts';
@@ -35,6 +39,13 @@ const MODES: [PoseMode, MessageKey][] = [
   ['brush', 'cr.mode_brush'],
   ['rect', 'cr.mode_rect'],
   ['bucket', 'cr.mode_bucket'],
+];
+
+const SYMMETRIES: [Symmetry, MessageKey][] = [
+  ['none', 'cr.sym_none'],
+  ['h', 'cr.sym_h'],
+  ['v', 'cr.sym_v'],
+  ['hv', 'cr.sym_hv'],
 ];
 
 const GROUPS: { title: MessageKey; tools: [CTool, MessageKey][] }[] = [
@@ -162,6 +173,8 @@ function draw(
   drag: { x: number; y: number } | null,
   rectLike: boolean,
   pending: Rect | null,
+  sym: Symmetry,
+  markerTool: boolean,
 ): void {
   ctx.drawImage(backgroundOf(s.theme), 0, 0, WORLD_W, WORLD_H);
   for (let y = 0; y < GRID_H; y++) {
@@ -199,7 +212,7 @@ function draw(
   // le centre de la page : repère pour équilibrer le niveau (symétrie des apparitions)
   ctx.save();
   ctx.strokeStyle = 'rgba(214,50,46,0.55)';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = sym === 'none' ? 1 : 1.6;
   ctx.setLineDash([8, 6]);
   ctx.beginPath();
   ctx.moveTo(WORLD_W / 2 + 0.5, 0);
@@ -259,8 +272,26 @@ function draw(
       (Math.abs(hover.x - drag.x) + 1) * CELL,
       (Math.abs(hover.y - drag.y) + 1) * CELL,
     );
+    // le reflet du rectangle
+    if (sym !== 'none') {
+      ctx.setLineDash([3, 3]);
+      for (const m of mirrorRects([drag.x, drag.y, hover.x, hover.y], sym).slice(1)) {
+        ctx.strokeRect(
+          m[0] * CELL,
+          m[1] * CELL,
+          (m[2] - m[0] + 1) * CELL,
+          (m[3] - m[1] + 1) * CELL,
+        );
+      }
+      ctx.setLineDash([]);
+    }
   } else if (!pending) {
     ctx.strokeRect(hover.x * CELL, hover.y * CELL, CELL, CELL);
+    // les reflets du pinceau
+    for (const [mx, my] of mirrorCells(hover.x, hover.y, sym, markerTool).slice(1)) {
+      ctx.strokeStyle = 'rgba(214,50,46,0.8)';
+      ctx.strokeRect(mx * CELL, my * CELL, CELL, CELL);
+    }
   }
 }
 
@@ -280,6 +311,7 @@ export function Creator(): JSX.Element {
   const state = draft;
   const [tool, setTool] = useState<CTool>(Tool.SOLID);
   const [poseMode, setPoseMode] = useState<PoseMode>('brush');
+  const [sym, setSym] = useState<Symmetry>('none');
   const [, setRev] = useState(0);
   const [check, setCheck] = useState<LevelCheck | null>(null);
   const hover = useRef({ x: 0, y: 0 });
@@ -297,7 +329,9 @@ export function Creator(): JSX.Element {
     tool === 'mover' || RECT_TOOLS.has(tool) || (cellTool && poseMode === 'rect');
   const redraw = (): void => {
     const ctx = canvasRef.current?.getContext('2d');
-    if (ctx && draft) draw(ctx, draft, hover.current, drag.current, rectLike(), pending.current);
+    if (ctx && draft) {
+      draw(ctx, draft, hover.current, drag.current, rectLike(), pending.current, sym, !cellTool);
+    }
   };
   /** Analyse du niveau dans un worker (plusieurs secondes sur un terrain très ouvert). */
   const verify = async (): Promise<void> => {
@@ -315,10 +349,19 @@ export function Creator(): JSX.Element {
   };
   const rev = (): void => setRev((n) => n + 1);
 
-  /** À appeler avant toute modification : garde l'état actuel pour « annuler ». */
-  const commit = (): void => {
-    if (!draft) return;
-    undoStack.push(snapshot(draft));
+  /**
+   * Une action : `begin` garde l'état de départ, `end` ne l'inscrit à l'historique que si le niveau
+   * a réellement changé (gommer du vide ne laisse donc aucune trace à annuler).
+   */
+  const before = useRef<EditorState | null>(null);
+  const begin = (): void => {
+    if (draft) before.current = snapshot(draft);
+  };
+  const end = (): void => {
+    const prev = before.current;
+    before.current = null;
+    if (!prev || !draft || sameLevel(prev, draft)) return;
+    undoStack.push(prev);
     if (undoStack.length > MAX_HISTORY) undoStack.shift();
     redoStack = [];
     rev();
@@ -377,7 +420,7 @@ export function Creator(): JSX.Element {
       checker.current?.dispose();
     };
   }, []);
-  useEffect(redraw, [tool, poseMode, state.theme]);
+  useEffect(redraw, [tool, poseMode, sym, state.theme]);
 
   const cellAt = (e: PointerEvent): { x: number; y: number } => {
     const r = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
@@ -387,6 +430,48 @@ export function Creator(): JSX.Element {
     };
   };
 
+  /** Un coup de pinceau (ou de gomme, ou un marqueur) sur une case, reproduit selon la symétrie. */
+  const paint = (tl: CTool, x: number, y: number): void => {
+    if (!draft) return;
+    const markers = !CELL_TOOL_IDS.has(tl);
+    // un seul départ de boule : pas de reflet
+    const spots =
+      tl === Tool.BALL_SPAWN ? [[x, y] as [number, number]] : mirrorCells(x, y, sym, markers);
+    for (const [px, py] of spots) {
+      if (tl === Tool.ERASE) eraseAt(draft, px, py);
+      else if (tl === Tool.SPAWN) toggleSpawnAt(draft, px, py);
+      else applyTool(draft, tl as ToolId, px, py);
+    }
+  };
+
+  /** Plateforme mobile, et son reflet gauche ↔ droite si la symétrie le demande. */
+  const placeMover = (rect: Rect, ex: number, ey: number): boolean => {
+    if (!draft) return false;
+    if (!addMover(draft, rect, ex, ey)) return false;
+    if (sym === 'h' || sym === 'hv') {
+      const [x, y, w, h] = rect;
+      addMover(draft, [GRID_W - x - w, y, w, h], GRID_W - ex - w, ey);
+    }
+    return true;
+  };
+
+  /** Colline et cages : la colline devient symétrique, une cage dessinée donne l'autre. */
+  const placeZone = (zone: ToolId, x0: number, y0: number, x1: number, y1: number): void => {
+    if (!draft) return;
+    const horizontal = sym === 'h' || sym === 'hv';
+    if (zone === Tool.KOTH && horizontal) {
+      const lx = Math.min(x0, x1, GRID_W - 1 - Math.max(x0, x1));
+      const hx = Math.max(x0, x1, GRID_W - 1 - Math.min(x0, x1));
+      applyRect(draft, zone, lx, y0, hx, y1);
+      return;
+    }
+    applyRect(draft, zone, x0, y0, x1, y1);
+    if ((zone === Tool.GOAL_A || zone === Tool.GOAL_B) && horizontal) {
+      const other = zone === Tool.GOAL_A ? Tool.GOAL_B : Tool.GOAL_A;
+      applyRect(draft, other, GRID_W - 1 - x1, y0, GRID_W - 1 - x0, y1);
+    }
+  };
+
   const onDown = (e: PointerEvent): void => {
     if (!draft) return;
     (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
@@ -394,13 +479,11 @@ export function Creator(): JSX.Element {
     hover.current = c;
     const tl: CTool = e.button === 2 ? Tool.ERASE : tool;
     if (pending.current && tl === 'mover') {
-      commit();
-      const ok = addMover(draft, pending.current, c.x, c.y);
+      begin();
+      const ok = placeMover(pending.current, c.x, c.y);
       pending.current = null;
-      if (!ok) {
-        undoStack.pop();
-        say(t('cr.mover_bad'));
-      }
+      if (!ok) say(t('cr.mover_bad'));
+      end();
       changed();
       return;
     }
@@ -410,15 +493,17 @@ export function Creator(): JSX.Element {
       redraw();
       return;
     }
-    commit();
+    begin();
     if (isCell && poseMode === 'bucket') {
-      floodFill(draft, c.x, c.y, cellValue(tl), tl === Tool.ERASE);
+      for (const [mx, my] of mirrorCells(c.x, c.y, sym)) {
+        floodFill(draft, mx, my, cellValue(tl), tl === Tool.ERASE);
+      }
+      end();
       changed();
       return;
     }
     painting.current = true;
-    if (tl === Tool.ERASE) removeMoverAt(draft, c.x, c.y);
-    applyTool(draft, tl, c.x, c.y);
+    paint(tl, c.x, c.y);
     changed();
   };
   const onMove = (e: PointerEvent): void => {
@@ -427,7 +512,7 @@ export function Creator(): JSX.Element {
     if (painting.current && draft) {
       const tl: CTool = e.buttons === 2 ? Tool.ERASE : tool;
       if (CELL_TOOL_IDS.has(tl) && poseMode === 'brush') {
-        applyTool(draft, tl as ToolId, c.x, c.y);
+        paint(tl, c.x, c.y);
         changed();
         return;
       }
@@ -446,15 +531,20 @@ export function Creator(): JSX.Element {
         say(t('cr.mover_end'));
         redraw();
       } else if (RECT_TOOLS.has(d.tool)) {
-        commit();
-        applyRect(draft, d.tool, d.x, d.y, c.x, c.y);
+        begin();
+        placeZone(d.tool, d.x, d.y, c.x, c.y);
+        end();
         changed();
       } else {
-        commit();
-        fillRect(draft, d.x, d.y, c.x, c.y, cellValue(d.tool), d.tool === Tool.ERASE);
+        begin();
+        for (const [x0, y0, x1, y1] of mirrorRects([d.x, d.y, c.x, c.y], sym)) {
+          fillRect(draft, x0, y0, x1, y1, cellValue(d.tool), d.tool === Tool.ERASE);
+        }
+        end();
         changed();
       }
     }
+    if (painting.current) end();
     painting.current = false;
   };
 
@@ -473,18 +563,20 @@ export function Creator(): JSX.Element {
     say(t('cr.saved'));
   };
   const load = (a: ArenaData): void => {
-    commit();
+    begin();
     draft = fromArena(a);
     draftId = a.id;
     pending.current = null;
+    end();
     rev();
     changed();
   };
   const fresh = (): void => {
-    commit();
+    begin();
     draft = newLevel(t('cr.default_name'));
     draftId = newLevelId();
     pending.current = null;
+    end();
     rev();
     changed();
   };
@@ -569,6 +661,25 @@ export function Creator(): JSX.Element {
               ))}
             </div>
           </section>
+          <section>
+            <h2>{t('cr.group_sym')}</h2>
+            <div class="modes">
+              {SYMMETRIES.map(([id, key]) => (
+                <button
+                  key={id}
+                  type="button"
+                  class={`tool${sym === id ? ' on' : ''}`}
+                  aria-pressed={sym === id}
+                  onClick={(e) => {
+                    setSym(id);
+                    e.currentTarget.blur();
+                  }}
+                >
+                  {t(key)}
+                </button>
+              ))}
+            </div>
+          </section>
           {GROUPS.map((g) => (
             <section key={g.title}>
               <h2>{t(g.title)}</h2>
@@ -608,8 +719,9 @@ export function Creator(): JSX.Element {
             value={state.theme}
             options={themeOptions}
             onChange={(v) => {
-              commit();
+              begin();
               state.theme = v;
+              end();
               rev();
               changed();
             }}
@@ -622,8 +734,9 @@ export function Creator(): JSX.Element {
               { value: 'tear-edges', label: t('cr.death_tear') },
             ]}
             onChange={(v) => {
-              commit();
+              begin();
               state.suddenDeath = v;
+              end();
               rev();
               changed();
             }}
@@ -639,8 +752,9 @@ export function Creator(): JSX.Element {
                 setCheck(null);
                 void c.spawns(toArena(state)).then((sug) => {
                   if (!sug || !draft) return;
-                  commit();
+                  begin();
                   if (applySpawns(draft, sug) < 8) say(t('cr.auto_fail'));
+                  end();
                   rev();
                   changed();
                 });

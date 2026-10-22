@@ -81,24 +81,140 @@ export function removeMoverAt(s: EditorState, x: number, y: number): boolean {
   return true;
 }
 
-/** Retire apparitions, objets et marqueurs posés dans la cellule (elle devient pleine ou dangereuse). */
-function clearMarkers(s: EditorState, x: number, y: number): void {
-  const same = (c: [number, number]): boolean => c[0] === x && c[1] === y;
-  s.spawns = s.spawns.filter((c) => !same(c));
-  s.weaponSpawns = s.weaponSpawns.filter((c) => !same(c));
-  s.props = s.props.filter((p) => !(p.at[0] === x && p.at[1] === y));
-  if (s.ballSpawn && same(s.ballSpawn)) s.ballSpawn = null;
+/**
+ * Un stickman posé occupe sa case et celle du dessus (2 cases de haut) ; un ballon aussi. On peut
+ * donc cliquer sur n'importe laquelle pour le retrouver.
+ */
+function coversCell(feet: [number, number], x: number, y: number, tall: boolean): boolean {
+  return feet[0] === x && (feet[1] === y || (tall && feet[1] === y + 1));
+}
+
+function inRect(r: Rect | null, x: number, y: number): boolean {
+  return r !== null && x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3];
 }
 
 /**
- * Change une case. Les marqueurs qu'elle porte sont retirés quand elle devient pleine ou
- * dangereuse, ou si `clear` le demande (gomme).
+ * Retire ce qui occupe la case : apparitions (case et tête), objets, départ de la boule. Avec
+ * `all` (gomme), aussi la colline, les cages et les plateformes mobiles qui la recouvrent.
+ * Retourne vrai si quelque chose a été retiré.
  */
+function clearMarkers(s: EditorState, x: number, y: number, all = false): boolean {
+  let removed = false;
+  const keep = <T>(list: T[], hit: (v: T) => boolean): T[] => {
+    const out = list.filter((v) => !hit(v));
+    if (out.length !== list.length) removed = true;
+    return out;
+  };
+  s.spawns = keep(s.spawns, (c) => coversCell(c, x, y, true));
+  s.weaponSpawns = keep(s.weaponSpawns, (c) => coversCell(c, x, y, false));
+  s.props = keep(s.props, (p) => coversCell(p.at, x, y, p.type === 'balloon'));
+  if (s.ballSpawn && coversCell(s.ballSpawn, x, y, false)) {
+    s.ballSpawn = null;
+    removed = true;
+  }
+  if (all) {
+    if (inRect(s.koth, x, y)) {
+      s.koth = null;
+      removed = true;
+    }
+    if (inRect(s.goalA, x, y)) {
+      s.goalA = null;
+      removed = true;
+    }
+    if (inRect(s.goalB, x, y)) {
+      s.goalB = null;
+      removed = true;
+    }
+    if (removeMoverAt(s, x, y)) removed = true;
+  }
+  return removed;
+}
+
+/** Symétrie d'édition : aucune, gauche ↔ droite, haut ↕ bas, ou les deux (4 quarts identiques). */
+export type Symmetry = 'none' | 'h' | 'v' | 'hv';
+
+/**
+ * Cases où reproduire une pose faite en `(x, y)`, la case elle-même d'abord, sans doublon.
+ * `markers` : apparitions, armes, objets… se tiennent debout, donc seule la symétrie gauche ↔ droite
+ * s'applique (un stickman ne se retourne pas la tête en bas).
+ */
+export function mirrorCells(
+  x: number,
+  y: number,
+  sym: Symmetry,
+  markers = false,
+): [number, number][] {
+  const out: [number, number][] = [[x, y]];
+  const add = (mx: number, my: number): void => {
+    if (!out.some((c) => c[0] === mx && c[1] === my)) out.push([mx, my]);
+  };
+  const h = sym === 'h' || sym === 'hv';
+  const v = (sym === 'v' || sym === 'hv') && !markers;
+  if (h) add(GRID_W - 1 - x, y);
+  if (v) add(x, GRID_H - 1 - y);
+  if (h && v) add(GRID_W - 1 - x, GRID_H - 1 - y);
+  return out;
+}
+
+/** Rectangles (bornes comprises : x0, y0, x1, y1) à remplir pour une symétrie, l'original d'abord. */
+export function mirrorRects(
+  r: [number, number, number, number],
+  sym: Symmetry,
+): [number, number, number, number][] {
+  const [x0, y0, x1, y1] = r;
+  const lx = Math.min(x0, x1);
+  const hx = Math.max(x0, x1);
+  const ly = Math.min(y0, y1);
+  const hy = Math.max(y0, y1);
+  const out: [number, number, number, number][] = [[lx, ly, hx, hy]];
+  const h = sym === 'h' || sym === 'hv';
+  const v = sym === 'v' || sym === 'hv';
+  if (h) out.push([GRID_W - 1 - hx, ly, GRID_W - 1 - lx, hy]);
+  if (v) out.push([lx, GRID_H - 1 - hy, hx, GRID_H - 1 - ly]);
+  if (h && v) out.push([GRID_W - 1 - hx, GRID_H - 1 - hy, GRID_W - 1 - lx, GRID_H - 1 - ly]);
+  return out;
+}
+
+/** Pose une apparition de joueur, ou retire celle qu'on clique (case ou tête : elle fait 2 cases). */
+export function toggleSpawnAt(s: EditorState, x: number, y: number): void {
+  if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return;
+  const i = s.spawns.findIndex((c) => coversCell(c, x, y, true));
+  if (i >= 0) s.spawns.splice(i, 1);
+  else s.spawns.push([x, y]);
+}
+
+/** Gomme : vide la case et retire tout ce qui s'y trouve (colline, cages, plateformes mobiles…). */
+export function eraseAt(s: EditorState, x: number, y: number): void {
+  if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return;
+  s.cells[y * GRID_W + x] = Cell.EMPTY;
+  clearMarkers(s, x, y, true);
+}
+
+/** Les deux états sont-ils identiques ? (pour ne garder dans l'historique que les vraies modifications) */
+export function sameLevel(a: EditorState, b: EditorState): boolean {
+  if (a.cells.length !== b.cells.length) return false;
+  for (let i = 0; i < a.cells.length; i++) if (a.cells[i] !== b.cells[i]) return false;
+  const rest = (s: EditorState): string =>
+    JSON.stringify([
+      s.theme,
+      s.suddenDeath,
+      s.nameFr,
+      s.spawns,
+      s.weaponSpawns,
+      s.props,
+      s.movers,
+      s.koth,
+      s.goalA,
+      s.goalB,
+      s.ballSpawn,
+    ]);
+  return rest(a) === rest(b);
+}
+
 function paintCell(s: EditorState, x: number, y: number, value: number, clear: boolean): void {
   s.cells[y * GRID_W + x] = value;
-  if (clear || (value !== Cell.EMPTY && value !== Cell.ONEWAY)) {
-    clearMarkers(s, x, y);
-  }
+  if (clear) clearMarkers(s, x, y, true);
+  else if (value !== Cell.EMPTY && value !== Cell.ONEWAY) clearMarkers(s, x, y);
 }
 
 /**

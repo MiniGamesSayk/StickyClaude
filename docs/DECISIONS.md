@@ -409,3 +409,10 @@ Le dépôt ClaudeGame n'est pas modifié. Les blocs à y ajouter sont dans `depl
 - **Tactile** : le joystick n'envoie plus que gauche/droite et la visée ; s'accroupir est un bouton (`Input.DOWN`) ; joystick vers le haut + attaque envoie `UP` (coup vers le haut). Tailles du joystick et des boutons séparées (0,6 à 1,8) ; tableau des scores masquable (option et bouton 🏆).
 - **Plateformes mobiles pleines** : côtés et dessous arrêtent les corps, le joueur porté est entraîné (inchangé), un joueur percuté est repoussé par la plus petite pénétration sans traverser un mur (`pushOutOfMovers`). Pendant la traversée (↓) elles sont ignorées. L'analyse d'accessibilité continue de les ignorer.
 - **Joueur local** : lueur et disque de sa couleur d'encre, flèche qui rebondit au-dessus du nom.
+
+### D68. Créateur : suppression complète, historique honnête, symétrie
+
+- **La gomme retire tout ce qui occupe la case** : colline, cages, plateformes mobiles, objets, départ de la boule. Une apparition de joueur fait 2 cases de haut (case et tête), comme son dessin : on la retrouve en cliquant l'une ou l'autre.
+- **Historique** : une action (`begin` / `end`) ne s'inscrit que si `sameLevel` voit une différence : gommer du vide, ou reposer ce qui existe déjà, ne crée plus d'étape « annuler » sans effet visible. Un trait de pinceau entier est une seule étape.
+- **Symétrie** (`mirrorCells`, `mirrorRects`) : une pose est reproduite sur les cases miroir avant d'être inscrite à l'historique, donc annulée en bloc. Les objets et apparitions (qui se tiennent debout) ne se reflètent que gauche ↔ droite ; la colline devient symétrique ; une cage dessinée donne l'autre.
+- **Anneau au sol du joueur local** : seulement quand il est posé (il restait visible en l'air).
