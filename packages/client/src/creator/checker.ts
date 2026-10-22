@@ -36,14 +36,12 @@ export class LevelChecker {
 
   private ask<T>(kind: 'check' | 'spawns', arena: ArenaData): Promise<T | null> {
     if (this.pending.size > 0) this.reset();
-    if (!this.worker) this.worker = this.spawn();
+    this.worker ??= this.spawn();
     const w = this.worker;
     if (!w) {
-      return Promise.resolve(
-        (kind === 'check'
-          ? { report: analyzeArena(arena) }
-          : { spawns: suggestSpawns(arena) }) as T,
-      );
+      const r =
+        kind === 'check' ? { report: analyzeArena(arena) } : { spawns: suggestSpawns(arena) };
+      return Promise.resolve(r as T);
     }
     const id = ++this.seq;
     return new Promise<T | null>((resolve) => {

@@ -11,9 +11,7 @@ export type CheckRequest =
 
 self.onmessage = (e: MessageEvent<CheckRequest>): void => {
   const m = e.data;
-  if (m.kind === 'check') {
-    (self as unknown as Worker).postMessage({ id: m.id, report: analyzeArena(m.arena) });
-  } else {
-    (self as unknown as Worker).postMessage({ id: m.id, spawns: suggestSpawns(m.arena) });
-  }
+  const post = (self as unknown as Worker).postMessage.bind(self);
+  if (m.kind === 'check') post({ id: m.id, report: analyzeArena(m.arena) });
+  else post({ id: m.id, spawns: suggestSpawns(m.arena) });
 };
