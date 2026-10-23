@@ -58,8 +58,12 @@ export class KeyboardInput {
       this.mouseSeen = true;
     });
     document.documentElement.addEventListener('pointerleave', () => (this.mouseSeen = false));
+    // Le clic droit pare : pas de menu du navigateur en jeu, même au-dessus du HUD (pas seulement
+    // sur le canvas) ni quand une touche comme Maj (dash) est tenue.
     target.addEventListener('contextmenu', (e) => {
-      if (e.target instanceof HTMLCanvasElement) e.preventDefault();
+      const t = e.target;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+      if (t instanceof HTMLCanvasElement || this.enabled) e.preventDefault();
     });
   }
 
