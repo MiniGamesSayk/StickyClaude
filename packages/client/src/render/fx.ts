@@ -13,6 +13,7 @@ import { PenStyle } from './penStyle.ts';
 import type { Pen, PenTextures } from './pen.ts';
 import { burst, PENCIL, WEAPON_SHAPES } from './shapes.ts';
 import type { TextPool } from './textpool.ts';
+import { TrailGate } from './trailGate.ts';
 
 /**
  * Effets et sensations : taches d'encre persistantes, onomatopoeias, éclats de papier, étincelles,
@@ -108,6 +109,7 @@ export function onoTextures(): Texture[] {
 
 /** Système d'effets. */
 export class FxSystem {
+  private readonly trailGate = new TrailGate();
   // particules (tableaux de structures)
   private readonly px = new Float32Array(MAX_PARTICLES);
   private readonly py = new Float32Array(MAX_PARTICLES);
@@ -873,6 +875,7 @@ export class FxSystem {
 
   /** Traînée d'un projectile : un point qui s'estompe, à appeler à chaque image. */
   trail(x: number, y: number, color: number, size: number, env: FxEnv): void {
+    if (!this.trailGate.open) return;
     if (env.density < 1 && (this.pnext & 1) === 0) return;
     this.particle(PK.DOT, x, y, 0, 0, size, 0.3, color);
   }
@@ -881,6 +884,7 @@ export class FxSystem {
 
   /** Avance les effets de `dtS` secondes et les dessine avec `pen` (couche d'effets). */
   draw(pen: Pen, labels: TextPool, dtS: number, env: FxEnv, boil: Boil): void {
+    this.trailGate.advance(dtS);
     // particules
     for (let i = 0; i < MAX_PARTICLES; i++) {
       if (this.plife[i] <= 0) continue;

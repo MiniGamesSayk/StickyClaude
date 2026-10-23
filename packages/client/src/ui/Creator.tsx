@@ -407,6 +407,8 @@ export function Creator(): JSX.Element {
   const hover = useRef({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; tool: CTool } | null>(null);
   const painting = useRef(false);
+  /** Compte les modifications du niveau : une analyse lancée avant un changement est périmée. */
+  const edits = useRef(0);
   const pending = useRef<Rect | null>(null);
   /** Zone sélectionnée (outil « sélectionner »), et déplacement en cours (décalage en cases). */
   const selection = useRef<Sel | null>(null);
@@ -450,6 +452,7 @@ export function Creator(): JSX.Element {
     if (report && draft === d) setCheck(levelCheck(d.nameFr, report));
   };
   const changed = (): void => {
+    edits.current++;
     redraw();
     window.clearTimeout(timer.current);
     setCheck(null);
@@ -653,6 +656,11 @@ export function Creator(): JSX.Element {
     changed();
   };
   const onMove = (e: PointerEvent): void => {
+    // Bouton relâché hors du canvas sans événement de fin : le trait s'arrête ici.
+    if (e.buttons === 0 && (painting.current || drag.current || moving.current)) {
+      onUp(e);
+      return;
+    }
     const c = cellAt(e);
     hover.current = c;
     const sel = selection.current;
@@ -917,6 +925,8 @@ export function Creator(): JSX.Element {
             onPointerDown={onDown}
             onPointerMove={onMove}
             onPointerUp={onUp}
+            onPointerCancel={onUp}
+            onLostPointerCapture={onUp}
           />
         </main>
         <aside class="creator-side">
@@ -993,9 +1003,11 @@ export function Creator(): JSX.Element {
               secondary
               onClick={() => {
                 const c = (checker.current ??= new LevelChecker());
+                const asked = edits.current;
                 setCheck(null);
                 void c.spawns(toArena(state)).then((sug) => {
-                  if (!sug || !draft) return;
+                  // le niveau a changé pendant le calcul : ces places ne lui correspondent plus
+                  if (!sug || !draft || edits.current !== asked) return;
                   begin();
                   if (applySpawns(draft, sug) < 8) say(t('cr.auto_fail'));
                   end();

@@ -7,6 +7,7 @@ import { setOptions, profile, setProfile } from '../app/options.ts';
 import { actions, net, overlay, rooms, screen, urlCode } from '../app/store.ts';
 import { lang, pick, t } from '../i18n/index.ts';
 import { Button, Check, Choice, Swatches } from './components.tsx';
+import { roomFull, submitAllowed } from './guards.ts';
 
 /** Le logo : chaque lettre tremble à son tour (le line boiling de l'interface). */
 function Logo(): JSX.Element {
@@ -126,6 +127,8 @@ export function Home(): JSX.Element {
   const lg = lang.value;
 
   const join = (c: string): void => {
+    // l'état est relu ici : un second appel dans la même image verrait sinon `busy` périmé
+    if (!submitAllowed(net.value.status)) return;
     if (c.trim() === '') {
       setMissing(true);
       return;
@@ -151,7 +154,7 @@ export function Home(): JSX.Element {
             aria-describedby="name-hint"
             onInput={(e) => setProfile({ name: e.currentTarget.value })}
             onKeyDown={(e) => {
-              if (e.key !== 'Enter') return;
+              if (e.key !== 'Enter' || e.repeat) return;
               if (code.trim() !== '') join(code);
             }}
           />
@@ -160,7 +163,11 @@ export function Home(): JSX.Element {
           </span>
         </label>
         <div class="row">
-          <Button class="grow" onClick={() => actions.create(isPublic)} disabled={busy}>
+          <Button
+            class="grow"
+            onClick={() => submitAllowed(net.value.status) && actions.create(isPublic)}
+            disabled={busy}
+          >
             {t('home.create')}
           </Button>
           <Check label={t('home.public')} checked={isPublic} onChange={setPublic} />
@@ -178,7 +185,7 @@ export function Home(): JSX.Element {
               spellcheck={false}
               onInput={(e) => setCode(e.currentTarget.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') join(code);
+                if (e.key === 'Enter' && !e.repeat) join(code);
               }}
             />
             <Button secondary onClick={() => join(code)} disabled={busy}>
@@ -213,7 +220,7 @@ export function Home(): JSX.Element {
                     phase: r.phase === 'lobby' ? t('home.room_lobby') : t('home.room_playing'),
                   })}
                 </span>
-                <Button small secondary onClick={() => join(r.code)} disabled={busy}>
+                <Button small secondary onClick={() => join(r.code)} disabled={busy || roomFull(r)}>
                   {r.phase === 'lobby' ? t('home.join') : t('home.watch')}
                 </Button>
               </div>

@@ -471,6 +471,7 @@ export const fr = {
   'pause.options': 'Options',
   'pause.leave': 'Quitter',
   'touch.jump': 'Saut',
+  'touch.stick': 'Déplacer / viser',
   'touch.attack': 'Coup',
   'touch.block': 'Parade',
   'touch.pickup': 'Prendre',

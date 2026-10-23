@@ -100,9 +100,11 @@ export class QualityController {
 
   /**
    * À appeler à chaque image avec sa durée. Retourne vrai si le niveau a changé. Les images
-   * anormalement longues (onglet masqué, chargement : > 250 ms) ne comptent pas.
+   * anormalement longues (onglet masqué, chargement : > 250 ms) ne comptent pas. `cap` est le
+   * plafond de FPS choisi par le joueur (0 = aucun) : tenir 30 FPS sous un plafond de 30 n'est
+   * pas une charge excessive.
    */
-  frame(dtMs: number): boolean {
+  frame(dtMs: number, cap = 0): boolean {
     if (this.setting !== 'auto' || dtMs > 250) return false;
     this.windowMs += dtMs;
     this.frames++;
@@ -113,7 +115,8 @@ export class QualityController {
     this.windowMs = 0;
     this.frames = 0;
     this.first = false;
-    if (fps < FPS_THRESHOLD && this.auto > 0) {
+    const threshold = cap > 0 ? Math.min(FPS_THRESHOLD, cap * 0.9) : FPS_THRESHOLD;
+    if (fps < threshold && this.auto > 0) {
       this.auto = (this.auto - 1) as QualityLevel;
       return true;
     }

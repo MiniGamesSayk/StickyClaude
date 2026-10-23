@@ -17,7 +17,7 @@ import {
 } from '@stickyclaude/shared';
 import type { RoomSettings } from '@stickyclaude/shared';
 import type { JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { profile } from '../app/options.ts';
 import { actions, hud, levels, lobby, overlay, selfSlot } from '../app/store.ts';
 import { pick, t } from '../i18n/index.ts';
@@ -25,6 +25,7 @@ import { touchActive } from './device.ts';
 import { LookEditor } from './Home.tsx';
 import { Button, Check, hex, Select } from './components.tsx';
 import { teamLabel } from './format.ts';
+import { SEND_PENDING_MS } from './guards.ts';
 
 /** Panneau du salon : joueurs, prêt, équipes, réglages de l'hôte, apparence, emotes. */
 export function LobbyPanel(): JSX.Element | null {
@@ -32,6 +33,15 @@ export function LobbyPanel(): JSX.Element | null {
   const self = selfSlot.value;
   // Sur téléphone le panneau démarre replié : il ne cache plus le terrain ni le joystick.
   const [collapsed, setCollapsed] = useState(touchActive());
+  // Envoi en cours (« Lancer », « Prêt ») : le bouton attend la réponse du serveur, ou 1,5 s.
+  const [sending, setSending] = useState<'start' | 'ready' | null>(null);
+  const readyNow = lob?.players.find((p) => p.slot === self)?.ready ?? false;
+  useEffect(() => {
+    if (sending === null) return;
+    const id = setTimeout(() => setSending(null), SEND_PENDING_MS);
+    return () => clearTimeout(id);
+  }, [sending]);
+  useEffect(() => setSending(null), [readyNow, lob?.phase]);
   if (!lob) return null;
   const isHost = self >= 0 && lob.host === self;
   const inLobby = lob.phase === GamePhase.LOBBY;
@@ -161,16 +171,38 @@ export function LobbyPanel(): JSX.Element | null {
         {inLobby && self >= 0 && (
           <div class="row">
             {isHost ? (
-              <Button class="grow" onClick={() => actions.start()}>
+              <Button
+                class="grow"
+                disabled={sending !== null}
+                onClick={() => {
+                  setSending('start');
+                  actions.start();
+                }}
+              >
                 {t('lobby.start')}
               </Button>
             ) : (
-              <Button class="grow" secondary={ready} onClick={() => actions.ready(!ready)}>
+              <Button
+                class="grow"
+                secondary={ready}
+                disabled={sending !== null}
+                onClick={() => {
+                  setSending('ready');
+                  actions.ready(!ready);
+                }}
+              >
                 {ready ? t('lobby.not_ready') : t('lobby.ready')}
               </Button>
             )}
             {isHost && (
-              <Button secondary onClick={() => actions.ready(!ready)}>
+              <Button
+                secondary
+                disabled={sending !== null}
+                onClick={() => {
+                  setSending('ready');
+                  actions.ready(!ready);
+                }}
+              >
                 {ready ? t('lobby.not_ready') : t('lobby.ready')}
               </Button>
             )}

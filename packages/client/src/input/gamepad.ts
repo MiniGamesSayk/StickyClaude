@@ -46,6 +46,9 @@ export class GamepadInput {
   aimAngle: number | null = null;
   private lastNav = 0;
   private navHeld = false;
+  /** Direction du dernier déplacement, et vrai quand le maintien a déjà commencé à répéter. */
+  private navDir = 0;
+  private navRepeating = false;
   private prevButtons = 0;
   /** Le bouton « smash bas » était déjà enfoncé à l'échantillon précédent. */
   private spikeHeld = false;
@@ -142,8 +145,8 @@ export class GamepadInput {
   }
 
   /**
-   * Navigation des menus : retourne un déplacement (avec répétition : 350 ms puis 140 ms) ou un
-   * bouton pressé, sinon null. À appeler à chaque image quand un menu est affiché.
+   * Navigation des menus : retourne un déplacement ou un bouton pressé, sinon null. Un appui est
+   * accepté tout de suite ; tenu, il se répète après 350 ms puis toutes les 140 ms. À appeler à chaque image quand un menu est affiché.
    */
   navigate(nowMs: number): PadNav | null {
     const pads = this.pads();
@@ -175,14 +178,22 @@ export class GamepadInput {
       return null;
     }
     if (dx !== 0 || dy !== 0) {
-      const wait = this.navHeld ? 140 : 350;
-      if (nowMs - this.lastNav >= wait) {
+      // nouvel appui (ou changement de direction sans repasser par le centre) : immédiat
+      const dir = dx * 3 + dy;
+      const fresh = !this.navHeld || dir !== this.navDir;
+      const wait = this.navRepeating ? 140 : 350;
+      if (fresh || nowMs - this.lastNav >= wait) {
         n.dx = dx;
         n.dy = dy;
+        this.navRepeating = !fresh;
         this.lastNav = nowMs;
         this.navHeld = true;
+        this.navDir = dir;
       }
-    } else this.navHeld = false;
+    } else {
+      this.navHeld = false;
+      this.navRepeating = false;
+    }
     return n.dx !== 0 || n.dy !== 0 || n.confirm || n.back || n.menu ? n : null;
   }
 
@@ -192,11 +203,13 @@ export class GamepadInput {
     for (const pad of this.pads()) {
       try {
         const act = (pad as unknown as { vibrationActuator?: Rumble }).vibrationActuator;
-        void act?.playEffect?.('dual-rumble', {
+        const played = act?.playEffect?.('dual-rumble', {
           duration: ms,
           strongMagnitude: Math.min(1, strength),
           weakMagnitude: Math.min(1, strength * 0.6),
         });
+        // refus asynchrone (manette débranchée, onglet masqué) : sans importance
+        played?.catch(() => {});
       } catch {
         /* pas de vibration sur cette manette */
       }

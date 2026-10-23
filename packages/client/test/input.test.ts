@@ -16,7 +16,7 @@ import type { Bindings } from '../src/app/options.ts';
 import { detectLayout, keyLabel } from '../src/input/bindings.ts';
 import { DEFAULT_PAD_BINDINGS } from '../src/app/options.ts';
 import { GamepadInput } from '../src/input/gamepad.ts';
-import { buildKeymap, SPIKE_BITS } from '../src/input/keyboard.ts';
+import { buildKeymap, KeyboardInput, SPIKE_BITS } from '../src/input/keyboard.ts';
 import { bindingWarnings } from '../src/input/warnings.ts';
 import {
   resetTouch,
@@ -385,5 +385,147 @@ describe('manette : smash bas', () => {
     g.sample();
     plug(pad([11]));
     expect(g.sample() & SPIKE_BITS).toBe(SPIKE_BITS);
+  });
+});
+
+describe('clavier : une touche relâchée ne reste jamais collée', () => {
+  type Handler = (e: unknown) => void;
+  class Dummy {}
+  const rig = (): {
+    kb: KeyboardInput;
+    fire: (type: string, e: Record<string, unknown>) => void;
+    body: object;
+    field: object;
+    canvas: object;
+  } => {
+    const handlers = new Map<string, Handler[]>();
+    const target = {
+      addEventListener: (t: string, fn: Handler) => {
+        handlers.set(t, [...(handlers.get(t) ?? []), fn]);
+      },
+    };
+    vi.stubGlobal('document', {
+      hidden: false,
+      addEventListener: () => {},
+      documentElement: { addEventListener: () => {} },
+    });
+    class Input_ extends Dummy {}
+    class Canvas_ extends Dummy {}
+    vi.stubGlobal('HTMLInputElement', Input_);
+    vi.stubGlobal('HTMLTextAreaElement', class extends Dummy {});
+    vi.stubGlobal('HTMLSelectElement', class extends Dummy {});
+    vi.stubGlobal('HTMLCanvasElement', Canvas_);
+    vi.stubGlobal('Element', Dummy);
+    const kb = new KeyboardInput(target as unknown as Window);
+    return {
+      kb,
+      fire: (type, e) => handlers.get(type)?.forEach((fn) => fn({ preventDefault() {}, ...e })),
+      body: new Dummy(),
+      field: new Input_(),
+      canvas: new Canvas_(),
+    };
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('relâchée pendant la pause, elle ne revient pas collée à la reprise', () => {
+    const { kb, fire, body } = rig();
+    fire('keydown', { code: 'KeyD', target: body });
+    expect(kb.sample() & Input.RIGHT).toBe(Input.RIGHT);
+    kb.enabled = false; // pause, options
+    fire('keyup', { code: 'KeyD', target: body });
+    kb.enabled = true;
+    expect(kb.sample() & Input.RIGHT).toBe(0);
+    expect(kb.sample() & Input.RIGHT).toBe(0);
+  });
+
+  it('relâchée dans un champ de texte, elle est bien relâchée', () => {
+    const { kb, fire, body, field } = rig();
+    fire('keydown', { code: 'KeyD', target: body });
+    fire('keyup', { code: 'KeyD', target: field });
+    kb.sample();
+    expect(kb.sample() & Input.RIGHT).toBe(0);
+  });
+
+  it('une touche tenue pendant la pause est oubliée à la reprise', () => {
+    const { kb, fire, body } = rig();
+    fire('keydown', { code: 'KeyD', target: body });
+    kb.enabled = false;
+    kb.enabled = true;
+    expect(kb.sample() & Input.RIGHT).toBe(0);
+  });
+
+  it('une touche tenue au clavier continue de compter tant qu’elle n’est pas lâchée', () => {
+    const { kb, fire, body } = rig();
+    fire('keydown', { code: 'KeyD', target: body });
+    kb.sample();
+    expect(kb.sample() & Input.RIGHT).toBe(Input.RIGHT);
+    fire('keyup', { code: 'KeyD', target: body });
+    expect(kb.sample() & Input.RIGHT).toBe(0);
+  });
+
+  it('le clic relâché hors du canvas relâche l’attaque', () => {
+    const { kb, fire, body, canvas } = rig();
+    fire('pointerdown', {
+      button: 0,
+      pointerType: 'mouse',
+      target: canvas,
+      clientX: 5,
+      clientY: 5,
+    });
+    kb.sample();
+    expect(kb.sample() & Input.ATTACK).toBe(Input.ATTACK);
+    fire('pointerup', { button: 0, pointerType: 'mouse', target: body });
+    expect(kb.sample() & Input.ATTACK).toBe(0);
+  });
+});
+
+describe('manette : navigation des menus', () => {
+  const padAt = (axes: number[]): unknown => ({
+    connected: true,
+    axes,
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
+  });
+  const plug = (p: unknown): void => {
+    vi.stubGlobal('navigator', { getGamepads: () => [p] });
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('deux appuis rapprochés sont tous deux acceptés', () => {
+    const g = new GamepadInput();
+    plug(padAt([1, 0]));
+    expect(g.navigate(1000)?.dx).toBe(1);
+    plug(padAt([0, 0]));
+    g.navigate(1050);
+    plug(padAt([1, 0]));
+    expect(g.navigate(1100)?.dx).toBe(1);
+  });
+
+  it('tenu, il attend 350 ms avant de répéter, puis 140 ms', () => {
+    const g = new GamepadInput();
+    plug(padAt([0, 1]));
+    expect(g.navigate(0)?.dy).toBe(1);
+    expect(g.navigate(200)).toBeNull();
+    expect(g.navigate(360)?.dy).toBe(1);
+    expect(g.navigate(450)).toBeNull();
+    expect(g.navigate(510)?.dy).toBe(1);
+  });
+
+  it('changer de direction sans passer par le centre compte comme un nouvel appui', () => {
+    const g = new GamepadInput();
+    plug(padAt([1, 0]));
+    g.navigate(0);
+    plug(padAt([-1, 0]));
+    expect(g.navigate(50)?.dx).toBe(-1);
+  });
+
+  it('une vibration refusée ne lève rien', async () => {
+    const g = new GamepadInput();
+    const pad = {
+      ...(padAt([0, 0]) as object),
+      vibrationActuator: { playEffect: () => Promise.reject(new Error('non')) },
+    };
+    plug(pad);
+    g.rumble(1, 100);
+    await new Promise((r) => setTimeout(r, 0)); // un rejet non géré ferait échouer le test
   });
 });

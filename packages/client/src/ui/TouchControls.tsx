@@ -1,6 +1,6 @@
 import { EMOTES, Input } from '@stickyclaude/shared';
 import type { JSX } from 'preact';
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { options, setOptions } from '../app/options.ts';
 import { actions, overlay } from '../app/store.ts';
 import { pick, t } from '../i18n/index.ts';
@@ -74,7 +74,7 @@ function Stick(): JSX.Element {
       ref={ref}
       class={`stickzone${o.touchSwap ? ' swap' : ''}`}
       role="application"
-      aria-label={t('touch.jump')}
+      aria-label={t('touch.stick')}
       onPointerDown={(e) => {
         e.preventDefault();
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -110,6 +110,8 @@ export function enterFullscreen(): void {
 export function TouchControls(): JSX.Element {
   const o = options.value;
   const [emotes, setEmotes] = useState(false);
+  // Démonté en plein appui (fin de partie, menu) : aucun bouton ne reste enfoncé pour la suite.
+  useEffect(() => resetTouch, []);
   return (
     <div
       class="touch"

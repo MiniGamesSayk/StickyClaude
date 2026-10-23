@@ -20,13 +20,18 @@ class FakeParam {
 class FakeNode {
   gain = new FakeParam();
   pan = new FakeParam();
+  disconnected = 0;
   connect(n: unknown): unknown {
     return n;
+  }
+  disconnect(): void {
+    this.disconnected++;
   }
 }
 class FakeSource extends FakeNode {
   buffer: { duration: number } | null = null;
   loop = false;
+  onended: (() => void) | null = null;
   playbackRate = new FakeParam();
   started = 0;
   stopped = 0;
@@ -42,8 +47,11 @@ class FakeContext {
   destination = new FakeNode();
   sources: FakeSource[] = [];
   state = 'suspended';
+  nodes: FakeNode[] = [];
   createGain(): FakeNode {
-    return new FakeNode();
+    const n = new FakeNode();
+    this.nodes.push(n);
+    return n;
   }
   createStereoPanner(): FakeNode {
     return new FakeNode();
@@ -89,16 +97,21 @@ const MANIFEST = {
   ),
 };
 
-async function make(random = () => 0.5): Promise<{ audio: AudioEngine; ctx: FakeContext }> {
+async function make(
+  random = () => 0.5,
+  fetches: string[] = [],
+): Promise<{ audio: AudioEngine; ctx: FakeContext }> {
   const ctx = new FakeContext();
   const deps: AudioDeps = {
     createContext: () => ctx as unknown as AudioContext,
-    fetchBytes: (url) =>
-      Promise.resolve(
+    fetchBytes: (url) => {
+      fetches.push(url);
+      return Promise.resolve(
         url.endsWith('manifest.json')
           ? new TextEncoder().encode(JSON.stringify(MANIFEST)).buffer
           : new ArrayBuffer(8),
-      ),
+      );
+    },
     random,
     baseUrl: '/audio/',
   };
@@ -129,6 +142,34 @@ describe('AudioEngine', () => {
     expect(audio.play('hit')).toBe(true);
     expect(ctx.sources.length).toBe(1);
     expect(ctx.sources[0].started).toBe(1);
+  });
+
+  it('un contexte suspendu est relancé au prochain son', async () => {
+    const { audio, ctx } = await make();
+    ctx.state = 'suspended';
+    audio.play('hit');
+    expect(ctx.state).toBe('running');
+  });
+
+  it('un geste de plus ne relance pas le chargement', async () => {
+    const fetches: string[] = [];
+    const { audio } = await make(() => 0.5, fetches);
+    const n = fetches.length;
+    audio.unlock();
+    audio.unlock();
+    await audio.preload();
+    expect(fetches).toHaveLength(n);
+  });
+
+  it('le graphe audio se démonte à la fin du son', async () => {
+    const { audio, ctx } = await make();
+    audio.play('hit', { x: 100 });
+    const src = ctx.sources[0];
+    const gain = ctx.nodes.at(-1)!;
+    expect(src.disconnected).toBe(0);
+    src.onended?.();
+    expect(src.disconnected).toBe(1);
+    expect(gain.disconnected).toBe(1);
   });
 
   it('un effet inconnu ou non chargé est ignoré sans erreur', async () => {

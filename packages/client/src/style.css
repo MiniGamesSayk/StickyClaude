@@ -368,8 +368,11 @@ input.code {
 .btn.block {
   width: 100%;
 }
-.btn:hover:not(:disabled) {
-  animation: wobble 0.167s steps(1, end) infinite;
+/* Pas de survol collé sur écran tactile : le « hover » reste après un toucher. */
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    animation: wobble 0.167s steps(1, end) infinite;
+  }
 }
 .btn:active:not(:disabled) {
   transform: translate(2px, 2px);
@@ -1137,20 +1140,20 @@ table.table td {
 .tbtn.crouch {
   right: calc(10.2rem * var(--touch-size));
   bottom: calc(0.4rem * var(--touch-size));
-  width: calc(4rem * var(--touch-size));
-  height: calc(4rem * var(--touch-size));
+  width: max(2.75rem, calc(4rem * var(--touch-size)));
+  height: max(2.75rem, calc(4rem * var(--touch-size)));
 }
 .tbtn.pickup {
   right: calc(1.4rem * var(--touch-size));
   bottom: calc(7.8rem * var(--touch-size));
-  width: calc(3.8rem * var(--touch-size));
-  height: calc(3.8rem * var(--touch-size));
+  width: max(2.75rem, calc(3.8rem * var(--touch-size)));
+  height: max(2.75rem, calc(3.8rem * var(--touch-size)));
 }
 .tbtn.dash {
   right: calc(10.6rem * var(--touch-size));
   bottom: calc(5.2rem * var(--touch-size));
-  width: calc(3.8rem * var(--touch-size));
-  height: calc(3.8rem * var(--touch-size));
+  width: max(2.75rem, calc(3.8rem * var(--touch-size)));
+  height: max(2.75rem, calc(3.8rem * var(--touch-size)));
 }
 .tsmall {
   position: absolute;
@@ -1160,7 +1163,9 @@ table.table td {
   gap: 6px;
 }
 .tsmall .btn {
-  min-width: 2.6rem;
+  /* cible tactile d'au moins 44 px */
+  min-width: 2.75rem;
+  min-height: 2.75rem;
 }
 .rotate {
   position: absolute;

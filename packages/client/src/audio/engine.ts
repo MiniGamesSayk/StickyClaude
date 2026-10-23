@@ -136,6 +136,7 @@ export class AudioEngine implements AudioSink {
   private sfxBus: GainNode | null = null;
   private musicBus: GainNode | null = null;
   private manifest: Manifest | null = null;
+  private preloading: Promise<void> | null = null;
   private readonly buffers = new Map<string, AudioBuffer>();
   private readonly loading = new Set<string>();
   private voices: Voice[] = [];
@@ -226,18 +227,30 @@ export class AudioEngine implements AudioSink {
   // --- Chargement paresseux ---------------------------------------------------------------------
 
   /** Charge le manifeste puis les effets (≈ 50 Ko) ; les musiques à la demande. */
-  async preload(): Promise<void> {
+  preload(): Promise<void> {
+    // `unlock` est rappelé à chaque geste : un seul chargement à la fois, relancé seulement s'il a échoué
+    if (!this.preloading) {
+      this.preloading = this.fetchAll().then((ok) => {
+        if (!ok) this.preloading = null;
+      });
+    }
+    return this.preloading;
+  }
+
+  private async fetchAll(): Promise<boolean> {
     const ctx = this.ensure();
-    if (!ctx || this.manifest) return;
+    if (!ctx) return false;
+    if (this.manifest) return true;
     try {
       this.manifest = JSON.parse(
         new TextDecoder().decode(await this.deps.fetchBytes(`${this.deps.baseUrl}manifest.json`)),
       ) as Manifest;
     } catch {
-      return;
+      return false;
     }
     await Promise.all(Object.keys(this.manifest.sfx).map((n) => this.load('sfx', n)));
     this.startWanted();
+    return true;
   }
 
   private async load(kind: 'sfx' | 'music', name: string): Promise<AudioBuffer | null> {
@@ -273,6 +286,10 @@ export class AudioEngine implements AudioSink {
     const ctx = this.ctx;
     const bus = this.sfxBus;
     if (!ctx || !bus || !this.unlocked) return false;
+    // suspendu (onglet masqué, politique de lecture automatique) : on relance, le son suivant passera
+    if (ctx.state !== 'running' && !(typeof document !== 'undefined' && document.hidden)) {
+      void ctx.resume();
+    }
     const buf = this.buffers.get(`sfx/${name}`);
     if (!buf) return false;
     // limite par effet : jamais deux fois le même en moins de 30 ms (rafales)
@@ -304,14 +321,21 @@ export class AudioEngine implements AudioSink {
     const gain = ctx.createGain();
     gain.gain.value = Math.max(0, Math.min(1, opts.vol ?? 1));
     src.connect(gain);
+    let pan: StereoPannerNode | null = null;
     if (opts.x !== undefined && typeof ctx.createStereoPanner === 'function') {
-      const pan = ctx.createStereoPanner();
+      pan = ctx.createStereoPanner();
       pan.pan.value = Math.max(-1, Math.min(1, ((opts.x - PAGE_W / 2) / (PAGE_W / 2)) * 0.8));
       gain.connect(pan);
       pan.connect(bus);
     } else {
       gain.connect(bus);
     }
+    // le graphe se démonte tout seul à la fin du son
+    src.onended = (): void => {
+      src.disconnect();
+      gain.disconnect();
+      pan?.disconnect();
+    };
     src.start();
     this.lastPlayed.set(name, ctx.currentTime);
     this.voices.push({ src, end: ctx.currentTime + buf.duration / src.playbackRate.value, prio });

@@ -451,6 +451,7 @@ export const en: Record<MessageKey, string> = {
   'pause.options': 'Options',
   'pause.leave': 'Leave',
   'touch.jump': 'Jump',
+  'touch.stick': 'Move / aim',
   'touch.attack': 'Hit',
   'touch.block': 'Block',
   'touch.pickup': 'Grab',

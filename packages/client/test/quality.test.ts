@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { FPS_THRESHOLD, PROFILES, QualityController } from '../src/render/quality.ts';
 
-function run(q: QualityController, fps: number, seconds: number): number {
+function run(q: QualityController, fps: number, seconds: number, cap = 0): number {
   let changes = 0;
   const dt = 1000 / fps;
-  for (let t = 0; t < seconds * 1000; t += dt) if (q.frame(dt)) changes++;
+  for (let t = 0; t < seconds * 1000; t += dt) if (q.frame(dt, cap)) changes++;
   return changes;
 }
 
@@ -25,6 +25,20 @@ describe('QualityController', () => {
     expect(q.level).toBe(0);
     expect(run(q, 20, 20)).toBe(0);
     expect(q.level).toBe(0);
+  });
+
+  it('un plafond de FPS choisi par le joueur ne fait pas baisser la qualité', () => {
+    const q = new QualityController(2);
+    expect(run(q, 30, 20, 30)).toBe(0);
+    expect(q.level).toBe(2);
+    const q60 = new QualityController(2);
+    expect(run(q60, 60, 12, 60)).toBe(0);
+    // sous le plafond, la charge réelle compte toujours : 20 FPS sous un plafond de 30
+    const slow = new QualityController(2);
+    expect(run(slow, 20, 6, 30)).toBe(1);
+    // et sans plafond, 30 FPS restent une charge excessive
+    const free = new QualityController(2);
+    expect(run(free, 30, 6, 0)).toBe(1);
   });
 
   it('ne remonte jamais seul', () => {

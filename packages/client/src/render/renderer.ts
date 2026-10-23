@@ -173,6 +173,8 @@ const PROJ_STYLE: Record<number, ProjStyle> = {
   },
 };
 
+/** Un terrain masqué en attendant son dessin réapparaît au plus tard après ce délai (ms). */
+const TERRAIN_HIDE_MAX_MS = 1500;
 const tmpA = { x: 0, y: 0 };
 const tmpB = { x: 0, y: 0 };
 
@@ -216,6 +218,8 @@ export class Renderer {
   private flipReduced = false;
   /** Dessin de l'arène : instant (s) depuis le début, −1 si inactif. */
   private introT = -1;
+  /** Instant où le terrain a été masqué en attendant son dessin ; -1 s'il ne l'est pas. */
+  private terrainHiddenAt = -1;
   private introLen = 0;
   private introLines: number[][] = [];
   private readonly introPts = new Float32Array(8);
@@ -457,7 +461,10 @@ export class Renderer {
     this.introT = animate && !this.options.reducedMotion ? 0 : -1;
     this.introLen = 0;
     this.introLines = [];
-    this.terrain.container.alpha = this.introT >= 0 ? 0 : 1;
+    // Sans animation, le calque reste masqué tant que les morceaux de la nouvelle arène ne sont pas
+    // dessinés : sinon l'ancien terrain se mêle au nouveau pendant quelques images.
+    this.terrainHiddenAt = this.introT >= 0 ? -1 : this.nowMs;
+    this.terrain.container.alpha = 0;
   }
 
   /**
@@ -555,11 +562,11 @@ export class Renderer {
     this.nowMs = t0;
     this.dtS = dtMs / 1000;
     this.stats.fps += (1000 / Math.max(1, rawDt) - this.stats.fps) * 0.05;
-    if (this.quality.frame(rawDt)) this.applyQuality();
+    if (this.quality.frame(rawDt, this.app.ticker.maxFPS)) this.applyQuality();
     if (this.needRes && t0 - this.lastResizeAt > 250) {
       this.needRes = false;
-      this.layout();
-      this.configureTerrain();
+      // la résolution suit aussi la fenêtre (changement d'écran, zoom) : tout le profil est réappliqué
+      this.applyQuality();
     }
 
     const reduced = this.options.reducedMotion;
@@ -643,6 +650,13 @@ export class Renderer {
       this.markCells.push(m.c0, m.c1, m.c2);
     }
     this.terrain.update(world.cells, world.terrainVersion, this.markCells, 3);
+    if (
+      this.terrainHiddenAt >= 0 &&
+      (this.terrain.settled || this.nowMs - this.terrainHiddenAt > TERRAIN_HIDE_MAX_MS)
+    ) {
+      this.terrainHiddenAt = -1;
+      this.terrain.container.alpha = 1;
+    }
     if (this.profile.boilTerrain && !this.options.reducedMotion) {
       const v = boilVariant(this.nowMs);
       if (v !== this.lastBoilVariant) {

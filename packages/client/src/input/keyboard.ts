@@ -40,8 +40,7 @@ export class KeyboardInput {
   private edges = 0;
   private keymap = buildKeymap(DEFAULT_BINDINGS);
   private captureCb: ((code: string) => void) | null = null;
-  /** Les touches de jeu sont ignorées (menus, saisie de texte). */
-  enabled = true;
+  private on = true;
   private mouse = 0;
   /** Dernière position de la souris (px de la fenêtre), connue seulement après un mouvement. */
   private mouseX = 0;
@@ -90,8 +89,19 @@ export class KeyboardInput {
         return;
       }
       if (!this.keymap.has(mouseCode(2))) return;
-      if (t instanceof HTMLCanvasElement || this.enabled) e.preventDefault();
+      if (t instanceof HTMLCanvasElement || this.on) e.preventDefault();
     });
+  }
+
+  /** Les touches de jeu sont ignorées (menus, saisie de texte). */
+  get enabled(): boolean {
+    return this.on;
+  }
+
+  /** Les touches relâchées pendant la pause ne sont pas vues : on repart de zéro à la reprise. */
+  set enabled(v: boolean) {
+    if (v && !this.on) this.reset();
+    this.on = v;
   }
 
   setBindings(b: Readonly<Bindings>): void {
@@ -150,7 +160,7 @@ export class KeyboardInput {
     this.mouseX = e.clientX;
     this.mouseY = e.clientY;
     this.mouseSeen = true;
-    if (this.enabled) {
+    if (this.on) {
       // « smash bas » : un seul appui par clic, jamais maintenu
       if (bit !== SPIKE_BITS) this.mouse |= bit;
       this.edges |= bit;
@@ -158,6 +168,12 @@ export class KeyboardInput {
   }
 
   private onKey(e: KeyboardEvent, down: boolean): void {
+    // Un relâchement compte toujours, avant les gardes ci-dessous : pause, options, champ de texte.
+    // Sans cela, une touche lâchée pendant ce temps resterait enfoncée à la reprise.
+    if (!down) {
+      const up = this.keymap.get(e.code);
+      if (up !== undefined && up !== SPIKE_BITS) this.held &= ~up;
+    }
     const t = e.target;
     if (
       t instanceof HTMLInputElement ||
@@ -174,20 +190,16 @@ export class KeyboardInput {
       cb(e.code);
       return;
     }
-    if (!this.enabled) return;
+    if (!this.on) return;
     const bit = this.keymap.get(e.code);
     if (bit === undefined) return;
     e.preventDefault();
-    if (down) {
-      if (bit === SPIKE_BITS) {
-        if (!e.repeat) this.edges |= bit;
-      } else {
-        this.held |= bit;
-        this.edges |= bit;
-      }
+    if (!down) return;
+    if (bit === SPIKE_BITS) {
+      if (!e.repeat) this.edges |= bit;
     } else {
-      // une touche partagée par deux actions (rare) : on ne relâche que son bit propre
-      if (bit !== SPIKE_BITS) this.held &= ~bit;
+      this.held |= bit;
+      this.edges |= bit;
     }
   }
 

@@ -248,6 +248,11 @@ export class TerrainLayer {
     return this.queue.length;
   }
 
+  /** Tout le terrain de l'arène courante est dessiné (aucun morceau de l'arène précédente à l'écran). */
+  get settled(): boolean {
+    return this.chunks.length > 0 && this.version !== -1 && this.queue.length === 0;
+  }
+
   private drawChunk(index: number, variant: number): void {
     const chunk = this.chunks[index];
     const canvas = chunk.canvases[variant];
