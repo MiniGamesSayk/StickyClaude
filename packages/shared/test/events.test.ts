@@ -101,10 +101,10 @@ describe('événements réseau génériques', () => {
 describe('compensation de latence dans le masque', () => {
   it('les bits 13 à 15 portent le retard (pas de 2 ticks), boutons et visée restent intacts', () => {
     const m = withRewind(0xffff, 9);
-    expect(rewindOf(m)).toBe(10);
-    expect(m & 0x1fff).toBe(0x1fff);
+    expect(rewindOf(m)).toBe(8);
+    expect(m & 0x3fff).toBe(0x3fff);
     expect(rewindOf(withRewind(0, 8))).toBe(8);
-    expect(rewindOf(withRewind(0, 99))).toBe(14);
+    expect(rewindOf(withRewind(0, 99))).toBe(12);
     expect(rewindOf(withRewind(0, -4))).toBe(0);
   });
 

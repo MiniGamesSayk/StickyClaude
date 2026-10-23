@@ -12,6 +12,7 @@ export const PlayerState = {
   STUN: 9,
   DEAD: 10,
   GHOST: 11,
+  DASH: 12,
 } as const;
 export type PlayerStateId = (typeof PlayerState)[keyof typeof PlayerState];
 
@@ -164,6 +165,8 @@ export const SimEvent = {
   SUDDEN_DEATH: 29,
   /** Début d'une attaque (son, effet) : uniquement local au client pour son propre joueur. */
   SWING: 30,
+  /** Début d'un dash (son, effet) : uniquement local au client pour son propre joueur. */
+  DASH: 31,
   /** Événements de déroulement de partie : consommés par le salon (messages JSON), jamais binaires. */
   ROUND_START: 40,
   ROUND_END: 41,

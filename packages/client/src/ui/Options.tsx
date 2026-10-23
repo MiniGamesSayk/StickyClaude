@@ -35,6 +35,7 @@ const ACTION_KEYS: Record<Action, MessageKey> = {
   attack: 'act.attack',
   block: 'act.block',
   pickup: 'act.pickup',
+  dash: 'act.dash',
 };
 
 const pct = (v: number): string => `${Math.round(v * 100)} %`;

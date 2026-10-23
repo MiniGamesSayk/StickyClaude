@@ -1132,6 +1132,12 @@ table.table td {
   width: calc(3.8rem * var(--touch-size));
   height: calc(3.8rem * var(--touch-size));
 }
+.tbtn.dash {
+  right: calc(10.6rem * var(--touch-size));
+  bottom: calc(5.2rem * var(--touch-size));
+  width: calc(3.8rem * var(--touch-size));
+  height: calc(3.8rem * var(--touch-size));
+}
 .tsmall {
   position: absolute;
   top: max(8px, var(--safe-top));

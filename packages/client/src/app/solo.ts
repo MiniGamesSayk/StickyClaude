@@ -53,6 +53,7 @@ export const TRAINING_OBJECTIVES: readonly ObjectiveDef[] = [
   { id: 'wall', goal: 1 },
   { id: 'drop', goal: 1 },
   { id: 'crouch', goal: 1 },
+  { id: 'dash', goal: 1 },
   { id: 'punch', goal: 3 },
   { id: 'combo', goal: 1 },
   { id: 'charged', goal: 1 },
@@ -177,6 +178,9 @@ export class TrainingTracker {
         break;
       case SimEvent.WALL_JUMP:
         if (slot === 0) add('wall');
+        break;
+      case SimEvent.DASH:
+        if (slot === 0) add('dash');
         break;
       case SimEvent.DROP_THROUGH:
         if (slot === 0) add('drop');

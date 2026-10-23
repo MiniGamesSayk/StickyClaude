@@ -95,6 +95,7 @@ export function cancelActions(p: Player): void {
   p.atkTicks = 0;
   p.chargeTicks = 0;
   p.kicking = false;
+  p.dashTicks = 0;
   p.atkBuffer = 0;
   p.combo = 0;
   p.comboWindow = 0;
@@ -375,6 +376,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   if (p.hazardCd > 0) p.hazardCd--;
   if (p.tackCd > 0) p.tackCd--;
   if (p.bombPassCd > 0) p.bombPassCd--;
+  if (p.dashCd > 0) p.dashCd--;
   if (p.stun > 0) {
     p.stun--;
     if (p.stun === 0) p.stunImmune = COMBAT.stunImmuneTicks;
@@ -404,6 +406,24 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   const dir = p.ctrlLocked
     ? 0
     : ((input & Input.RIGHT) !== 0 ? 1 : 0) - ((input & Input.LEFT) !== 0 ? 1 : 0);
+
+  // --- Dash : ruée horizontale, sans gravité, vers la direction tenue (sinon vers où l'on regarde) ---
+  const busy =
+    p.ctrlLocked ||
+    p.blockTicks > 0 ||
+    p.chargeTicks > 0 ||
+    p.atkPhase !== AtkPhase.NONE ||
+    p.kicking ||
+    p.grappleTicks > 0;
+  if (busy) p.dashTicks = 0;
+  else if ((pressed & Input.DASH) !== 0 && p.dashCd === 0 && p.dashTicks === 0) {
+    p.dashTicks = P.dashTicks;
+    p.dashCd = P.dashCooldownTicks;
+    if (dir !== 0) p.facing = dir;
+    p.jumping = false;
+    p.wallLock = 0;
+    emit(world, SimEvent.DASH, slot, p.x, p.y, p.facing);
+  }
 
   // --- Sol ------------------------------------------------------------------------------------
   const wasGrounded = p.grounded;
@@ -494,6 +514,9 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     }
   }
 
+  // Un saut (sol, mur ou double) interrompt le dash : on garde l'élan, pas l'apesanteur.
+  if (p.jumping) p.dashTicks = 0;
+
   // --- Horizontal -----------------------------------------------------------------------------
   const slippery = p.grounded && inPuddle(world, p.x, p.y);
   if (p.grappleTicks > 0) {
@@ -509,6 +532,8 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
       p.vy = (ty / d) * speed;
       p.jumping = false;
     }
+  } else if (p.dashTicks > 0) {
+    p.vx = p.facing * P.dashSpeed;
   } else if (p.wallLock === 0) {
     const maxSpeed = (p.crouching ? P.crouchSpeed : P.runSpeed) * p.moveMul;
     const target = dir * maxSpeed;
@@ -528,7 +553,9 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   }
 
   // --- Vertical -------------------------------------------------------------------------------
-  if (p.grappleTicks <= 0 || p.kicking) {
+  if (p.dashTicks > 0) {
+    p.vy = 0;
+  } else if (p.grappleTicks <= 0 || p.kicking) {
     let maxFall = P.maxFallSpeed;
     let g = P.gravity;
     if (p.kicking) {
@@ -549,8 +576,14 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   if (moveX(world, p, p.vx * DT)) {
     p.vx = 0;
     if (p.grappleTicks > 0) p.grappleTicks = 0;
+    p.dashTicks = 0;
   }
   const hit = moveY(world, p, p.vy * DT);
+  const dashing = p.dashTicks > 0;
+  if (dashing && --p.dashTicks === 0 && Math.abs(p.vx) > P.runSpeed) {
+    // Fin du dash : on repart à la vitesse de course, sans glisser à pleine vitesse.
+    p.vx = Math.sign(p.vx) * P.runSpeed;
+  }
   if (hit === 1) {
     p.vy = 0;
     if (p.kicking) endKick(p);
@@ -573,6 +606,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   else if (p.blockTicks > 0) state = PlayerState.BLOCK;
   else if (p.atkPhase !== AtkPhase.NONE) state = PlayerState.ATTACK;
   else if (p.chargeTicks > 0) state = PlayerState.CHARGE;
+  else if (dashing) state = PlayerState.DASH;
   else if (p.grounded) {
     state = p.crouching ? PlayerState.CROUCH : dir !== 0 ? PlayerState.RUN : PlayerState.IDLE;
   } else if (wallSliding && wall !== 0) {

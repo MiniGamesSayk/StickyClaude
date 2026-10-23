@@ -31,6 +31,8 @@ export function resetCombatState(p: Player): void {
   p.blockTicks = 0;
   p.blockCd = 0;
   p.pickupCd = 0;
+  p.dashTicks = 0;
+  p.dashCd = 0;
   p.grappleTicks = 0;
   p.kicking = false;
   p.ghost = false;

@@ -69,6 +69,7 @@ const LOCAL_EVENTS: ReadonlySet<number> = new Set([
   SimEvent.LAND,
   SimEvent.DROP_THROUGH,
   SimEvent.SWING,
+  SimEvent.DASH,
 ]);
 
 /**

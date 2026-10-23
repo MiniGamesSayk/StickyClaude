@@ -10,7 +10,8 @@ import type { QualitySetting } from '../render/quality.ts';
  * écriture ne lèvent jamais (mode privé, stockage plein). Chaque valeur est validée à la lecture.
  */
 
-export type Action = 'left' | 'right' | 'up' | 'down' | 'jump' | 'attack' | 'block' | 'pickup';
+export type Action =
+  'left' | 'right' | 'up' | 'down' | 'jump' | 'attack' | 'block' | 'pickup' | 'dash';
 export const ACTIONS: readonly Action[] = [
   'left',
   'right',
@@ -20,6 +21,7 @@ export const ACTIONS: readonly Action[] = [
   'attack',
   'block',
   'pickup',
+  'dash',
 ];
 
 /** Deux touches par action (position physique, `event.code`) : principale et secondaire. */
@@ -34,6 +36,7 @@ export const DEFAULT_BINDINGS: Readonly<Bindings> = {
   attack: ['KeyJ', ''],
   block: ['KeyE', ''],
   pickup: ['KeyL', ''],
+  dash: ['ShiftLeft', 'ShiftRight'],
 };
 
 export type TouchMode = 'auto' | 'on' | 'off';

@@ -62,6 +62,7 @@ export class GamepadInput {
       if (b(2) || b(7)) m |= Input.ATTACK;
       if (b(1) || b(6)) m |= Input.BLOCK;
       if (b(3) || b(5)) m |= Input.PICKUP;
+      if (b(4)) m |= Input.DASH;
     }
     return m;
   }

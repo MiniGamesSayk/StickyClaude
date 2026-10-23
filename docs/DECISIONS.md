@@ -437,3 +437,10 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - À la création du monde, chaque point d'apparition d'arme **descend jusqu'au premier sol** (bloc, papier ou plateforme à sens unique) sous lui (`weaponDropRow`) : le dessin au crayon et l'arme apparaissent déjà à terre, au lieu de tomber de haut. Un point sans sol (vide, ou danger en dessous) est écarté. Aucune arène livrée n'est modifiée.
 - **Pas deux objets au même point** : arme ou cœur non ramassé (ou dessin en cours) bloque le point ; l'apparition choisit le point libre suivant, ou saute son tour si tous sont occupés.
 - Le créateur trace un pointillé du point posé jusqu'au sol où l'arme apparaîtra (rouge s'il n'y a pas de sol).
+
+### D60. Dash : un bit de plus dans le masque, retard de compensation à 2 bits
+
+- **Contexte.** Le masque d'entrées de 16 bits était plein (boutons 0-7, visée 8-12, retard 13-15, D-visée). Le dash a besoin d'un bouton.
+- **Choix.** `Input.DASH` = bit 13 ; le retard de compensation passe à 2 bits (14-15), par pas de 4 ticks (0 à 12 au lieu de 0 à 14 par pas de 2) : erreur de ±2 ticks (33 ms) au lieu de ±1, plafond 200 ms au lieu de 233 ms. `INPUT_MASK_USED` = `0x3fff`. Le dash : Maj (touche reconfigurable dans Options, action « Dash »), manette LB, bouton tactile ; ruée horizontale de 9 ticks à 420 u/s sans gravité, recharge 45 ticks, interrompue par saut, mur, coup reçu, attaque, parade, charge ou grappin. État `dashTicks`/`dashCd` dans `OwnState` (71 octets), le hash de déterminisme, objectif « Fais un dash » du carnet, pose de squelette `PlayerState.DASH`, événement local `SimEvent.DASH`.
+- **Alternatives.** Masque 32 bits (touche tous les tampons et enregistrements, voir D-visée) ; combo de boutons existants (ambigu).
+- **À valider.** Équilibre du dash, et la précision de la compensation à 4 ticks (à mesurer avec `loadtest`).

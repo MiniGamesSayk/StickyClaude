@@ -273,6 +273,8 @@ const KEYS: Record<string, number> = {
   KeyJ: Input.ATTACK,
   KeyE: Input.BLOCK,
   KeyL: Input.PICKUP,
+  ShiftLeft: Input.DASH,
+  ShiftRight: Input.DASH,
 };
 window.addEventListener('keydown', (e) => {
   const bit = KEYS[e.code];

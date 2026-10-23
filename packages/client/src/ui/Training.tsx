@@ -22,6 +22,7 @@ const KEY: Record<string, MessageKey> = {
   block: 'train.block',
   parry: 'train.parry',
   pickup: 'train.pickup',
+  dash: 'train.dash',
   shoot: 'train.shoot',
   throw: 'train.throw',
   emote: 'train.emote',

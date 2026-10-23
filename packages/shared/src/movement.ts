@@ -38,6 +38,10 @@ export interface MovementParams {
   wallCoyoteTicks: number;
   // Plateformes à sens unique
   dropThroughTicks: number;
+  // Dash
+  dashSpeed: number;
+  dashTicks: number;
+  dashCooldownTicks: number;
   // Événements
   /** Vitesse de chute minimale pour émettre l'événement d'atterrissage (son, poussière). */
   landEventSpeed: number;
@@ -73,6 +77,10 @@ export const DEFAULT_MOVEMENT: Readonly<MovementParams> = {
   wallCoyoteTicks: 5,
 
   dropThroughTicks: 14,
+
+  dashSpeed: 420, // ≈ 2,2 × la course
+  dashTicks: 9, // 150 ms, ≈ 3,9 cellules parcourues
+  dashCooldownTicks: 45, // 750 ms, compté depuis le début du dash
 
   landEventSpeed: 200,
 };
@@ -113,6 +121,9 @@ export const MOVEMENT_TUNING: Readonly<Record<MovementKey, TuningMeta>> = {
   wallLockTicks: { label: 'Blocage après saut mur', min: 0, max: 30, step: 1 },
   wallCoyoteTicks: { label: 'Coyote mur (ticks)', min: 0, max: 20, step: 1 },
   dropThroughTicks: { label: 'Traversée sens unique', min: 4, max: 40, step: 1 },
+  dashSpeed: { label: 'Vitesse du dash', min: 100, max: 900, step: 5 },
+  dashTicks: { label: 'Durée du dash (ticks)', min: 2, max: 30, step: 1 },
+  dashCooldownTicks: { label: 'Recharge du dash (ticks)', min: 0, max: 180, step: 1 },
   landEventSpeed: { label: 'Seuil d’atterrissage (événement)', min: 0, max: 800, step: 5 },
 };
 

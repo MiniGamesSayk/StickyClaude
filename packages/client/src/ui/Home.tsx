@@ -214,7 +214,7 @@ export function Home(): JSX.Element {
                   })}
                 </span>
                 <Button small secondary onClick={() => join(r.code)} disabled={busy}>
-                  {t('home.join')}
+                  {r.phase === 'lobby' ? t('home.join') : t('home.watch')}
                 </Button>
               </div>
             ))
