@@ -13,6 +13,8 @@ export const PlayerState = {
   DEAD: 10,
   GHOST: 11,
   DASH: 12,
+  /** Esquive sur place : invulnérable, sans bouger. */
+  DODGE: 13,
 } as const;
 export type PlayerStateId = (typeof PlayerState)[keyof typeof PlayerState];
 
@@ -130,6 +132,7 @@ export const StatusFlag = {
   DEAD: 1 << 1,
   HAS_BOMB: 1 << 2,
   KICKING: 1 << 3,
+  DODGING: 1 << 4,
 } as const;
 
 /**
@@ -167,6 +170,8 @@ export const SimEvent = {
   SWING: 30,
   /** Début d'un dash (son, effet) : uniquement local au client pour son propre joueur. */
   DASH: 31,
+  /** Début d'une esquive sur place : uniquement local au client pour son propre joueur. */
+  DODGE: 32,
   /** Événements de déroulement de partie : consommés par le salon (messages JSON), jamais binaires. */
   ROUND_START: 40,
   ROUND_END: 41,

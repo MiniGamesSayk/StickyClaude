@@ -157,6 +157,45 @@ describe('sauts', () => {
     expect(types.has(SimEvent.DOUBLE_JUMP)).toBe(true);
   });
 
+  it('le double saut monte aussi haut que le premier, même enchaîné très vite', () => {
+    const apex = (second: boolean): number => {
+      const w = worldWithPlayer(boxArena());
+      const p = w.players[0];
+      const y0 = p.y;
+      let top = y0;
+      for (let i = 0; i < 90; i++) {
+        // appuis brefs : saut, relâché, puis (éventuellement) deuxième appui deux ticks plus tard
+        const mask = i === 0 || (second && i === 3) ? JUMP : 0;
+        inputs.fill(0);
+        inputs[0] = mask;
+        step(w, inputs);
+        top = Math.min(top, p.y);
+      }
+      return y0 - top;
+    };
+    const single = apex(false);
+    const chained = apex(true);
+    // Le premier saut est coupé par le relâchement ; le double saut, lui, a sa pleine hauteur.
+    expect(chained).toBeGreaterThan(single);
+    const w = worldWithPlayer(boxArena());
+    run(w, 1, JUMP);
+    run(w, 4, 0);
+    run(w, 1, JUMP);
+    expect(w.players[0].vy).toBeCloseTo(-P.jumpSpeed + P.gravity / 60, 5);
+    expect(P.doubleJumpSpeed).toBe(P.jumpSpeed);
+  });
+
+  it('s accrocher à un mur rend le double saut', () => {
+    const w = worldWithPlayer();
+    const p = w.players[0];
+    put(w, 2 * CELL + P.width / 2, FLOOR_Y - 120);
+    p.grounded = false;
+    p.coyote = 0;
+    p.doubleAvailable = false;
+    run(w, 3, LEFT);
+    expect(p.doubleAvailable).toBe(true);
+  });
+
   it('mémoire du saut : un appui juste avant l atterrissage déclenche le saut', () => {
     const w = worldWithPlayer();
     const p = w.players[0];
@@ -607,12 +646,49 @@ describe('dash', () => {
     expect(p.vx).toBeLessThanOrEqual(P.runSpeed);
   });
 
-  it('sans direction tenue, part vers où le joueur regarde', () => {
+  it('sans direction tenue, esquive sur place : invulnérable, sans bouger', () => {
     const w = worldWithPlayer();
     const p = w.players[0];
     p.facing = -1;
+    const x0 = p.x;
     run(w, 1, DASH);
-    expect(p.vx).toBe(-P.dashSpeed);
+    expect(p.state).toBe(PlayerState.DODGE);
+    expect(p.dodging).toBe(true);
+    expect(p.invuln).toBeGreaterThan(0);
+    run(w, P.dodgeTicks - 2, 0);
+    expect(p.x).toBe(x0);
+    expect(p.invuln).toBeGreaterThan(0);
+    run(w, 2, 0);
+    expect(p.dodging).toBe(false);
+    expect(p.dashTicks).toBe(0);
+    expect(p.invuln).toBe(0);
+    expect(p.state).toBe(PlayerState.IDLE);
+  });
+
+  it('l esquive en l air fige le personnage, le saut est impossible pendant', () => {
+    const w = worldWithPlayer();
+    const p = w.players[0];
+    put(w, 400, FLOOR_Y - 120);
+    p.vx = 120;
+    p.grounded = false;
+    run(w, 1, DASH);
+    const y0 = p.y;
+    run(w, 3, JUMP);
+    expect(p.vx).toBe(0);
+    expect(p.y).toBe(y0);
+    expect(p.vy).toBe(0);
+  });
+
+  it('une recharge empêche d enchaîner deux esquives', () => {
+    const w = worldWithPlayer();
+    const p = w.players[0];
+    run(w, 1, DASH);
+    run(w, P.dodgeTicks, 0);
+    run(w, 1, DASH);
+    expect(p.dodging).toBe(false);
+    run(w, P.dodgeCooldownTicks, 0);
+    run(w, 1, DASH);
+    expect(p.dodging).toBe(true);
   });
 
   it('une recharge empêche d enchaîner, puis le dash redevient possible', () => {

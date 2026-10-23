@@ -445,6 +445,17 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - **Alternatives.** Masque 32 bits (touche tous les tampons et enregistrements, voir D-visée) ; combo de boutons existants (ambigu).
 - **À valider.** Équilibre du dash, et la précision de la compensation à 4 ticks (à mesurer avec `loadtest`).
 
+### D73. Correctifs de jeu : manette, sauts, charge, esquive, armes, salons
+
+- **Entrées collées en parade.** Deux causes corrigées côté client : le relâchement du bouton de souris n'était pris en compte que sur le canvas (si l'écran de fin ou un menu le recouvrait pendant l'appui, parade/attaque restaient collées) ; il l'est maintenant partout (et sur `pointercancel`). À la manette, les boutons d'action sont « armés » seulement une fois vus relâchés (`GamepadInput.disarm`, appelé tant que le jeu n'est pas actif) : un A ou B tenu depuis les menus, ou une gâchette qui lit « pressée » au repos, ne fuit plus en partie. Les gâchettes exigent aussi une valeur > 0,5.
+- **Double saut** : même vitesse que le premier saut (`doubleJumpSpeed` = `jumpSpeed`) et plus de coupure au relâchement (enchaîner deux appuis très vite ne donne plus un saut court). **S'accrocher à un mur** (contact en l'air ou saut mural) rend le double saut.
+- **Salons publics par défaut** (`DEFAULT_SETTINGS.isPublic`, création serveur, case de l'accueil cochée).
+- **Charge** : mains nues, sans haut/bas tenu, le coup part au **relâchement** d'un appui bref ; tenu au-delà de `chargeHoldTicks`, la charge démarre sans coup avant. Coût : un jab part au relâchement du bouton (≈ la durée de l'appui). Les coups dirigés (haut, bas, coup de pied) partent toujours à l'appui. Les armes ne changent pas.
+- **Punaises** (objets gris au sol) retirées des arènes de base ; les cellules « danger » des fosses sont conservées.
+- **Page de garde** : le décor « CAHIER DE » est complété (« CAHIER DE CASTAGNE »).
+- **Esquive** : `Dash` sans gauche/droite tenu = esquive sur place (`Player.dodging`, bit `StatusFlag.DODGING` dans `OwnState`, état `PlayerState.DODGE`, événement local `SimEvent.DODGE`, réglages `dodgeTicks` 20 et `dodgeCooldownTicks` 75). Invulnérable (`invuln`) et figée (ni gravité ni vitesse), sans saut, coup ni parade pendant ; interrompue par un étourdissement ou la mort. Rendu : tas d'encre semi-transparent.
+- **Armes dans les murs** : une arme lancée contre un mur ou lâchée dans un angle pouvait rester à moitié dans le décor, hors de portée. `unstick` (objets) la ressort vers la plus proche position libre dans 64 unités, sinon elle disparaît (la boule n'est jamais supprimée).
+
 ### D72. Créateur : sélection et déplacement d'une zone
 
 - Outil « Sélectionner / déplacer » : encadrer une zone la sélectionne (si elle contient quelque chose), puis la glisser déplace **tout** : cases, apparitions de joueurs et d'armes, objets, départ de la boule, colline et cages entières, plateformes mobiles dont tout le trajet est dans la zone. Suppr efface le contenu, Échap annule.

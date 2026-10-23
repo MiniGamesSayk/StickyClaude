@@ -18,6 +18,7 @@ import {
   randomWeapon,
   spawnObj,
   spawnProps,
+  spawnWeaponObj,
   WEAPON_DRAW_TICKS,
 } from '../src/index.ts';
 import {
@@ -396,5 +397,24 @@ describe('capacité des réserves', () => {
     for (let i = 0; i < 100; i++) if (spawnObj(w, ObjType.CRATE, 100, 100, 16, 16, 20, 0)) made++;
     expect(made).toBe(32);
     expect(countEvents(w, 3, SimEvent.HIT)).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('armes prises dans le décor', () => {
+  it('une arme posée à moitié dans un mur en ressort et peut être ramassée', () => {
+    const w = fightWorld();
+    // mur plein de la bordure gauche : colonnes 0 et 1 (x < 32)
+    const o = spawnWeaponObj(w, WeaponId.PISTOL, 5, 28, FLOOR - 40, 0, 0)!;
+    ticks(w, 90, 0);
+    expect(o.active).toBe(true);
+    expect(o.x - o.w / 2).toBeGreaterThanOrEqual(2 * CELL - 0.01);
+    expect(o.grounded).toBe(true);
+  });
+
+  it('une arme enfouie loin dans la masse disparaît au lieu de rester inaccessible', () => {
+    const w = fightWorld();
+    const o = spawnWeaponObj(w, WeaponId.PISTOL, 5, 5, FLOOR + 20, 0, 0)!;
+    ticks(w, 3, 0);
+    expect(o.active === false || o.x - o.w / 2 >= 2 * CELL - 0.01).toBe(true);
   });
 });

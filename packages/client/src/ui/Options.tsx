@@ -4,11 +4,14 @@ import {
   ACTIONS,
   defaultOptions,
   options,
+  PAD_ACTIONS,
   rebind,
+  rebindPad,
   resetBindings,
+  resetPadBindings,
   setOptions,
 } from '../app/options.ts';
-import type { Action } from '../app/options.ts';
+import type { Action, PadAction } from '../app/options.ts';
 import { actions, overlay } from '../app/store.ts';
 import { t } from '../i18n/index.ts';
 import type { MessageKey } from '../i18n/index.ts';
@@ -65,6 +68,37 @@ function KeyCap(p: { action: Action; slot: 0 | 1 }): JSX.Element {
   );
 }
 
+/** Nom du bouton de manette (disposition standard), « — » s'il n'y en a pas. */
+function padLabel(i: number): string {
+  const names = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Back', 'Start', 'L3', 'R3'];
+  if (i < 0) return '—';
+  return names[i] ?? `B${i}`;
+}
+
+/** Un bouton de manette reconfigurable : cliquer puis appuyer sur le nouveau bouton. */
+function PadCap(p: { action: PadAction; slot: 0 | 1 }): JSX.Element {
+  const [listening, setListening] = useState(false);
+  const button = options.value.padBindings[p.action][p.slot];
+  useEffect(() => {
+    if (!listening) return;
+    actions.capturePad((i) => {
+      setListening(false);
+      rebindPad(p.action, p.slot, i);
+    });
+    return () => actions.capturePad(null);
+  }, [listening]);
+  return (
+    <button
+      type="button"
+      class={`keycap${listening ? ' listening' : ''}`}
+      aria-label={`${t(ACTION_KEYS[p.action])} : ${padLabel(button)}`}
+      onClick={() => setListening(!listening)}
+    >
+      {listening ? '…' : padLabel(button)}
+    </button>
+  );
+}
+
 function Controls(): JSX.Element {
   const o = options.value;
   return (
@@ -98,10 +132,31 @@ function Controls(): JSX.Element {
         </div>
         <p class="hint">{t('opt.key_press')}</p>
         <p class="hint">{t('opt.keys_emotes')}</p>
-        <p class="hint">{t('opt.gamepad')}</p>
         <div>
           <Button small secondary onClick={() => resetBindings()}>
             {t('opt.key_reset')}
+          </Button>
+        </div>
+      </div>
+      <div class="field">
+        <span>{t('opt.pad')}</span>
+        <div class="keys">
+          <span />
+          <span class="hint">{t('opt.key_primary')}</span>
+          <span class="hint">{t('opt.key_secondary')}</span>
+          {PAD_ACTIONS.map((a) => (
+            <>
+              <span key={`pl${a}`}>{t(ACTION_KEYS[a])}</span>
+              <PadCap key={`pa${a}`} action={a} slot={0} />
+              <PadCap key={`pb${a}`} action={a} slot={1} />
+            </>
+          ))}
+        </div>
+        <p class="hint">{t('opt.pad_press')}</p>
+        <p class="hint">{t('opt.gamepad')}</p>
+        <div>
+          <Button small secondary onClick={() => resetPadBindings()}>
+            {t('opt.pad_reset')}
           </Button>
         </div>
       </div>

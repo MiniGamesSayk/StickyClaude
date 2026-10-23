@@ -50,6 +50,7 @@ export class KeyboardInput {
     });
     target.addEventListener('pointerdown', (e) => this.onPointer(e, true));
     target.addEventListener('pointerup', (e) => this.onPointer(e, false));
+    target.addEventListener('pointercancel', () => (this.mouse = 0));
     target.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'touch') return;
       this.mouseX = e.clientX;
@@ -91,16 +92,23 @@ export class KeyboardInput {
   }
 
   private onPointer(e: PointerEvent, down: boolean): void {
-    if (e.pointerType === 'touch' || !(e.target instanceof HTMLCanvasElement)) return;
+    if (e.pointerType === 'touch') return;
     const bit = e.button === 0 ? Input.ATTACK : e.button === 2 ? Input.BLOCK : 0;
     if (bit === 0) return;
+    // Un relâchement compte partout : si l'écran de fin ou un menu recouvre le canvas pendant que
+    // le bouton est tenu, la parade ne doit pas rester collée.
+    if (!down) {
+      this.mouse &= ~bit;
+      return;
+    }
+    if (!(e.target instanceof HTMLCanvasElement)) return;
     this.mouseX = e.clientX;
     this.mouseY = e.clientY;
     this.mouseSeen = true;
-    if (down && this.enabled) {
+    if (this.enabled) {
       this.mouse |= bit;
       this.edges |= bit;
-    } else this.mouse &= ~bit;
+    }
   }
 
   private onKey(e: KeyboardEvent, down: boolean): void {

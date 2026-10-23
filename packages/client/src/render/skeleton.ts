@@ -421,6 +421,19 @@ export class Rig {
         set(raw, T_HNL, -5.0, -15.0);
         raw[T_TILT] = 0.2;
         break;
+      case PlayerState.DODGE:
+        // Ramassé sur lui-même, bras croisés devant la tête : un petit tas d'encre.
+        raw[T_LEAN] = -0.12;
+        set(raw, T_PEL, -1.0, -7.4);
+        set(raw, T_HEAD, 1.0, -15.6);
+        set(raw, T_NECK, 0.4, -11.2);
+        set(raw, T_SHL, -0.6, -10.6);
+        set(raw, T_SHR, 1.8, -10.4);
+        set(raw, T_FTL, -3.2, 0);
+        set(raw, T_FTR, 3.6, 0);
+        set(raw, T_HNL, 4.2, -15.0);
+        set(raw, T_HNR, 5.6, -17.6);
+        break;
       case PlayerState.CHARGE: {
         const k = clamp01(p.variant / COMBAT.chargeMaxTicks);
         raw[T_LEAN] = 0.2 + 0.1 * k;

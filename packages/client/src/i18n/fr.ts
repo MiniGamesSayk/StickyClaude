@@ -385,6 +385,10 @@ export const fr = {
   'opt.key_secondary': 'Secondaire',
   'opt.key_press': 'Appuie sur une touche… (Échap pour annuler)',
   'opt.key_reset': 'Touches par défaut',
+  'opt.pad': 'Manette',
+  'opt.pad_press':
+    'Clique sur un bouton, puis appuie sur celui de la manette (clique à nouveau pour annuler).',
+  'opt.pad_reset': 'Manette par défaut',
   'opt.keys_emotes': 'Emotes : touches 1 à 9 (non modifiables).',
   'opt.touch': 'Contrôles tactiles',
   'opt.touch_auto': 'Sur écran tactile',
@@ -399,7 +403,8 @@ export const fr = {
   'opt.vibration': 'Vibration du téléphone',
   'opt.pad_rumble': 'Vibration de la manette',
   'opt.fullscreen': 'Plein écran au lancement (mobile)',
-  'opt.gamepad': 'Manette : A saute, X attaque, B pare, Y ramasse, croix ou stick pour bouger.',
+  'opt.gamepad':
+    'Par défaut : A saute, X ou RT attaque, B ou LT pare, Y ou RB ramasse, LB dash, croix ou stick pour bouger. Dash sans direction : esquive.',
   'opt.reset_all': 'Réinitialiser les options',
   'act.left': 'Gauche',
   'act.right': 'Droite',
@@ -416,7 +421,7 @@ export const fr = {
   'help.goal':
     'Le dernier debout gagne la manche ; le premier à plusieurs manches gagne la partie.',
   'help.move':
-    'Bouger : flèches ou WASD/ZQSD, manette, joystick. Sauter deux fois = double saut ; contre un mur = saut mural. Dash (Maj, LB) : ruée horizontale de 0,15 s, recharge 0,75 s.',
+    'Bouger : flèches ou WASD/ZQSD, manette, joystick. Sauter deux fois = double saut ; contre un mur = saut mural. Dash (Maj, LB) : ruée horizontale de 0,15 s, recharge 0,75 s ; sans toucher à une direction, il devient une esquive sur place (invulnérable 0,33 s, recharge 1,25 s). Un mur rend le double saut.',
   'help.fight':
     'Attaquer : 3 coups enchaînés, maintenir pour charger ; ↑ + attaque : coup vers le haut ; ↓ + attaque : coup accroupi (au sol) ou plongeant (en l’air). Parer : un seul coup encaissé, il étourdit l’attaquant 0,4 s, puis 0,5 s de recharge ; juste après l’appui = parade parfaite. La visée suit la souris (ou le joystick).',
   'help.weapons':

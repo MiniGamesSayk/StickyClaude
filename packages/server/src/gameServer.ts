@@ -7,6 +7,7 @@ import {
   DecodeError,
   encodePong,
   eventIdDiff,
+  GamePhase,
   getArena,
   INPUT_MASK_USED,
   INPUT_RING,
@@ -362,7 +363,7 @@ export class GameServer implements RoomIO {
       if (!getArena(msg.arena)) return this.error(c, 'bad_request', 'arena');
       arenaId = msg.arena;
     }
-    const room = this.newRoom(c, arenaId, msg.isPublic ?? false, now);
+    const room = this.newRoom(c, arenaId, msg.isPublic ?? true, now);
     if (!room) return;
     room.addMember(c, name, msg.look, now);
   }
@@ -395,6 +396,11 @@ export class GameServer implements RoomIO {
       if (!this.codeLimiter.hit(c.conn.ip, now)) return this.error(c, 'rate_limited');
       return this.error(c, 'not_found');
     }
+    // Une partie sans aucun joueur ne se regarde pas : le salon est figé en attendant sa fermeture.
+    if (room.playerCount === 0 && room.phase !== GamePhase.LOBBY) {
+      if (!this.codeLimiter.hit(c.conn.ip, now)) return this.error(c, 'rate_limited');
+      return this.error(c, 'not_found');
+    }
     if (!room.hasRoom() || !room.addMember(c, name, msg.look, now)) this.error(c, 'full');
   }
 
@@ -405,7 +411,7 @@ export class GameServer implements RoomIO {
     let best: Room | null = null;
     let bestScore = -1;
     for (const r of this.rooms.values()) {
-      if (!r.settings.isPublic || !r.hasRoom()) continue;
+      if (!r.settings.isPublic || r.playerCount === 0 || !r.hasRoom()) continue;
       const waiting = r.phase === 0 && r.freeSlot() >= 0;
       const score = (waiting ? 100 : 0) + r.playerCount;
       if (score > bestScore) {
@@ -470,7 +476,7 @@ export class GameServer implements RoomIO {
   publicRooms(): PublicRoom[] {
     const out: PublicRoom[] = [];
     for (const r of this.rooms.values())
-      if (r.settings.isPublic && r.hasRoom()) out.push(r.toPublic());
+      if (r.settings.isPublic && r.playerCount > 0 && r.hasRoom()) out.push(r.toPublic());
     return out.sort((a, b) => b.players - a.players || a.code.localeCompare(b.code));
   }
 

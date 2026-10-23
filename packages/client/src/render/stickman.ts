@@ -243,7 +243,8 @@ export class StickmanPainter {
     const style = mannequin ? PenStyle.PENCIL : p.stroke;
     const wd = PEN_WIDTH[style];
     let alpha = 1;
-    if ((p.flags & PlayerFlag.INVULN) !== 0 && Math.floor(now / 90) % 2 === 0) alpha = 0.4;
+    if (p.state === PlayerState.DODGE) alpha = 0.35;
+    else if ((p.flags & PlayerFlag.INVULN) !== 0 && Math.floor(now / 90) % 2 === 0) alpha = 0.4;
     if ((p.flags & PlayerFlag.HIT_FLASH) !== 0 && Math.floor(now / 70) % 2 === 0) {
       ink = mix(ink, 0xffffff, 0.7);
     }

@@ -1,17 +1,21 @@
 import { Input } from '@stickyclaude/shared';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ACTIONS,
   DEFAULT_BINDINGS,
   defaultOptions,
   options,
   rebind,
+  rebindPad,
   resetBindings,
+  resetPadBindings,
   sanitizeOptions,
   setOptions,
 } from '../src/app/options.ts';
 import type { Bindings } from '../src/app/options.ts';
 import { detectLayout, keyLabel } from '../src/input/bindings.ts';
+import { DEFAULT_PAD_BINDINGS } from '../src/app/options.ts';
+import { GamepadInput } from '../src/input/gamepad.ts';
 import { buildKeymap } from '../src/input/keyboard.ts';
 import {
   resetTouch,
@@ -177,5 +181,91 @@ describe('options', () => {
   it('les touches par défaut couvrent les 8 actions', () => {
     const b: Bindings = DEFAULT_BINDINGS;
     for (const a of ACTIONS) expect(b[a][0]).not.toBe('');
+  });
+});
+
+describe('manette : un bouton tenu depuis les menus ne reste pas collé en jeu', () => {
+  const pad = (pressed: number[], axes: number[] = [0, 0]): unknown => ({
+    connected: true,
+    axes,
+    buttons: Array.from({ length: 17 }, (_, i) => ({
+      pressed: pressed.includes(i),
+      value: pressed.includes(i) ? 1 : 0,
+    })),
+  });
+  const plug = (p: unknown): void => {
+    vi.stubGlobal('navigator', { getGamepads: () => [p] });
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('un bouton déjà enfoncé après la remise à zéro est ignoré jusqu’au relâchement', () => {
+    const g = new GamepadInput();
+    plug(pad([1]));
+    g.disarm();
+    expect(g.sample() & Input.BLOCK).toBe(0);
+    expect(g.sample() & Input.BLOCK).toBe(0);
+    plug(pad([]));
+    g.sample();
+    plug(pad([1]));
+    expect(g.sample() & Input.BLOCK).toBe(Input.BLOCK);
+  });
+
+  it('une gâchette qui ment (pressée mais à zéro) ne compte pas', () => {
+    const g = new GamepadInput();
+    const liar = pad([]) as { buttons: { pressed: boolean; value: number }[] };
+    liar.buttons[6] = { pressed: true, value: 0 };
+    plug(liar);
+    g.sample();
+    expect(g.sample() & Input.BLOCK).toBe(0);
+  });
+
+  it('les boutons suivent les réglages, et le dash est configurable', () => {
+    const g = new GamepadInput();
+    g.bindings = { ...DEFAULT_PAD_BINDINGS, dash: [8, -1], jump: [4, 0] };
+    plug(pad([]));
+    g.sample(); // relâchés : les boutons sont armés
+    plug(pad([8]));
+    expect(g.sample() & Input.DASH).toBe(Input.DASH);
+    plug(pad([4]));
+    expect(g.sample() & Input.DASH).toBe(0);
+    expect(g.sample() & Input.JUMP).toBe(Input.JUMP);
+  });
+
+  it('capture : le prochain bouton pressé est transmis, pas Start ni la croix', () => {
+    const g = new GamepadInput();
+    plug(pad([0]));
+    const got: number[] = [];
+    g.capture((i) => got.push(i));
+    g.navigate(0);
+    expect(got).toEqual([]); // A tenu au départ : ignoré
+    plug(pad([9, 12]));
+    g.navigate(10);
+    expect(got).toEqual([]);
+    plug(pad([5]));
+    g.navigate(20);
+    expect(got).toEqual([5]);
+    plug(pad([]));
+    expect(g.navigate(30)).toBeNull();
+  });
+
+  it('les directions ne sont pas désarmées', () => {
+    const g = new GamepadInput();
+    plug(pad([], [1, 0]));
+    g.disarm();
+    expect(g.sample() & Input.RIGHT).toBe(Input.RIGHT);
+  });
+});
+
+describe('réglages de la manette', () => {
+  it('rebindPad retire le bouton à l’autre action et valide les valeurs', () => {
+    resetPadBindings();
+    rebindPad('dash', 0, 2);
+    expect(options.value.padBindings.dash[0]).toBe(2);
+    // l'action qui perd son premier bouton passe son second en premier
+    expect(options.value.padBindings.attack).toEqual([7, -1]);
+    const bad = sanitizeOptions({ padBindings: { jump: [9, 99], dash: ['x', 12] } });
+    expect(bad.padBindings.jump).toEqual(DEFAULT_PAD_BINDINGS.jump);
+    expect(bad.padBindings.dash).toEqual(DEFAULT_PAD_BINDINGS.dash);
+    resetPadBindings();
   });
 });

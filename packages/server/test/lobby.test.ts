@@ -35,7 +35,7 @@ describe('créer et rejoindre', () => {
     expect(j.lobby.host).toBe(0);
     expect(j.lobby.phase).toBe(GamePhase.LOBBY);
     expect(j.lobby.settings.roundsToWin).toBe(5);
-    expect(j.lobby.settings.isPublic).toBe(false);
+    expect(j.lobby.settings.isPublic).toBe(true);
     expect(j.round.round).toBe(0);
     expect(j.round.rows).toHaveLength(36);
     expect(j.lobby.players).toHaveLength(1);
@@ -303,7 +303,7 @@ describe('salons publics et partie rapide', () => {
     const a = h.connect('10.0.0.1');
     const b = h.connect('10.0.0.2');
     const codeA = h.create(a, 'Alice', { isPublic: true });
-    h.create(b, 'Bob');
+    h.create(b, 'Bob', { isPublic: false });
     const list = h.server.publicRooms();
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
@@ -386,7 +386,7 @@ describe('salons publics et partie rapide', () => {
   it('un salon privé ne se lance jamais seul', () => {
     const h = harness({ AUTOSTART_MS: '500' });
     const a = h.connect('10.0.0.1');
-    const code = h.create(a);
+    const code = h.create(a, 'Alice', { isPublic: false });
     const [b] = fill(h, code, 1);
     h.send(a, { t: 'ready', ready: true });
     h.send(b, { t: 'ready', ready: true });

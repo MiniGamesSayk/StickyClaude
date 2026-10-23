@@ -373,6 +373,10 @@ export const en: Record<MessageKey, string> = {
   'opt.key_secondary': 'Secondary',
   'opt.key_press': 'Press a key… (Esc to cancel)',
   'opt.key_reset': 'Default keys',
+  'opt.pad': 'Gamepad',
+  'opt.pad_press':
+    'Click a button, then press the gamepad button you want (click again to cancel).',
+  'opt.pad_reset': 'Default gamepad',
   'opt.keys_emotes': 'Emotes: keys 1 to 9 (not editable).',
   'opt.touch': 'Touch controls',
   'opt.touch_auto': 'On touch screens',
@@ -387,7 +391,8 @@ export const en: Record<MessageKey, string> = {
   'opt.vibration': 'Phone vibration',
   'opt.pad_rumble': 'Gamepad vibration',
   'opt.fullscreen': 'Fullscreen when a game starts (mobile)',
-  'opt.gamepad': 'Gamepad: A jumps, X attacks, B blocks, Y picks up, d-pad or stick to move.',
+  'opt.gamepad':
+    'Default: A jumps, X or RT attacks, B or LT blocks, Y or RB picks up, LB dashes, d-pad or stick to move. Dash with no direction: dodge.',
   'opt.reset_all': 'Reset options',
   'act.left': 'Left',
   'act.right': 'Right',
@@ -402,7 +407,7 @@ export const en: Record<MessageKey, string> = {
   'help.title': 'How to play',
   'help.goal': 'The last one standing wins the round; the first to several rounds wins the match.',
   'help.move':
-    'Move: arrows or WASD/ZQSD, gamepad, joystick. Jump twice = double jump; against a wall = wall jump. Dash (Shift, LB): a 0.15 s horizontal burst, 0.75 s cooldown.',
+    'Move: arrows or WASD/ZQSD, gamepad, joystick. Jump twice = double jump; against a wall = wall jump. Dash (Shift, LB): a 0.15 s horizontal burst, 0.75 s cooldown; without a direction it becomes a spot dodge (invulnerable for 0.33 s, 1.25 s cooldown). Touching a wall gives the double jump back.',
   'help.fight':
     'Attack: 3-hit combo, hold to charge; ↑ + attack: upward strike; ↓ + attack: crouch strike (ground) or diving kick (air). Block: absorbs one hit only, stuns the attacker for 0.4 s, then a 0.5 s cooldown; right after pressing = perfect parry. Aim follows the mouse (or the joystick).',
   'help.weapons': 'Pick up / throw a weapon: pick-up key; ↓ + pick-up to drop it.',

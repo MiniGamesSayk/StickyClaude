@@ -32,5 +32,6 @@ export class InputManager {
   apply(o: Options): void {
     this.keyboard.setBindings(o.bindings);
     this.gamepad.rumbleEnabled = o.padRumble;
+    this.gamepad.bindings = o.padBindings;
   }
 }

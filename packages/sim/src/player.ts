@@ -88,6 +88,26 @@ export function phaseTicks(p: Player, phase: number): number {
   }
 }
 
+/**
+ * La récupération d'un jab ou d'un crochet peut être coupée par une parade ou un dash : sans
+ * cela, enchaîner les coups sans pause empêche toute autre action.
+ */
+function cancelableRecovery(p: Player): boolean {
+  return (
+    p.atkPhase === AtkPhase.RECOVERY &&
+    !p.kicking &&
+    (p.atkKind === AttackKind.FIST1 || p.atkKind === AttackKind.FIST2)
+  );
+}
+
+function endAttack(p: Player): void {
+  p.atkPhase = AtkPhase.NONE;
+  p.atkKind = AttackKind.NONE;
+  p.atkTicks = 0;
+  p.combo = 0;
+  p.comboWindow = 0;
+}
+
 /** Annule toute action en cours (touché, étourdi, mort). */
 export function cancelActions(p: Player): void {
   p.atkPhase = AtkPhase.NONE;
@@ -96,6 +116,7 @@ export function cancelActions(p: Player): void {
   p.chargeTicks = 0;
   p.kicking = false;
   p.dashTicks = 0;
+  p.dodging = false;
   p.atkBuffer = 0;
   p.combo = 0;
   p.comboWindow = 0;
@@ -216,10 +237,11 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
     if (
       (pressed & Input.BLOCK) !== 0 &&
       p.blockCd === 0 &&
-      p.atkPhase === AtkPhase.NONE &&
+      (p.atkPhase === AtkPhase.NONE || cancelableRecovery(p)) &&
       p.chargeTicks === 0 &&
       !p.kicking
     ) {
+      if (p.atkPhase !== AtkPhase.NONE) endAttack(p);
       p.blockTicks = 1;
       p.atkBuffer = 0;
     }
@@ -287,6 +309,18 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
     p.atkBuffer = Math.max(p.atkBuffer, 1);
   }
   if (p.atkBuffer === 0 || p.chargeTicks > 0) return;
+  // Mains nues, sans direction : tant que le bouton est tenu sans avoir atteint le seuil de charge,
+  // on ne sait pas encore si c'est un coup ou une charge. Le coup part au relâchement (appui
+  // bref) ; au-delà du seuil, la charge commence directement, sans coup parasite avant. Les coups
+  // dirigés (haut, bas) partent tout de suite.
+  if (
+    fists &&
+    (input & (Input.ATTACK | Input.UP | Input.DOWN)) === Input.ATTACK &&
+    p.attackHeld < COMBAT.chargeHoldTicks
+  ) {
+    p.atkBuffer = ATK_BUFFER_TICKS;
+    return;
+  }
   const chain =
     fists &&
     p.atkPhase === AtkPhase.RECOVERY &&
@@ -383,6 +417,10 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     cancelActions(p);
     p.blockTicks = 0;
     p.attackHeld = 0;
+  } else if (p.dodging) {
+    // Pendant l'esquive on ne frappe ni ne pare : seule la fin de l'esquive rend la main.
+    p.attackHeld = 0;
+    p.atkBuffer = 0;
   } else {
     stepActions(world, p, slot, input, pressed);
   }
@@ -399,7 +437,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   if (w.kind === WeaponKind.SHIELD) mul *= w.slowMul;
   p.moveMul = mul;
   p.ctrlLocked = p.hitLock > 0 || p.stun > 0;
-  p.jumpLocked = p.blockTicks > 0 || p.chargeTicks > 0 || p.stun > 0 || p.kicking;
+  p.jumpLocked = p.blockTicks > 0 || p.chargeTicks > 0 || p.stun > 0 || p.kicking || p.dodging;
 
   const jumpPressed = (pressed & Input.JUMP) !== 0 && !p.jumpLocked;
   if (jumpPressed) p.jumpBuffer = P.jumpBufferTicks;
@@ -412,17 +450,29 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     p.ctrlLocked ||
     p.blockTicks > 0 ||
     p.chargeTicks > 0 ||
-    p.atkPhase !== AtkPhase.NONE ||
+    (p.atkPhase !== AtkPhase.NONE && !cancelableRecovery(p)) ||
     p.kicking ||
     p.grappleTicks > 0;
-  if (busy) p.dashTicks = 0;
-  else if ((pressed & Input.DASH) !== 0 && p.dashCd === 0 && p.dashTicks === 0) {
-    p.dashTicks = P.dashTicks;
-    p.dashCd = P.dashCooldownTicks;
-    if (dir !== 0) p.facing = dir;
+  if (busy) {
+    p.dashTicks = 0;
+    p.dodging = false;
+  } else if ((pressed & Input.DASH) !== 0 && p.dashCd === 0 && p.dashTicks === 0) {
+    if (p.atkPhase !== AtkPhase.NONE) endAttack(p);
     p.jumping = false;
     p.wallLock = 0;
-    emit(world, SimEvent.DASH, slot, p.x, p.y, p.facing);
+    if (dir !== 0) {
+      p.dashTicks = P.dashTicks;
+      p.dashCd = P.dashCooldownTicks;
+      p.facing = dir;
+      emit(world, SimEvent.DASH, slot, p.x, p.y, p.facing);
+    } else {
+      // Dash sans direction : esquive sur place, invulnérable (comme dans Brawlhalla).
+      p.dodging = true;
+      p.dashTicks = P.dodgeTicks;
+      p.dashCd = P.dodgeCooldownTicks;
+      if (p.invuln < P.dodgeTicks) p.invuln = P.dodgeTicks;
+      emit(world, SimEvent.DODGE, slot, p.x, p.y, p.facing);
+    }
   }
 
   // --- Sol ------------------------------------------------------------------------------------
@@ -470,6 +520,8 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     if (wall !== 0) {
       p.wallSide = wall;
       p.wallCoyote = P.wallCoyoteTicks;
+      // S'accrocher à un mur rend le double saut.
+      p.doubleAvailable = true;
     } else if (p.wallCoyote > 0) {
       p.wallCoyote--;
     }
@@ -495,12 +547,16 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
       p.jumping = true;
       p.wallCoyote = 0;
       p.wallSide = 0;
+      p.doubleAvailable = true;
       p.jumpBuffer = 0;
       emit(world, SimEvent.WALL_JUMP, slot, p.x, p.y);
     } else if (jumpPressed && p.doubleAvailable) {
+      // Le double saut a toujours la même hauteur : relâcher le bouton ne le raccourcit pas, même
+      // si l'on enchaîne les deux appuis très vite.
       p.vy = -P.doubleJumpSpeed;
       p.doubleAvailable = false;
-      p.jumping = true;
+      p.jumping = false;
+      p.dashTicks = 0;
       p.jumpBuffer = 0;
       emit(world, SimEvent.DOUBLE_JUMP, slot, p.x, p.y);
     }
@@ -533,7 +589,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
       p.jumping = false;
     }
   } else if (p.dashTicks > 0) {
-    p.vx = p.facing * P.dashSpeed;
+    p.vx = p.dodging ? 0 : p.facing * P.dashSpeed;
   } else if (p.wallLock === 0) {
     const maxSpeed = (p.crouching ? P.crouchSpeed : P.runSpeed) * p.moveMul;
     const target = dir * maxSpeed;
@@ -549,7 +605,9 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     }
     if (slippery) accel *= PUDDLE_GRIP;
     p.vx = approach(p.vx, target, accel * DT);
-    if (dir !== 0 && p.atkPhase === AtkPhase.NONE) p.facing = dir;
+    // On se retourne tant que le coup n'est pas parti (départ et récupération) : enchaîner les
+    // attaques ne fige plus la direction.
+    if (dir !== 0 && p.atkPhase !== AtkPhase.ACTIVE && !p.kicking) p.facing = dir;
   }
 
   // --- Vertical -------------------------------------------------------------------------------
@@ -580,9 +638,11 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   }
   const hit = moveY(world, p, p.vy * DT);
   const dashing = p.dashTicks > 0;
-  if (dashing && --p.dashTicks === 0 && Math.abs(p.vx) > P.runSpeed) {
+  const dodgingNow = dashing && p.dodging;
+  if (dashing && --p.dashTicks === 0) {
+    p.dodging = false;
     // Fin du dash : on repart à la vitesse de course, sans glisser à pleine vitesse.
-    p.vx = Math.sign(p.vx) * P.runSpeed;
+    if (Math.abs(p.vx) > P.runSpeed) p.vx = Math.sign(p.vx) * P.runSpeed;
   }
   if (hit === 1) {
     p.vy = 0;
@@ -606,7 +666,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   else if (p.blockTicks > 0) state = PlayerState.BLOCK;
   else if (p.atkPhase !== AtkPhase.NONE) state = PlayerState.ATTACK;
   else if (p.chargeTicks > 0) state = PlayerState.CHARGE;
-  else if (dashing) state = PlayerState.DASH;
+  else if (dashing) state = dodgingNow ? PlayerState.DODGE : PlayerState.DASH;
   else if (p.grounded) {
     state = p.crouching ? PlayerState.CROUCH : dir !== 0 ? PlayerState.RUN : PlayerState.IDLE;
   } else if (wallSliding && wall !== 0) {
