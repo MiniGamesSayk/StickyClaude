@@ -483,3 +483,9 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 
 - Champ facultatif `weapons` (liste de `WeaponId` parmi les armes qui apparaissent, sans doublon, au moins une) dans `ArenaData` et son schéma. Absent : toutes. `randomWeapon` tire dans cette liste (apparitions programmées, caisses brisées, mode « même arme pour tous »), sans changer les poids relatifs.
 - Créateur : case « Toutes les armes » ; décochée, une liste de cases permet de garder seulement certaines armes (cocher toutes les armes revient à « toutes » ; on ne peut pas tout décocher).
+
+### D76. Lave, scie et trampoline (cases de terrain)
+
+- Trois nouveaux types de case, donc dans la grille (`l` lave, `s` scie, `t` trampoline : le schéma et `parseGrid` les acceptent) : rien de nouveau dans les snapshots ni les objets.
+- **Lave** : traversable, `lavaDamage` 40 toutes les 24 ticks et un fort rebond vertical (cause de mort `LAVA`). **Scie** : traversable, `sawDamage` 20 toutes les 20 ticks, recul latéral qui éloigne du centre de la scie (cause `SAW`) ; ses dents changent à chaque variante de dessin (elle tourne). Les deux s'ajoutent à `stepHazards` ; la lave l'emporte sur la scie, qui l'emporte sur l'encre. Les marques du fantôme-crayon gardent la priorité d'attribution.
+- **Trampoline** : case **pleine** (`isBlocking`), qui renvoie le joueur en l'air quand il retombe dessus : vitesse = chute × 0,95, entre 620 et 820 u/s (bien plus haut qu'un saut, 395), événement `BOUNCE` (son, anneau rose). Maintenir ↓ à l'arrivée annule le rebond. L'analyse d'accessibilité le traite comme un sol ; elle refuse un départ de joueur dans la lave ou une scie, et les points d'arme au-dessus d'un danger sont écartés.

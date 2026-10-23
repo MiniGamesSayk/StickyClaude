@@ -41,7 +41,13 @@ import { applyRect, applyTool, CELL_TOOLS, RECT_TOOLS, Tool, toArena } from '../
 import type { Rect, ToolId } from '../editor/model.ts';
 import { pick, t } from '../i18n/index.ts';
 import type { MessageKey } from '../i18n/index.ts';
-import { drawHazard, drawPlayerSpawn, drawProp, drawWeaponSpawn } from '../creator/draw2d.ts';
+import {
+  drawHazard,
+  drawPlayerSpawn,
+  drawProp,
+  drawSpecialCell,
+  drawWeaponSpawn,
+} from '../creator/draw2d.ts';
 import { renderPage } from '../render/page.ts';
 import { Button, Check, Select } from './components.tsx';
 
@@ -112,6 +118,9 @@ const GROUPS: { title: MessageKey; tools: [CTool, MessageKey][] }[] = [
     title: 'cr.group_traps',
     tools: [
       [Tool.HAZARD, 'cr.tool_hazard'],
+      [Tool.LAVA, 'cr.tool_lava'],
+      [Tool.SAW, 'cr.tool_saw'],
+      [Tool.TRAMPOLINE, 'cr.tool_trampoline'],
       [Tool.TACK, 'cr.tool_tack'],
       [Tool.BALLOON, 'cr.tool_balloon'],
       [Tool.CRATE, 'cr.tool_crate'],
@@ -147,6 +156,9 @@ const CELL_TOOL_IDS: ReadonlySet<CTool> = new Set([
   Tool.PAPER,
   Tool.ONEWAY,
   Tool.HAZARD,
+  Tool.LAVA,
+  Tool.SAW,
+  Tool.TRAMPOLINE,
   Tool.ERASE,
 ]);
 
@@ -263,6 +275,8 @@ function draw(
         ctx.stroke();
       } else if (c === Cell.HAZARD) {
         drawHazard(ctx, x, y);
+      } else if (c === Cell.LAVA || c === Cell.SAW || c === Cell.TRAMPOLINE) {
+        drawSpecialCell(ctx, c, x, y);
       }
     }
   }

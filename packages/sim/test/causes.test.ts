@@ -60,10 +60,10 @@ function give(w: World, slot: number, weapon: number, ammo = weaponDef(weapon).a
   pl(w, slot).ammo = ammo;
 }
 
-function withHazardAt(cx: number, cy: number): ArenaData {
+function withHazardAt(cx: number, cy: number, ch = '^'): ArenaData {
   const a = boxArena();
   const rows = a.grid.map((r) => r.split(''));
-  rows[cy][cx] = '^';
+  rows[cy][cx] = ch;
   a.grid = rows.map((r) => r.join(''));
   return a;
 }
@@ -168,6 +168,30 @@ const SCENARIOS: Scenario[] = [
     name: 'une cellule de danger',
     build: () => {
       const w = fightWorld({ arena: withHazardAt(20, 32), ghosts: false });
+      const q = pl(w, 1);
+      q.x = 20 * CELL + CELL / 2;
+      q.y = FLOOR;
+      q.hp = 1;
+      return { w, victim: 1, ticks: 5, masks: [] };
+    },
+  },
+  {
+    cause: Cause.LAVA,
+    name: 'de la lave',
+    build: () => {
+      const w = fightWorld({ arena: withHazardAt(20, 32, 'l'), ghosts: false });
+      const q = pl(w, 1);
+      q.x = 20 * CELL + CELL / 2;
+      q.y = FLOOR;
+      q.hp = 1;
+      return { w, victim: 1, ticks: 5, masks: [] };
+    },
+  },
+  {
+    cause: Cause.SAW,
+    name: 'une scie',
+    build: () => {
+      const w = fightWorld({ arena: withHazardAt(20, 32, 's'), ghosts: false });
       const q = pl(w, 1);
       q.x = 20 * CELL + CELL / 2;
       q.y = FLOOR;

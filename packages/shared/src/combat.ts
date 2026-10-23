@@ -62,6 +62,17 @@ export const COMBAT = {
   hazardDamage: 12,
   hazardIntervalTicks: 30,
   hazardBounce: 280,
+  /** Lave : gros dégâts, souvent. Scie : dégâts moyens et recul latéral. */
+  lavaDamage: 40,
+  lavaIntervalTicks: 24,
+  lavaBounce: 380,
+  sawDamage: 20,
+  sawIntervalTicks: 20,
+  sawKnock: 300,
+  /** Trampoline : vitesse de rebond minimale, rendement de la chute, plafond. */
+  trampolineMin: 620,
+  trampolineGain: 0.95,
+  trampolineMax: 820,
   tackDamage: 8,
   tackBounce: 220,
   tackCooldownTicks: 60,

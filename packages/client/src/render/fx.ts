@@ -591,6 +591,13 @@ export class FxSystem {
         this.spray(PK.SPARK, 6, x, y, 80, 4, 0.3, color, env);
         break;
       }
+      case SimEvent.BOUNCE: {
+        const x = a[0] ?? 0;
+        const y = a[1] ?? 0;
+        this.ring(x, y, 4, 20, 0.25, 0xf29ab8, false);
+        this.spray(PK.SPARK, 4, x, y, 90, 3.4, 0.3, 0xf29ab8, env, 0, -1, 1.4);
+        break;
+      }
       case SimEvent.HEAL: {
         const x = a[0] ?? 0;
         const y = a[1] ?? 0;

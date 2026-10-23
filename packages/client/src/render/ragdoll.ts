@@ -56,7 +56,7 @@ const BONES: Bone[] = [
 function isFree(cells: Uint8Array, gx: number, gy: number): boolean {
   if (gx < 0 || gx >= GRID_W || gy < 0 || gy >= GRID_H) return false;
   const t = cells[gy * GRID_W + gx];
-  return t !== Cell.SOLID && t !== Cell.PAPER;
+  return t !== Cell.SOLID && t !== Cell.PAPER && t !== Cell.TRAMPOLINE;
 }
 
 function segP(
@@ -170,7 +170,7 @@ export class Ragdoll {
       const cy = Math.floor(y / CELL);
       if (cx >= 0 && cx < GRID_W && cy >= 0 && cy < GRID_H) {
         const c = cells[cy * GRID_W + cx];
-        const solid = c === Cell.SOLID || c === Cell.PAPER;
+        const solid = c === Cell.SOLID || c === Cell.PAPER || c === Cell.TRAMPOLINE;
         if (solid) {
           // sort par le côté le plus proche qui est libre
           const left = x - cx * CELL;

@@ -23,7 +23,13 @@ export function drawThumb(canvas: HTMLCanvasElement, arena: ArenaData): void {
             ? '#c9a96a'
             : c === Cell.ONEWAY
               ? '#1f4fd1'
-              : '#d6322e';
+              : c === Cell.LAVA
+                ? '#f0643c'
+                : c === Cell.SAW
+                  ? '#7b8494'
+                  : c === Cell.TRAMPOLINE
+                    ? '#f29ab8'
+                    : '#d6322e';
       if (c === Cell.ONEWAY) ctx.fillRect(x * k, y * k, k, Math.max(1, k * 0.35));
       else ctx.fillRect(x * k, y * k, k, k);
     }

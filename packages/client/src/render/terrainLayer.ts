@@ -367,7 +367,11 @@ export class TerrainLayer {
     // --- Dangers : pointes de stylo rouges ---------------------------------------------------
     for (let y = cy0; y <= cy1; y++) {
       for (let x = cx0; x <= cx1; x++) {
-        if (cell(x, y) === Cell.HAZARD) this.drawSpikes(ctx, x, y, wb, th.paper);
+        const t = cell(x, y);
+        if (t === Cell.HAZARD) this.drawSpikes(ctx, x, y, wb, th.paper);
+        else if (t === Cell.LAVA) this.drawLava(ctx, x, y, wb, cell(x, y - 1) === Cell.LAVA);
+        else if (t === Cell.SAW) this.drawSaw(ctx, x, y, wb, variant, th.paper);
+        else if (t === Cell.TRAMPOLINE) this.drawTrampoline(ctx, x, y, wb);
       }
     }
     chunk.textures[variant].source.update();
@@ -429,6 +433,123 @@ export class TerrainLayer {
     ctx.strokeStyle = css(INK.red);
     ctx.lineWidth = 1.7;
     ctx.lineJoin = 'round';
+    ctx.stroke();
+  }
+
+  /** Lave : fond orange, surface jaune qui ondule, quelques bulles. */
+  private drawLava(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    wb: Wobble,
+    covered: boolean,
+  ): void {
+    const px = cx * CELL;
+    const py = cy * CELL;
+    const p = { x: 0, y: 0 };
+    ctx.fillStyle = css(0xf0643c);
+    ctx.fillRect(px - 0.3, py - (covered ? 0.3 : 0), CELL + 0.6, CELL + 0.6);
+    // veines plus sombres
+    const r = (k: number): number => rand2(cx * 11 + k, cy, wb.seed + 31);
+    ctx.strokeStyle = css(0xc2331d);
+    ctx.lineWidth = 1.3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px + 2 + r(1) * 3, py + 6 + r(2) * 4);
+    ctx.lineTo(px + 8 + r(3) * 3, py + 9 + r(4) * 3);
+    ctx.lineTo(px + 13, py + 5 + r(5) * 4);
+    ctx.stroke();
+    // bulles
+    ctx.fillStyle = css(0xffc65a);
+    ctx.beginPath();
+    ctx.arc(px + 4 + r(6) * 8, py + 10 + r(7) * 4, 1.3 + r(8), 0, Math.PI * 2);
+    ctx.fill();
+    if (!covered) {
+      // surface : bande claire ondulée
+      ctx.strokeStyle = css(0xffd24a);
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      for (let i = 0; i <= 4; i++) {
+        wobblePoint(px + i * 4, py + 1.6 + Math.sin((cx * 4 + i) * 1.7) * 1.2, wb, p);
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  /** Scie circulaire : disque à dents, moyeu ; l'angle des dents change avec la variante (elle tourne). */
+  private drawSaw(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    wb: Wobble,
+    variant: number,
+    paper: number,
+  ): void {
+    const mx = cx * CELL + CELL / 2;
+    const my = cy * CELL + CELL / 2;
+    const p = { x: 0, y: 0 };
+    const teeth = 10;
+    const spin = (variant % 4) * 0.28 + (cx % 2) * 0.3;
+    ctx.beginPath();
+    for (let i = 0; i < teeth * 2; i++) {
+      const a = spin + (i / (teeth * 2)) * Math.PI * 2;
+      const r = i % 2 === 0 ? 8 : 5.6;
+      wobblePoint(mx + Math.cos(a) * r, my + Math.sin(a) * r, wb, p);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = css(blend(0x9aa3b2, paper, 0.25));
+    ctx.fill();
+    ctx.strokeStyle = css(INK.night);
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(mx, my, 2.1, 0, Math.PI * 2);
+    ctx.fillStyle = css(INK.red);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  /** Trampoline : une gomme rose dans sa manche bleue, avec un ressort tracé au-dessus. */
+  private drawTrampoline(ctx: CanvasRenderingContext2D, cx: number, cy: number, wb: Wobble): void {
+    const px = cx * CELL;
+    const py = cy * CELL;
+    const p = { x: 0, y: 0 };
+    const pts: [number, number][] = [
+      [px + 0.8, py + 1.4],
+      [px + 15.2, py + 1.4],
+      [px + 15.2, py + 15.2],
+      [px + 0.8, py + 15.2],
+    ];
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => {
+      wobblePoint(x, y, wb, p);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = css(0xf29ab8);
+    ctx.fill();
+    ctx.strokeStyle = css(INK.night);
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // manche bleue
+    ctx.fillStyle = css(INK.blue);
+    ctx.fillRect(px + 1.2, py + 10.2, CELL - 2.4, 4.4);
+    // ressort : zigzag au-dessus de la gomme
+    ctx.strokeStyle = css(INK.night);
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    for (let i = 0; i <= 6; i++) {
+      wobblePoint(px + 1 + i * 2.33, py + (i % 2 === 0 ? 1.4 : 0.2), wb, p);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
     ctx.stroke();
   }
 

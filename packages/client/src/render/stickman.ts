@@ -84,7 +84,9 @@ function footDrop(cells: Uint8Array, wx: number, wy: number): number {
   const cy = Math.floor((wy + 1) / CELL);
   if (cx < 0 || cx >= GRID_W || cy < 0 || cy >= GRID_H) return 0;
   const c = cells[cy * GRID_W + cx];
-  return c === Cell.SOLID || c === Cell.PAPER || c === Cell.ONEWAY ? 0 : 2.6;
+  return c === Cell.SOLID || c === Cell.PAPER || c === Cell.ONEWAY || c === Cell.TRAMPOLINE
+    ? 0
+    : 2.6;
 }
 
 /** Segment entre deux points du squelette (indices a et b), sans bouts : ils sont posés aux jointures. */

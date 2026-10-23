@@ -10,11 +10,17 @@ export const Cell = {
   ONEWAY: 3,
   /** Danger (encre, punaises…) : traversable, effets en phase 2. */
   HAZARD: 4,
+  /** Lave : traversable, gros dégâts. */
+  LAVA: 5,
+  /** Scie : traversable, dégâts et recul, tourne sur elle-même. */
+  SAW: 6,
+  /** Trampoline (gomme rebondissante) : pleine, on rebondit dessus en retombant. */
+  TRAMPOLINE: 7,
 } as const;
 export type CellId = (typeof Cell)[keyof typeof Cell];
 
 /** Un caractère par cellule dans le JSON des arènes. */
-export const CELL_CHARS = '.#p-^';
+export const CELL_CHARS = '.#p-^lst';
 
 export interface MoverData {
   /** [x, y, largeur, hauteur] en cellules ; (x, y) = path[0]. */
@@ -41,7 +47,7 @@ export interface ArenaData {
   name: { fr: string; en: string };
   theme: string;
   size: [number, number];
-  /** 36 chaînes de 64 caractères parmi `.#p-^`. */
+  /** 36 chaînes de 64 caractères parmi `.#p-^lst` (vide, bloc, papier, traversable, danger, lave, scie, trampoline). */
   grid: string[];
   spawns: { players: [number, number][]; weapons: [number, number][] };
   movers: MoverData[];

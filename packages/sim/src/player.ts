@@ -26,6 +26,7 @@ import {
   moveY,
   probeGround,
   probeMover,
+  trampolineBelow,
   wallContact,
 } from './collision.ts';
 import { inPuddle, PUDDLE_GRIP } from './terrain.ts';
@@ -796,9 +797,20 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     if (Math.abs(p.vx) > P.runSpeed) p.vx = Math.sign(p.vx) * P.runSpeed;
     if (p.dashY !== 0) p.vy *= 0.25;
   }
+  let bounced = false;
   if (hit === 1) {
     p.vy = 0;
     if (p.kicking) endKick(p);
+    if (fallSpeed > 0 && !downHeld && trampolineBelow(world, p)) {
+      // trampoline : on repart en rendant l'essentiel de la chute (au moins un bon saut)
+      p.vy = -Math.min(
+        COMBAT.trampolineMax,
+        Math.max(COMBAT.trampolineMin, fallSpeed * COMBAT.trampolineGain),
+      );
+      p.jumping = false;
+      bounced = true;
+      emit(world, SimEvent.BOUNCE, slot, p.x, p.y);
+    }
   } else if (hit === -1) {
     p.vy = 0;
     p.jumping = false;
@@ -808,7 +820,8 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   // --- Sol (après déplacement) et état --------------------------------------------------------
   const groundAfter = probeGround(world, p);
   p.groundMover = probeMover(world, p);
-  p.grounded = groundAfter !== 0 || p.groundMover >= 0;
+  p.grounded = !bounced && (groundAfter !== 0 || p.groundMover >= 0);
+  if (bounced) p.groundMover = -1;
   if (!wasGrounded && p.grounded && fallSpeed > P.landEventSpeed)
     emit(world, SimEvent.LAND, slot, p.x, p.y);
   if (p.kicking && p.grounded) endKick(p);

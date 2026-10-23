@@ -17,6 +17,9 @@ export const Tool = {
   PAPER: 'paper',
   ONEWAY: 'oneway',
   HAZARD: 'hazard',
+  LAVA: 'lava',
+  SAW: 'saw',
+  TRAMPOLINE: 'trampoline',
   SPAWN: 'spawn',
   WEAPON: 'weapon',
   CRATE: 'crate',
@@ -39,6 +42,9 @@ export const CELL_TOOLS: Readonly<Partial<Record<ToolId, number>>> = {
   [Tool.PAPER]: Cell.PAPER,
   [Tool.ONEWAY]: Cell.ONEWAY,
   [Tool.HAZARD]: Cell.HAZARD,
+  [Tool.LAVA]: Cell.LAVA,
+  [Tool.SAW]: Cell.SAW,
+  [Tool.TRAMPOLINE]: Cell.TRAMPOLINE,
 };
 
 const PROP_TOOLS: Readonly<Partial<Record<ToolId, PropData['type']>>> = {

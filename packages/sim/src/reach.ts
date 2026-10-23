@@ -1,6 +1,11 @@
 import { Cell, CELL, GRID_H, GRID_W, Input, MAX_PLAYERS, parseGrid } from '@stickyclaude/shared';
 import type { ArenaData } from '@stickyclaude/shared';
 import { isBlocking } from './collision.ts';
+
+/** Cellule qui blesse (encre, lave, scie) : pas de point d'apparition dessus. */
+export function isDangerCell(t: number): boolean {
+  return t === Cell.HAZARD || t === Cell.LAVA || t === Cell.SAW;
+}
 import { spawnPlayerAt } from './spawn.ts';
 import { step } from './step.ts';
 import { createWorld } from './world.ts';
@@ -206,6 +211,12 @@ export function analyzeArena(arena: ArenaData, opts: { reach?: boolean } = {}): 
       errors.push(`apparition joueur (${x},${y}) : pas de place pour se tenir debout`);
       continue;
     }
+    const here = cellType(cells, x, y);
+    const head = cellType(cells, x, y - 1);
+    if (here === Cell.LAVA || here === Cell.SAW || head === Cell.LAVA || head === Cell.SAW) {
+      errors.push(`apparition joueur (${x},${y}) : dans de la lave ou une scie`);
+      continue;
+    }
     spawns.push({ cx: x, cy: y });
   }
   if (arena.spawns.players.length < MAX_PLAYERS) {
@@ -334,7 +345,7 @@ export function suggestSpawns(
   const standing: Node[] = [];
   for (let cy = 0; cy < GRID_H; cy++) {
     for (let cx = 0; cx < GRID_W; cx++) {
-      if (canStand(cells, cx, cy) && cellType(cells, cx, cy) !== Cell.HAZARD) {
+      if (canStand(cells, cx, cy) && !isDangerCell(cellType(cells, cx, cy))) {
         standing.push({ cx, cy });
       }
     }

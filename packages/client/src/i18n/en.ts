@@ -148,6 +148,9 @@ export const en: Record<MessageKey, string> = {
   'cr.tool_paper': 'Paper block (destructible)',
   'cr.tool_oneway': 'Pass-through platform',
   'cr.tool_mover': 'Moving platform',
+  'cr.tool_lava': 'Lava (heavy damage)',
+  'cr.tool_saw': 'Saw',
+  'cr.tool_trampoline': 'Trampoline (eraser)',
   'cr.tool_hazard': 'Hazard (ink, spikes)',
   'cr.tool_tack': 'Tack',
   'cr.tool_balloon': 'Balloon',
@@ -261,6 +264,8 @@ export const en: Record<MessageKey, string> = {
   'cause.balloon': 'a balloon',
   'cause.ghost': 'a ghost',
   'cause.tack': 'a thumbtack',
+  'cause.lava': 'lava',
+  'cause.saw': 'a saw',
 
   'podium.title': 'Podium',
   'podium.rank': '{n}.',

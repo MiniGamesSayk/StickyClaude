@@ -122,6 +122,8 @@ const CAUSE_KEYS: Record<number, MessageKey> = {
   [Cause.BALLOON]: 'cause.balloon',
   [Cause.GHOST]: 'cause.ghost',
   [Cause.TACK]: 'cause.tack',
+  [Cause.LAVA]: 'cause.lava',
+  [Cause.SAW]: 'cause.saw',
 };
 
 /** Le jeu en ligne : connexion, reconnexion, état du salon dans le store, source de scène. */

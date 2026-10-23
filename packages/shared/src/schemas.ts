@@ -17,7 +17,7 @@ const rect = z.tuple([
   z.number().int().min(1).max(GRID_H),
 ]);
 
-const GRID_ROW = new RegExp(`^[.#p\\-^]{${GRID_W}}$`);
+const GRID_ROW = new RegExp(`^[.#p\\-^lst]{${GRID_W}}$`);
 
 export const arenaSchema = z
   .object({

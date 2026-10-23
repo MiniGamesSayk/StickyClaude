@@ -20,7 +20,7 @@ export function cellAt(world: World, cx: number, cy: number): number {
 }
 
 export function isBlocking(t: number): boolean {
-  return t === Cell.SOLID || t === Cell.PAPER;
+  return t === Cell.SOLID || t === Cell.PAPER || t === Cell.TRAMPOLINE;
 }
 
 export function bodyHeight(world: World, p: Player): number {
@@ -94,6 +94,16 @@ export function probeGround(world: World, p: Player): number {
     }
   }
   return mask;
+}
+
+/** Y a-t-il un trampoline sous les pieds du joueur ? */
+export function trampolineBelow(world: World, p: Player): boolean {
+  const hw = world.params.width * 0.5;
+  const cl = Math.floor((p.x - hw + EPS) / CELL);
+  const cr = Math.floor((p.x + hw - EPS) / CELL);
+  const row = Math.floor((p.y + PROBE) / CELL);
+  for (let cx = cl; cx <= cr; cx++) if (cellAt(world, cx, row) === Cell.TRAMPOLINE) return true;
+  return false;
 }
 
 /** Indice de la plateforme mobile sur laquelle le joueur est posé, -1 sinon. */

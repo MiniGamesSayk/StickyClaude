@@ -90,6 +90,8 @@ export const Cause = {
   BALLOON: 13,
   GHOST: 14,
   TACK: 15,
+  LAVA: 16,
+  SAW: 17,
 } as const;
 export type CauseId = (typeof Cause)[keyof typeof Cause];
 
@@ -192,6 +194,8 @@ export const SimEvent = {
   DASH: 31,
   /** Début d'une esquive sur place : uniquement local au client pour son propre joueur. */
   DODGE: 32,
+  /** Rebond sur un trampoline : joueur (slot) · x y. */
+  BOUNCE: 33,
   /** Événements de déroulement de partie : consommés par le salon (messages JSON), jamais binaires. */
   ROUND_START: 40,
   ROUND_END: 41,
@@ -236,6 +240,7 @@ export const EVENT_SPECS: Readonly<Record<number, string>> = {
   [SimEvent.CRATE_BREAK]: 'pp',
   /** équipe · x y */
   [SimEvent.HEAL]: 'ppi',
+  [SimEvent.BOUNCE]: 'pp',
   [SimEvent.GOAL]: 'ipp',
   /** sorte (0 encre, 1 déchirure) */
   [SimEvent.SUDDEN_DEATH]: 'i',

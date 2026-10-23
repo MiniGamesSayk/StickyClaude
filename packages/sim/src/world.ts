@@ -558,11 +558,13 @@ export function setTick(world: World, tick: number): void {
 export function weaponDropRow(cells: ArrayLike<number>, cx: number, cy: number): number {
   if (cx < 0 || cx >= GRID_W || cy < 0 || cy >= GRID_H) return -1;
   const at = (r: number): number => cells[r * GRID_W + cx];
-  if (at(cy) === Cell.SOLID || at(cy) === Cell.PAPER) return cy;
+  const floor = (c: number): boolean =>
+    c === Cell.SOLID || c === Cell.PAPER || c === Cell.TRAMPOLINE;
+  if (floor(at(cy))) return cy;
   for (let r = cy; r < GRID_H - 1; r++) {
     const below = at(r + 1);
-    if (below === Cell.SOLID || below === Cell.PAPER || below === Cell.ONEWAY) return r;
-    if (below === Cell.HAZARD) return -1;
+    if (floor(below) || below === Cell.ONEWAY) return r;
+    if (below === Cell.HAZARD || below === Cell.LAVA || below === Cell.SAW) return -1;
   }
   return -1;
 }

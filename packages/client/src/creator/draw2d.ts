@@ -1,4 +1,4 @@
-import { CELL, WeaponId } from '@stickyclaude/shared';
+import { Cell, CELL, WeaponId } from '@stickyclaude/shared';
 import { OBJECT_SHAPES, WEAPON_INK, WEAPON_SHAPES } from '../render/shapes.ts';
 import type { Shape } from '../render/shapes.ts';
 import { ObjType } from '@stickyclaude/shared';
@@ -159,4 +159,69 @@ export function drawHazard(ctx: CanvasRenderingContext2D, x: number, y: number):
   }
   ctx.fill();
   ctx.stroke();
+}
+
+/** Lave, scie et trampoline dans le créateur : mêmes couleurs que dans le jeu. */
+export function drawSpecialCell(
+  ctx: CanvasRenderingContext2D,
+  cell: number,
+  cx: number,
+  cy: number,
+): void {
+  const px = cx * CELL;
+  const py = cy * CELL;
+  if (cell === Cell.LAVA) {
+    ctx.fillStyle = '#f0643c';
+    ctx.fillRect(px, py, CELL, CELL);
+    ctx.strokeStyle = '#ffd24a';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    for (let i = 0; i <= 4; i++) {
+      const y = py + 1.6 + Math.sin((cx * 4 + i) * 1.7) * 1.2;
+      if (i === 0) ctx.moveTo(px, y);
+      else ctx.lineTo(px + i * 4, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#ffc65a';
+    ctx.beginPath();
+    ctx.arc(px + 5 + (cx % 3) * 3, py + 11, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (cell === Cell.SAW) {
+    const mx = px + CELL / 2;
+    const my = py + CELL / 2;
+    ctx.beginPath();
+    for (let i = 0; i < 20; i++) {
+      const a = (i / 20) * Math.PI * 2;
+      const r = i % 2 === 0 ? 8 : 5.6;
+      if (i === 0) ctx.moveTo(mx + Math.cos(a) * r, my + Math.sin(a) * r);
+      else ctx.lineTo(mx + Math.cos(a) * r, my + Math.sin(a) * r);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#aab2c0';
+    ctx.fill();
+    ctx.strokeStyle = '#22262e';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#d6322e';
+    ctx.beginPath();
+    ctx.arc(mx, my, 2.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (cell === Cell.TRAMPOLINE) {
+    ctx.fillStyle = '#f29ab8';
+    ctx.fillRect(px + 0.8, py + 1.4, CELL - 1.6, CELL - 2.2);
+    ctx.strokeStyle = '#22262e';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(px + 0.8, py + 1.4, CELL - 1.6, CELL - 2.2);
+    ctx.fillStyle = '#1f4fd1';
+    ctx.fillRect(px + 1.2, py + 10.2, CELL - 2.4, 4.4);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (let i = 0; i <= 6; i++) {
+      const y = py + (i % 2 === 0 ? 1.4 : 0.2);
+      if (i === 0) ctx.moveTo(px + 1, y);
+      else ctx.lineTo(px + 1 + i * 2.33, y);
+    }
+    ctx.stroke();
+  }
 }

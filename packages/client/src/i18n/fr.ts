@@ -155,6 +155,9 @@ export const fr = {
   'cr.tool_paper': 'Bloc de papier (destructible)',
   'cr.tool_oneway': 'Plateforme traversable',
   'cr.tool_mover': 'Plateforme mobile',
+  'cr.tool_lava': 'Lave (gros dégâts)',
+  'cr.tool_saw': 'Scie',
+  'cr.tool_trampoline': 'Trampoline (gomme)',
   'cr.tool_hazard': 'Danger (encre, épines)',
   'cr.tool_tack': 'Punaise',
   'cr.tool_balloon': 'Ballon',
@@ -269,6 +272,8 @@ export const fr = {
   'cause.balloon': 'un ballon',
   'cause.ghost': 'un fantôme',
   'cause.tack': 'une punaise',
+  'cause.lava': 'la lave',
+  'cause.saw': 'une scie',
 
   // Podium
   'podium.title': 'Podium',

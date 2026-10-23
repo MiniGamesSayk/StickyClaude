@@ -546,7 +546,7 @@ function healByContact(world: World, o: Obj): void {
   }
 }
 
-/** Contact avec les cellules de danger (encre bouillonnante, taille-crayon géant, gouttes). */
+/** Contact avec les cellules de danger : encre, lave (gros dégâts) et scies (dégâts et recul). */
 export function stepHazards(world: World): void {
   const hw = world.params.width * 0.5;
   for (let s = 0; s < MAX_PLAYERS; s++) {
@@ -558,36 +558,45 @@ export function stepHazards(world: World): void {
     const r0 = Math.floor((p.y - h + 1) / CELL);
     const r1 = Math.floor((p.y - 1) / CELL);
     let found = -1;
-    for (let cy = r0; cy <= r1 && found < 0; cy++) {
+    let kind: number = Cell.HAZARD;
+    for (let cy = r0; cy <= r1; cy++) {
       for (let cx = c0; cx <= c1; cx++) {
-        if (cellAt(world, cx, cy) === Cell.HAZARD) {
+        const t = cellAt(world, cx, cy);
+        // le plus grave l'emporte : lave > scie > encre
+        const grave = t === Cell.LAVA ? 3 : t === Cell.SAW ? 2 : t === Cell.HAZARD ? 1 : 0;
+        const have = kind === Cell.LAVA ? 3 : kind === Cell.SAW ? 2 : 1;
+        if (grave > 0 && (found < 0 || grave > have)) {
           found = cy * GRID_W + cx;
-          break;
+          kind = t;
         }
       }
     }
     if (found < 0) continue;
-    p.hazardCd = COMBAT.hazardIntervalTicks;
     let owner = -1;
     let cause: number = Cause.HAZARD;
+    let damage: number = COMBAT.hazardDamage;
+    let kbx = 0;
+    let kby: number = -COMBAT.hazardBounce;
+    p.hazardCd = COMBAT.hazardIntervalTicks;
+    if (kind === Cell.LAVA) {
+      cause = Cause.LAVA;
+      damage = COMBAT.lavaDamage;
+      kby = -COMBAT.lavaBounce;
+      p.hazardCd = COMBAT.lavaIntervalTicks;
+    } else if (kind === Cell.SAW) {
+      cause = Cause.SAW;
+      damage = COMBAT.sawDamage;
+      const sx = ((found % GRID_W) + 0.5) * CELL;
+      kbx = (p.x >= sx ? 1 : -1) * COMBAT.sawKnock;
+      kby = -COMBAT.hazardBounce;
+      p.hazardCd = COMBAT.sawIntervalTicks;
+    }
     for (const m of world.marks) {
       if (m.active && (m.c0 === found || m.c1 === found || m.c2 === found)) {
         owner = m.owner;
         cause = Cause.GHOST;
       }
     }
-    queueHit(
-      world,
-      s,
-      owner,
-      COMBAT.hazardDamage,
-      0,
-      -COMBAT.hazardBounce,
-      0,
-      cause,
-      HitFlag.UNBLOCKABLE,
-      p.x,
-      p.y,
-    );
+    queueHit(world, s, owner, damage, kbx, kby, 0, cause, HitFlag.UNBLOCKABLE, p.x, p.y);
   }
 }
