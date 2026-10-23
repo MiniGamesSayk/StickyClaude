@@ -138,6 +138,7 @@ async function main(): Promise<void> {
     overheadPos: () => ({ x: 560, y: 940, right: false }),
     colorOf: (s) => legibleInk(INK_COLORS[s % 12], paper, 3),
     reducedMotion: false,
+    showDamage: false,
     density: 1,
   };
   const fx = new FxSystem(

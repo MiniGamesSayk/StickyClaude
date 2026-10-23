@@ -27,6 +27,7 @@ const MAX_LINES = 40;
 const MAX_ONO = 8;
 const MAX_BLOTS = 48;
 const MAX_BUBBLES = 8;
+const MAX_DMG = 12;
 const MAX_DRAWINS = 6;
 const MAX_ROPES = 6;
 
@@ -60,6 +61,8 @@ export interface FxEnv {
   overheadPos(slot: number): { x: number; y: number; right: boolean } | null;
   colorOf(slot: number): number;
   reducedMotion: boolean;
+  /** Affiche le chiffre des dégâts à chaque coup (entraînement). */
+  showDamage: boolean;
   /** Densité des particules : 1 (haute), 0,5 (basse). */
   density: number;
 }
@@ -157,6 +160,13 @@ export class FxSystem {
   private readonly bslot = new Int8Array(MAX_BUBBLES).fill(-1);
   private readonly bemote = new Uint8Array(MAX_BUBBLES);
   private readonly blife = new Float32Array(MAX_BUBBLES);
+  // chiffres de dégâts (entraînement)
+  private readonly dmx = new Float32Array(MAX_DMG);
+  private readonly dmy = new Float32Array(MAX_DMG);
+  private readonly dmv = new Uint16Array(MAX_DMG);
+  private readonly dmlife = new Float32Array(MAX_DMG);
+  private readonly dmbig = new Uint8Array(MAX_DMG);
+  private dmnext = 0;
   // armes dessinées en direct
   private readonly dx = new Float32Array(MAX_DRAWINS);
   private readonly dy = new Float32Array(MAX_DRAWINS);
@@ -203,6 +213,7 @@ export class FxSystem {
     this.llife.fill(0);
     this.olife.fill(0);
     this.blife.fill(0);
+    this.dmlife.fill(0);
     this.bslot.fill(-1);
     this.dactive.fill(0);
     this.clife.fill(0);
@@ -415,6 +426,27 @@ export class FxSystem {
     if (big) this.flash(x, y, env);
   }
 
+  /** Chiffre de dégâts : il apparaît au point d'impact et monte en s'effaçant. */
+  private damageNumber(
+    x: number,
+    y: number,
+    dmg: number,
+    big: boolean,
+    attacker: number,
+    env: FxEnv,
+  ): void {
+    const i = this.dmnext;
+    this.dmnext = (this.dmnext + 1) % MAX_DMG;
+    // à côté du touché (du côté opposé à l'attaquant) pour ne pas couvrir son nom
+    const from = attacker !== 255 ? env.playerPos(attacker) : null;
+    const side = from && from.x > x ? -1 : 1;
+    this.dmx[i] = x + side * 20;
+    this.dmy[i] = y - 10;
+    this.dmv[i] = Math.round(dmg);
+    this.dmbig[i] = big ? 1 : 0;
+    this.dmlife[i] = 0.9;
+  }
+
   // --- Événements -----------------------------------------------------------------------------
 
   /** Transforme un événement de la simulation en effets, hit-stop, secousse, ragdoll. */
@@ -435,6 +467,7 @@ export class FxSystem {
         this.spray(PK.SPARK, heavy ? 8 : 5, x, y, 130, 5, 0.22, INK.black, env);
         if (blocked) break;
         this.impact(x, y, attacker, e.slot, dmg, heavy || lethal, color, env);
+        if (env.showDamage && dmg > 0) this.damageNumber(x, y, dmg, heavy || lethal, attacker, env);
         let ms = 0;
         if (lethal || heavy || dmg >= 12) ms = 90;
         else if (dmg >= 8) ms = 60;
@@ -791,6 +824,20 @@ export class FxSystem {
         this.bemote[i],
         Math.min(1, this.blife[i] * 4, (2 - this.blife[i]) * 8),
       );
+    }
+    // chiffres de dégâts
+    for (let i = 0; i < MAX_DMG; i++) {
+      if (this.dmlife[i] <= 0) continue;
+      this.dmlife[i] -= dtS;
+      if (this.dmlife[i] <= 0) continue;
+      const age = 0.9 - this.dmlife[i];
+      const t = labels.get(
+        String(this.dmv[i]),
+        (this.dmbig[i] ? 22 : 17) + Math.min(6, this.dmv[i] * 0.15),
+        this.dmbig[i] ? 0xd6322e : 0x8f1d1a,
+      );
+      t.position.set(this.dmx[i], this.dmy[i] - age * 26);
+      t.alpha = Math.min(1, this.dmlife[i] * 4);
     }
     // onomatopées : pop-in avec dépassement, puis fondu
     for (let i = 0; i < MAX_ONO; i++) {

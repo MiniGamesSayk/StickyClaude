@@ -53,6 +53,8 @@ export interface Scene {
   game: Pick<GameSnap, 'phase' | 'mode' | 'modeData'>;
   ghost: { x: number; y: number; visible: boolean };
   debug: boolean;
+  /** Entraînement : chiffre des dégâts qui monte à chaque coup porté. */
+  damageNumbers: boolean;
   /** Couleurs d'équipe (indices 0 à 3) quand on joue par équipes. */
   teamColors: readonly number[] | null;
   /** Emplacements qui gagnent la manche (masque de bits) : ils jouent leur emote de victoire. */

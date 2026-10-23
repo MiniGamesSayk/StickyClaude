@@ -449,3 +449,8 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 
 - Outil « Sélectionner / déplacer » : encadrer une zone la sélectionne (si elle contient quelque chose), puis la glisser déplace **tout** : cases, apparitions de joueurs et d'armes, objets, départ de la boule, colline et cages entières, plateformes mobiles dont tout le trajet est dans la zone. Suppr efface le contenu, Échap annule.
 - Modèle pur (`liftSelection` / `dropPayload` / `clampShift`) : le niveau n'est modifié qu'au lâcher (l'aperçu se dessine sur une copie), donc un déplacement est une seule étape d'annulation ; le décalage est borné pour que la zone reste dans la page. À l'arrivée, les cases vides n'effacent rien, les cases pleines remplacent ce qu'elles recouvrent (marqueurs compris).
+
+### D73. Entraînement : chiffre des dégâts à chaque coup
+
+- En entraînement (`Scene.damageNumbers`, activé par `SoloSource`), chaque coup qui touche fait monter le chiffre des dégâts à côté de la cible (du côté opposé à l'attaquant), en rouge sombre, plus gros pour un coup lourd ou mortel. Pas d'affichage en ligne.
+- Au salon (entraînement, en ligne comme en solo) la simulation ne retire aucun PV, mais l'événement `HIT` annonce désormais les dégâts qu'aurait infligés le coup (`shown`), au lieu de 0 ; les statistiques (`dealt`) ne changent pas. Conséquence : les coups du salon déclenchent les mêmes effets (arrêt sur image, secousse) que ceux d'un combat.

@@ -47,6 +47,7 @@ export function createScene(world: World): Scene {
     game: { phase: 0, mode: 0, modeData: new Uint16Array(8) },
     ghost: { x: 0, y: 0, visible: false },
     debug: false,
+    damageNumbers: false,
     teamColors: null,
     winners: 0,
   };

@@ -200,6 +200,7 @@ export class Renderer {
       },
       colorOf: (slot) => this.colorOf(slot),
       reducedMotion: false,
+      showDamage: false,
       density: 1,
     };
     this.root.addChild(this.worldLayer, this.screenLayer);
@@ -447,6 +448,7 @@ export class Renderer {
     this.boil.amp = boilOn ? 0.55 : 0;
     this.fxEnv.nowMs = t0;
     this.fxEnv.reducedMotion = reduced;
+    this.fxEnv.showDamage = scene.damageNumbers;
     this.lastScene = scene;
 
     const world = scene.world;

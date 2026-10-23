@@ -192,10 +192,15 @@ function applyHit(world: World, index: number): void {
 
   const lobby = phase === GamePhase.LOBBY;
   let dealt = 0;
-  if (damage > 0 && !lobby) {
-    dealt = Math.max(1, Math.round(damage));
-    if (dealt > v.hp) dealt = v.hp;
-    v.hp -= dealt;
+  /** Dégâts annoncés dans l'événement : au salon (entraînement) rien n'est retiré, mais le chiffre s'affiche. */
+  let shown = 0;
+  if (damage > 0) {
+    shown = Math.max(1, Math.round(damage));
+    if (!lobby) {
+      dealt = Math.min(shown, v.hp);
+      shown = dealt;
+      v.hp -= dealt;
+    }
   }
 
   if (a && a !== v) {
@@ -239,7 +244,7 @@ function applyHit(world: World, index: number): void {
     v.x,
     v.y - bodyHeight(world, v) * 0.5,
     attacker < 0 ? NO_SLOT : attacker,
-    dealt,
+    shown,
     (h.heavy ? 1 : 0) | (blocked ? 2 : 0) | (lethal ? 4 : 0),
   );
   if (lethal) killPlayer(world, h.victim, attacker, h.cause);

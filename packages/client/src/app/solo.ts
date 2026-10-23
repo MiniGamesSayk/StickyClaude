@@ -276,6 +276,7 @@ export class SoloSource implements RenderSource {
     this.world.rules.weapons = true;
     this.world.game.phase = GamePhase.LOBBY;
     this.scene = createScene(this.world);
+    this.scene.damageNumbers = true;
     this.tracker = new TrainingTracker(loadDone());
     this.placeActors();
     this.deps.onObjectives(deps.arena ? [] : this.tracker.list(), []);
