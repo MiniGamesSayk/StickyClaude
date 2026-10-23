@@ -921,6 +921,20 @@ table.table td {
   gap: 6px 8px;
   align-items: center;
 }
+.warn-list {
+  border: 2px dashed #c9a227;
+  border-radius: 6px;
+  background: rgba(201, 162, 39, 0.12);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85em;
+}
+.warn-list ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+}
+.warn-list li + li {
+  margin-top: 0.25rem;
+}
 .keycap {
   min-width: 4.2rem;
   font: inherit;

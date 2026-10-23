@@ -1,6 +1,7 @@
 import {
   aimOfInput,
   AIM_DX,
+  AIM_DY,
   AtkPhase,
   AttackKind,
   COMBAT,
@@ -13,6 +14,7 @@ import {
   UPPER,
   WeaponId,
   WeaponKind,
+  weaponChargeLevel,
   weaponDef,
 } from '@stickyclaude/shared';
 import type { WeaponDef } from '@stickyclaude/shared';
@@ -34,6 +36,8 @@ import type { Player, World } from './world.ts';
 const ATK_BUFFER_TICKS = 6;
 /** Durée maximale d'un coup de pied plongeant (sécurité). */
 const KICK_MAX_TICKS = 150;
+/** Durée du geste d'un lancer à l'attaque (avant que la charge ne s'ajoute). */
+const THROW_STARTUP = 3;
 
 function approach(v: number, target: number, maxDelta: number): number {
   if (v < target) {
@@ -75,8 +79,20 @@ export function phaseTicks(p: Player, phase: number): number {
     }
     case AttackKind.KICK:
       return phase === AtkPhase.STARTUP ? 0 : phase === AtkPhase.ACTIVE ? 0 : COMBAT.kick.recovery;
+    case AttackKind.AIR_DOWN: {
+      const a = COMBAT.airDown;
+      return phase === AtkPhase.STARTUP
+        ? a.startup
+        : phase === AtkPhase.ACTIVE
+          ? a.active
+          : a.recovery;
+    }
     case AttackKind.THROW:
-      return phase === AtkPhase.STARTUP ? 3 : phase === AtkPhase.ACTIVE ? 1 : 8;
+      return phase === AtkPhase.STARTUP
+        ? THROW_STARTUP
+        : phase === AtkPhase.ACTIVE
+          ? 1
+          : 8;
     default: {
       const w = weaponDef(p.weapon);
       return phase === AtkPhase.STARTUP
@@ -86,6 +102,13 @@ export function phaseTicks(p: Player, phase: number): number {
           : w.recovery;
     }
   }
+}
+
+/** Un lancer chargé est en cours : « ramasser » tenu avec une arme en main. */
+export function throwCharging(p: Player): boolean {
+  return (
+    p.chargeTicks > 0 && p.weapon !== 0 && p.atkPhase === AtkPhase.NONE && !p.kicking && !p.dodging
+  );
 }
 
 /**
@@ -148,16 +171,17 @@ function startFist(p: Player, idx: number): void {
 }
 
 function enterPhase(world: World, p: Player, slot: number, phase: number): void {
+  const held = p.atkTicks;
   p.atkPhase = phase;
   p.atkTicks = 0;
-  if (phase === AtkPhase.ACTIVE) onActiveStart(world, p, slot);
+  if (phase === AtkPhase.ACTIVE) onActiveStart(world, p, slot, held);
   else if (phase === AtkPhase.RECOVERY) {
     const k = p.atkKind;
     if (k === AttackKind.FIST1 || k === AttackKind.FIST2) p.comboWindow = COMBAT.comboWindowTicks;
   }
 }
 
-function onActiveStart(world: World, p: Player, slot: number): void {
+function onActiveStart(world: World, p: Player, slot: number, held: number): void {
   p.hitMask = 0;
   const k = p.atkKind;
   const dir = p.facing;
@@ -166,11 +190,16 @@ function onActiveStart(world: World, p: Player, slot: number): void {
     const a = FIST[k - AttackKind.FIST1];
     if (Math.abs(p.vx) < a.lunge) p.vx = dir * a.lunge;
   } else if (k === AttackKind.CHARGED) {
-    if (Math.abs(p.vx) < COMBAT.charged.lunge) p.vx = dir * COMBAT.charged.lunge;
+    // L'élan suit la visée : un coup chargé vers le haut ou le bas ne propulse pas de côté.
+    const ux = AIM_DX[p.aim] / Math.hypot(AIM_DX[p.aim], AIM_DY[p.aim]);
+    if (Math.abs(ux) > 0.4 && Math.abs(p.vx) < COMBAT.charged.lunge) {
+      p.vx = Math.sign(ux) * COMBAT.charged.lunge;
+    }
   } else if (k === AttackKind.CROUCH) {
     if (Math.abs(p.vx) < CROUCH_PUNCH.lunge) p.vx = dir * CROUCH_PUNCH.lunge;
   } else if (k === AttackKind.THROW) {
     // L'arme quitte la main tout de suite (prédit) ; la passe d'autorité crée le projectile.
+    p.throwLevel = throwLevel(held - THROW_STARTUP);
     p.throwW = p.weapon;
     p.throwA = p.ammo;
     p.weapon = 0;
@@ -178,6 +207,8 @@ function onActiveStart(world: World, p: Player, slot: number): void {
     p.wantThrow = true;
   } else if (k === AttackKind.WEAPON || k === AttackKind.SHOOT || k === AttackKind.BASH) {
     const w = weaponDef(p.weapon);
+    // Arme chargeable (arc, mêlée) : la durée de maintien est conservée pour l'impact ou le tir.
+    p.chargeTicks = w.chargeMax > 0 && weaponChargeLevel(w, held) > 0 ? held : 0;
     // Le bouclier s'use quand il encaisse, pas quand il frappe.
     if (k !== AttackKind.BASH && p.ammo > 0) p.ammo--;
     if (k === AttackKind.SHOOT) {
@@ -208,6 +239,12 @@ function startWeaponUse(p: Player, w: WeaponDef): void {
   }
 }
 
+/** Charge d'un lancer (0 à 1) après `ticks` ticks de maintien au-delà du geste de base. */
+function throwLevel(ticks: number): number {
+  const span = COMBAT.throwChargeMax - THROW_STARTUP;
+  return ticks <= 0 ? 0 : Math.min(1, ticks / span);
+}
+
 function startThrow(p: Player): void {
   p.atkKind = AttackKind.THROW;
   p.atkPhase = AtkPhase.STARTUP;
@@ -221,11 +258,48 @@ function startThrow(p: Player): void {
  * Passe 1, actions : parade, enchaînement de coups, charge, utilisation d'arme, demande de
  * ramassage. Ne dépend que de l'état du joueur et de ses entrées (prédictible côté client).
  */
-function stepActions(world: World, p: Player, slot: number, input: number, pressed: number): void {
+function stepActions(
+  world: World,
+  p: Player,
+  slot: number,
+  inputRaw: number,
+  pressedRaw: number,
+): void {
   const weapon = weaponDef(p.weapon);
+  let input = inputRaw;
+  let pressed = pressedRaw;
 
   const a = aimOfInput(input);
   p.aim = a >= 0 ? a : p.facing > 0 ? 0 : 8;
+
+  // Un coup de pied plongeant s'annule : dash, saut, parade ou nouvel appui sur « smash bas ».
+  let cancelled = false;
+  if (p.kicking && (pressed & (Input.DASH | Input.JUMP | Input.BLOCK)) !== 0) {
+    cancelKick(p);
+    cancelled = true;
+  }
+  // « Smash bas » : attaque et parade pressées ensemble (une seule touche côté client). En l'air
+  // c'est le coup de pied plongeant ; au sol c'est une simple attaque (pas de parade).
+  const spikePress =
+    (pressed & Input.BLOCK) !== 0 &&
+    ((pressed & Input.ATTACK) !== 0 || (input & Input.ATTACK) !== 0);
+  if (spikePress && !cancelled) {
+    if (
+      !p.grounded &&
+      !p.kicking &&
+      p.chargeTicks === 0 &&
+      p.blockTicks === 0 &&
+      (p.atkPhase === AtkPhase.NONE || cancelableRecovery(p))
+    ) {
+      if (p.atkPhase !== AtkPhase.NONE) endAttack(p);
+      startKick(world, p, slot);
+      pressed &= ~(Input.ATTACK | Input.BLOCK);
+      input &= ~(Input.ATTACK | Input.BLOCK);
+    } else if ((pressed & Input.ATTACK) !== 0) {
+      pressed &= ~Input.BLOCK;
+      input &= ~Input.BLOCK;
+    }
+  }
 
   if ((input & Input.ATTACK) !== 0) {
     if (p.attackHeld < 255) p.attackHeld++;
@@ -233,9 +307,40 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
   if ((pressed & Input.ATTACK) !== 0) p.atkBuffer = ATK_BUFFER_TICKS;
   else if (p.atkBuffer > 0) p.atkBuffer--;
   if ((pressed & Input.PICKUP) !== 0 && p.pickupCd === 0) {
-    p.pickupCd = COMBAT.pickupCooldownTicks;
-    if ((input & Input.DOWN) !== 0 && p.weapon !== 0) p.wantDrop = true;
-    else p.wantPickup = true;
+    if ((input & Input.DOWN) !== 0 && p.weapon !== 0) {
+      p.pickupCd = COMBAT.pickupCooldownTicks;
+      p.wantDrop = true;
+    } else if (
+      p.weapon !== 0 &&
+      p.chargeTicks === 0 &&
+      p.blockTicks === 0 &&
+      p.atkPhase === AtkPhase.NONE &&
+      !p.kicking
+    ) {
+      // Une arme en main : on arme le lancer ; un appui bref ramasse ou lance doucement.
+      p.chargeTicks = 1;
+    } else {
+      p.pickupCd = COMBAT.pickupCooldownTicks;
+      p.wantPickup = true;
+    }
+  } else if (throwCharging(p)) {
+    if ((input & Input.PICKUP) !== 0) {
+      if (p.chargeTicks < COMBAT.throwChargeMax) p.chargeTicks++;
+    } else {
+      p.pickupCd = COMBAT.pickupCooldownTicks;
+      if (p.chargeTicks < COMBAT.throwHoldTicks) {
+        p.chargeTicks = 0;
+        p.wantPickup = true;
+      } else {
+        p.throwLevel = throwLevel(p.chargeTicks - COMBAT.throwHoldTicks + 1);
+        p.chargeTicks = 0;
+        p.throwW = p.weapon;
+        p.throwA = p.ammo;
+        p.weapon = 0;
+        p.ammo = 0;
+        p.wantThrow = true;
+      }
+    }
   }
 
   // --- Parade ---------------------------------------------------------------------------------
@@ -269,7 +374,15 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
       if (p.atkPhase === AtkPhase.ACTIVE && p.atkTicks > KICK_MAX_TICKS) endKick(p);
     } else {
       const dur = phaseTicks(p, p.atkPhase);
-      if (p.atkTicks >= dur) {
+      // Arc et armes de mêlée : tant que l'attaque est tenue, le geste reste armé (charge).
+      const drawing =
+        p.atkPhase === AtkPhase.STARTUP &&
+        (input & Input.ATTACK) !== 0 &&
+        ((weapon.chargeMax > 0 &&
+          (p.atkKind === AttackKind.WEAPON || p.atkKind === AttackKind.SHOOT) &&
+          p.atkTicks < weapon.chargeMax) ||
+          (p.atkKind === AttackKind.THROW && p.atkTicks < COMBAT.throwChargeMax));
+      if (p.atkTicks >= dur && !drawing) {
         if (p.atkPhase === AtkPhase.STARTUP) enterPhase(world, p, slot, AtkPhase.ACTIVE);
         else if (p.atkPhase === AtkPhase.ACTIVE) enterPhase(world, p, slot, AtkPhase.RECOVERY);
         else finishAttack(p);
@@ -304,13 +417,16 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
     p.comboWindow = 0;
     p.atkBuffer = 0;
     p.chargeTicks = 1;
-  } else if (p.chargeTicks > 0 && p.atkPhase === AtkPhase.NONE) {
+  } else if (fists && p.chargeTicks > 0 && p.atkPhase === AtkPhase.NONE) {
     if ((input & Input.ATTACK) !== 0) {
       if (p.chargeTicks < COMBAT.chargeMaxTicks) p.chargeTicks++;
     } else {
       p.atkKind = AttackKind.CHARGED;
       p.atkPhase = AtkPhase.STARTUP;
       p.atkTicks = 0;
+      // Le coup chargé part dans la direction visée ; on se retourne si elle est de côté.
+      const ux = AIM_DX[p.aim] / Math.hypot(AIM_DX[p.aim], AIM_DY[p.aim]);
+      if (Math.abs(ux) > 0.4) p.facing = ux > 0 ? 1 : -1;
     }
   }
 
@@ -323,13 +439,13 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
     p.atkBuffer = Math.max(p.atkBuffer, 1);
   }
   if (p.atkBuffer === 0 || p.chargeTicks > 0) return;
-  // Mains nues, sans direction : tant que le bouton est tenu sans avoir atteint le seuil de charge,
-  // on ne sait pas encore si c'est un coup ou une charge. Le coup part au relâchement (appui
-  // bref) ; au-delà du seuil, la charge commence directement, sans coup parasite avant. Les coups
-  // dirigés (haut, bas) partent tout de suite.
+  // Mains nues : tant que le bouton est tenu sans avoir atteint le seuil de charge, on ne sait pas
+  // encore si c'est un coup ou une charge (quelle que soit la direction tenue). Le coup part au
+  // relâchement (appui bref) ; au-delà du seuil, la charge commence directement, sans coup
+  // parasite avant (le coup de pied plongeant a sa propre touche : « smash bas »).
   if (
     fists &&
-    (input & (Input.ATTACK | Input.UP | Input.DOWN)) === Input.ATTACK &&
+    (input & Input.ATTACK) !== 0 &&
     p.attackHeld < COMBAT.chargeHoldTicks
   ) {
     p.atkBuffer = ATK_BUFFER_TICKS;
@@ -346,7 +462,7 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
 
   if (fists) {
     if ((input & Input.DOWN) !== 0 && !p.grounded && !p.kicking) {
-      startKick(world, p, slot);
+      startSpecial(p, AttackKind.AIR_DOWN);
     } else if ((input & Input.DOWN) !== 0 && p.grounded) {
       startSpecial(p, AttackKind.CROUCH);
     } else if ((input & Input.UP) !== 0) {
@@ -383,6 +499,13 @@ function startKick(_world: World, p: Player, _slot: number): void {
   p.comboWindow = 0;
 }
 
+/** Annule un coup de pied plongeant en cours : on garde la main, sans récupération. */
+function cancelKick(p: Player): void {
+  p.kicking = false;
+  endAttack(p);
+  if (p.vy > 140) p.vy = 140;
+}
+
 export function endKick(p: Player): void {
   p.kicking = false;
   p.atkPhase = AtkPhase.RECOVERY;
@@ -393,6 +516,7 @@ function finishAttack(p: Player): void {
   const wasFinisher = p.atkKind === AttackKind.FIST3;
   const wasCharged = p.atkKind === AttackKind.CHARGED;
   const wasThrow = p.atkKind === AttackKind.THROW;
+  const wasWeapon = p.atkKind === AttackKind.WEAPON || p.atkKind === AttackKind.SHOOT;
   p.atkPhase = AtkPhase.NONE;
   p.atkKind = AttackKind.NONE;
   p.atkTicks = 0;
@@ -400,7 +524,7 @@ function finishAttack(p: Player): void {
     p.combo = 0;
     p.comboWindow = 0;
   }
-  if (wasCharged) p.chargeTicks = 0;
+  if (wasCharged || wasWeapon) p.chargeTicks = 0;
   if (wasThrow) p.combo = 0;
 }
 
@@ -425,6 +549,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   if (p.tackCd > 0) p.tackCd--;
   if (p.bombPassCd > 0) p.bombPassCd--;
   if (p.dashCd > 0) p.dashCd--;
+  if (p.glueTicks > 0) p.glueTicks--;
   if (p.stun > 0) {
     p.stun--;
     if (p.stun === 0) p.stunImmune = COMBAT.stunImmuneTicks;
@@ -449,6 +574,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   else if (p.atkPhase !== AtkPhase.NONE) mul = COMBAT.attackSpeedMul;
   else if (p.chargeTicks > 0) mul = COMBAT.chargeSpeedMul;
   if (w.kind === WeaponKind.SHIELD) mul *= w.slowMul;
+  if (p.glueTicks > 0) mul *= COMBAT.glueSpeedMul;
   p.moveMul = mul;
   p.ctrlLocked = p.hitLock > 0 || p.stun > 0;
   p.jumpLocked = p.blockTicks > 0 || p.chargeTicks > 0 || p.stun > 0 || p.kicking || p.dodging;
@@ -459,7 +585,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     ? 0
     : ((input & Input.RIGHT) !== 0 ? 1 : 0) - ((input & Input.LEFT) !== 0 ? 1 : 0);
 
-  // --- Dash : ruée horizontale, sans gravité, vers la direction tenue (sinon vers où l'on regarde) ---
+  // --- Dash : ruée sans gravité dans l'une des huit directions tenues ; sans direction, esquive ---
   const busy =
     p.ctrlLocked ||
     p.blockTicks > 0 ||
@@ -470,16 +596,28 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   if (busy) {
     p.dashTicks = 0;
     p.dodging = false;
-  } else if ((pressed & Input.DASH) !== 0 && p.dashCd === 0 && p.dashTicks === 0) {
+  } else if (
+    (pressed & Input.DASH) !== 0 &&
+    p.dashCd === 0 &&
+    p.dashTicks === 0 &&
+    p.glueTicks === 0
+  ) {
     if (p.atkPhase !== AtkPhase.NONE) endAttack(p);
     p.jumping = false;
     p.wallLock = 0;
-    if (dir !== 0) {
+    // Bas seul au sol : on s'accroupit, le dash n'a pas de direction verticale.
+    let dy = ((input & Input.DOWN) !== 0 ? 1 : 0) - ((input & Input.UP) !== 0 ? 1 : 0);
+    if (dy > 0 && p.grounded) dy = 0;
+    if (dir !== 0 || dy !== 0) {
       p.dashTicks = P.dashTicks;
       p.dashCd = P.dashCooldownTicks;
-      p.facing = dir;
+      p.dashX = dir;
+      p.dashY = dy;
+      if (dir !== 0) p.facing = dir;
       emit(world, SimEvent.DASH, slot, p.x, p.y, p.facing);
     } else {
+      p.dashX = 0;
+      p.dashY = 0;
       // Dash sans direction : esquive sur place, invulnérable (comme dans Brawlhalla).
       p.dodging = true;
       p.dashTicks = P.dodgeTicks;
@@ -543,6 +681,12 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   const wallSliding = !p.grounded && wall !== 0 && dir === wall && p.vy >= 0 && !p.kicking;
 
   // --- Sauts ----------------------------------------------------------------------------------
+  // Sauter pendant la traction du grappin lâche la corde et garde l'élan.
+  if (p.grappleTicks > 0 && jumpPressed) {
+    p.grappleTicks = 0;
+    p.jumpBuffer = 0;
+    emit(world, SimEvent.GRAPPLE, slot, p.x, p.y, 254);
+  }
   if (p.jumpBuffer > 0 && !p.jumpLocked) {
     if (p.coyote > 0) {
       p.vy = -P.jumpSpeed;
@@ -603,7 +747,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
       p.jumping = false;
     }
   } else if (p.dashTicks > 0) {
-    p.vx = p.dodging ? 0 : p.facing * P.dashSpeed;
+    p.vx = p.dodging ? 0 : p.dashX * P.dashSpeed * (p.dashY !== 0 ? Math.SQRT1_2 : 1);
   } else if (p.wallLock === 0) {
     const maxSpeed = (p.crouching ? P.crouchSpeed : P.runSpeed) * p.moveMul;
     const target = dir * maxSpeed;
@@ -626,7 +770,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
 
   // --- Vertical -------------------------------------------------------------------------------
   if (p.dashTicks > 0) {
-    p.vy = 0;
+    p.vy = p.dodging ? 0 : p.dashY * P.dashSpeed * (p.dashX !== 0 ? Math.SQRT1_2 : 1);
   } else if (p.grappleTicks <= 0 || p.kicking) {
     let maxFall = P.maxFallSpeed;
     let g = P.gravity;
@@ -651,12 +795,14 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     p.dashTicks = 0;
   }
   const hit = moveY(world, p, p.vy * DT);
+  if (hit !== 0 && p.dashTicks > 0 && p.dashY !== 0) p.dashTicks = 0;
   const dashing = p.dashTicks > 0;
   const dodgingNow = dashing && p.dodging;
   if (dashing && --p.dashTicks === 0) {
     p.dodging = false;
     // Fin du dash : on repart à la vitesse de course, sans glisser à pleine vitesse.
     if (Math.abs(p.vx) > P.runSpeed) p.vx = Math.sign(p.vx) * P.runSpeed;
+    if (p.dashY !== 0) p.vy *= 0.25;
   }
   if (hit === 1) {
     p.vy = 0;

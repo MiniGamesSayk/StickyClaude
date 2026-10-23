@@ -14,10 +14,12 @@ import {
   NO_SLOT,
   ObjType,
   PlayerState,
+  ProjType,
   SimEvent,
   SillyDeath,
   UPPER,
   WeaponKind,
+  weaponChargeLevel,
   weaponDef,
 } from '@stickyclaude/shared';
 import type { Explosion } from '@stickyclaude/shared';
@@ -32,7 +34,7 @@ import { damageObject, dropWeaponAt, kickBall, triggerMine } from './objects.ts'
 /** Demi-largeur perdue par la boîte du corps depuis le réglage des allonges (12,8 → 9). */
 const MELEE_BODY_BONUS = 1.9;
 
-export const HitFlag = { PIERCE: 1, RANGED: 2, HEAVY: 4, UNBLOCKABLE: 8 } as const;
+export const HitFlag = { PIERCE: 1, RANGED: 2, HEAVY: 4, UNBLOCKABLE: 8, LIGHT: 16 } as const;
 
 // --- Historique des positions (compensation de latence) ---------------------------------------
 
@@ -108,6 +110,7 @@ export function queueHit(
   h.ranged = (flags & HitFlag.RANGED) !== 0;
   h.heavy = (flags & HitFlag.HEAVY) !== 0;
   h.unblockable = (flags & HitFlag.UNBLOCKABLE) !== 0;
+  h.light = (flags & HitFlag.LIGHT) !== 0;
   h.x = x;
   h.y = y;
 }
@@ -216,7 +219,7 @@ function applyHit(world: World, index: number): void {
     v.lastAttackTick = world.tick;
   }
 
-  if (kbx !== 0 || kby !== 0) {
+  if ((kbx !== 0 || kby !== 0) && !h.light) {
     const hpFrac = Math.max(0, Math.min(1, v.hp / COMBAT.maxHp));
     const scale = 1 + COMBAT.lowHpKnockbackBonus * (1 - hpFrac);
     v.vx = v.vx * 0.2 + kbx * scale;
@@ -229,7 +232,7 @@ function applyHit(world: World, index: number): void {
     const l = Math.min(COMBAT.hitLockMax, Math.round(lock));
     if (l > v.hitLock) v.hitLock = l;
   }
-  if (!blocked) {
+  if (!blocked && !h.light) {
     cancelActions(v);
     if (stun > 0 && v.stunImmune === 0) {
       v.stun = Math.min(COMBAT.stunMaxTicks, stun);
@@ -380,6 +383,18 @@ function meleeSpec(p: Player): boolean {
       spec.cause = Cause.MELEE;
       return true;
     }
+    case AttackKind.AIR_DOWN: {
+      const a = COMBAT.airDown;
+      spec.damage = a.damage;
+      spec.kbx = a.kbx;
+      spec.kby = a.kby;
+      spec.stun = a.stun;
+      spec.reach = a.reach;
+      spec.halfHeight = 0;
+      spec.flags = 0;
+      spec.cause = Cause.MELEE;
+      return true;
+    }
     case AttackKind.KICK: {
       const k = COMBAT.kick;
       spec.damage = k.damage;
@@ -395,13 +410,16 @@ function meleeSpec(p: Player): boolean {
     case AttackKind.WEAPON:
     case AttackKind.BASH: {
       const w = weaponDef(p.weapon);
-      spec.damage = w.damage;
-      spec.kbx = w.kbx;
-      spec.kby = w.kby;
-      spec.stun = w.stun;
-      spec.reach = w.reach;
+      // Une arme de mêlée chargée (attaque maintenue) frappe plus fort, plus loin.
+      const lvl = p.atkKind === AttackKind.WEAPON ? weaponChargeLevel(w, p.chargeTicks) : 0;
+      spec.damage = w.damage * (1 + w.chargeBonus * lvl);
+      spec.kbx = w.kbx * (1 + 0.7 * lvl);
+      spec.kby = w.kby * (1 + 0.7 * lvl);
+      spec.stun = w.stun > 0 ? w.stun : lvl >= 0.7 ? 18 : 0;
+      spec.reach = w.reach + 8 * lvl;
       spec.halfHeight = w.halfHeight;
-      spec.flags = (w.pierceBlock ? HitFlag.PIERCE : 0) | (w.stun > 0 ? HitFlag.HEAVY : 0);
+      spec.flags =
+        (w.pierceBlock ? HitFlag.PIERCE : 0) | (w.stun > 0 || lvl >= 0.5 ? HitFlag.HEAVY : 0);
       spec.cause = p.atkKind === AttackKind.BASH ? Cause.MELEE : Cause.WEAPON_MELEE;
       return true;
     }
@@ -413,14 +431,62 @@ function meleeSpec(p: Player): boolean {
 /** Zone de frappe (rectangle) du joueur pour l'attaque en cours. */
 const box = { l: 0, t: 0, r: 0, b: 0 };
 
+/** Direction du coup chargé : la visée, mais au sol « vers le bas » devient un coup bas de côté. */
+const cdir = { x: 1, y: 0 };
+function chargedDir(p: Player): void {
+  const dx = AIM_DX[p.aim];
+  const dy = AIM_DY[p.aim];
+  const n = Math.hypot(dx, dy) || 1;
+  cdir.x = dx / n;
+  cdir.y = dy / n;
+  if (p.grounded && cdir.y > 0.4) {
+    cdir.y = 0;
+    cdir.x = p.facing;
+  }
+}
+
 function meleeBox(world: World, p: Player): void {
   const hw = world.params.width * 0.5;
   const h = bodyHeight(world, p);
+  if (p.atkKind === AttackKind.CHARGED) {
+    chargedDir(p);
+    const reach = spec.reach + MELEE_BODY_BONUS;
+    const side = Math.abs(cdir.x) > 0.4;
+    if (cdir.x > 0.4) {
+      box.l = p.x;
+      box.r = p.x + hw + reach;
+    } else if (cdir.x < -0.4) {
+      box.l = p.x - hw - reach;
+      box.r = p.x;
+    } else {
+      box.l = p.x - hw - 4;
+      box.r = p.x + hw + 4;
+    }
+    if (cdir.y < -0.4) {
+      box.t = p.y - h - reach;
+      box.b = side ? p.y + 2 : p.y - h * 0.3;
+    } else if (cdir.y > 0.4) {
+      box.t = side ? p.y - h - 2 : p.y - h * 0.5;
+      box.b = p.y + reach;
+    } else {
+      box.t = p.y - h - 2;
+      box.b = p.y + 2;
+    }
+    return;
+  }
   if (p.atkKind === AttackKind.KICK) {
     box.l = p.x - COMBAT.kick.reachX;
     box.r = p.x + COMBAT.kick.reachX;
     box.t = p.y - 6;
     box.b = p.y + COMBAT.kick.reachDown;
+    return;
+  }
+  if (p.atkKind === AttackKind.AIR_DOWN) {
+    // sous les pieds, un peu devant
+    box.l = p.x - hw - 3 - (p.facing < 0 ? 5 : 0);
+    box.r = p.x + hw + 3 + (p.facing > 0 ? 5 : 0);
+    box.t = p.y - 6;
+    box.b = p.y + spec.reach;
     return;
   }
   if (p.atkKind === AttackKind.UPPER) {
@@ -479,18 +545,37 @@ export function resolveMelee(world: World): void {
       p.hitMask |= 1 << v;
       hitAny = true;
       const dir =
-        p.atkKind === AttackKind.KICK || p.atkKind === AttackKind.UPPER
+        p.atkKind === AttackKind.KICK ||
+        p.atkKind === AttackKind.UPPER ||
+        p.atkKind === AttackKind.AIR_DOWN
           ? q.x >= p.x
             ? 1
             : -1
           : p.facing;
+      let kx = dir * spec.kbx;
+      let ky = spec.kby;
+      if (p.atkKind === AttackKind.CHARGED) {
+        // La projection suit la direction du coup : haut = lancer, bas = smash vers le sol.
+        const side = Math.abs(cdir.x) > 0.4;
+        const sx = side ? (cdir.x > 0 ? 1 : -1) : q.x >= p.x ? 1 : -1;
+        if (cdir.y < -0.4) {
+          kx = sx * spec.kbx * (side ? 0.7 : 0.25);
+          ky = -(Math.abs(spec.kby) * 1.5 + spec.kbx * 0.2);
+        } else if (cdir.y > 0.4) {
+          kx = sx * spec.kbx * 0.3;
+          ky = spec.kbx * 0.8;
+        } else {
+          kx = sx * spec.kbx;
+        }
+      }
+      if (p.atkKind === AttackKind.WEAPON && weaponDef(p.weapon).cuts) q.grappleTicks = 0;
       queueHit(
         world,
         v,
         s,
         spec.damage,
-        dir * spec.kbx,
-        spec.kby,
+        kx,
+        ky,
         spec.stun,
         spec.cause,
         spec.flags,
@@ -498,11 +583,26 @@ export function resolveMelee(world: World): void {
         p.y - 14,
       );
     }
+    // Ciseaux : coupent les crochets de grappin en vol.
+    if (p.atkKind === AttackKind.WEAPON && weaponDef(p.weapon).cuts) {
+      for (let i = 0; i < world.projectiles.length; i++) {
+        const pr = world.projectiles[i];
+        if (!pr.active || pr.type !== ProjType.HOOK) continue;
+        if (pr.x < box.l - 6 || pr.x > box.r + 6 || pr.y < box.t - 6 || pr.y > box.b + 6) continue;
+        pr.active = false;
+        emit(world, SimEvent.GRAPPLE, pr.owner, pr.x, pr.y, 254);
+      }
+    }
     // Objets : caisses, ballons, boule.
     for (let i = 0; i < world.objects.length; i++) {
       const o = world.objects[i];
       if (!o.active) continue;
-      if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON && o.type !== ObjType.BALL)
+      if (
+        o.type !== ObjType.CRATE &&
+        o.type !== ObjType.BALLOON &&
+        o.type !== ObjType.BALL &&
+        o.type !== ObjType.COVER
+      )
         continue;
       if (o.x + o.w / 2 < box.l || o.x - o.w / 2 > box.r || o.y < box.t || o.y - o.h > box.b)
         continue;
@@ -513,6 +613,7 @@ export function resolveMelee(world: World): void {
       p.vy = -COMBAT.kick.bounce;
       endKick(p);
     }
+    if (hitAny && p.atkKind === AttackKind.AIR_DOWN) p.vy = -COMBAT.airDown.bounce;
   }
 }
 
@@ -560,7 +661,7 @@ export function explode(
   for (let i = 0; i < world.objects.length; i++) {
     const o = world.objects[i];
     if (!o.active) continue;
-    if (o.type === ObjType.CRATE || o.type === ObjType.BALLOON) {
+    if (o.type === ObjType.CRATE || o.type === ObjType.BALLOON || o.type === ObjType.COVER) {
       const dist = Math.hypot(o.x - x, o.y - o.h / 2 - y);
       if (dist <= ex.radius + o.w / 2) damageObject(world, o, ex.damage, owner);
     } else if (o.type === ObjType.MINE && o.b === 1) {
@@ -649,7 +750,7 @@ export function traceRay(
   for (let i = 0; i < world.objects.length; i++) {
     const o = world.objects[i];
     if (!o.active) continue;
-    if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON) continue;
+    if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON && o.type !== ObjType.COVER) continue;
     const t = segmentBox(ox, oy, ex, ey, o.x - o.w / 2, o.y - o.h, o.x + o.w / 2, o.y);
     if (t >= 0 && t < best) {
       best = t;

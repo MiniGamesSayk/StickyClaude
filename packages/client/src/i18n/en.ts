@@ -392,7 +392,7 @@ export const en: Record<MessageKey, string> = {
   'opt.pad_rumble': 'Gamepad vibration',
   'opt.fullscreen': 'Fullscreen when a game starts (mobile)',
   'opt.gamepad':
-    'Default: A jumps, X or RT attacks, B or LT blocks, Y or RB picks up, LB dashes, d-pad or stick to move. Dash with no direction: dodge.',
+    'Default: A jumps, X or RT attacks, B or LT blocks, Y or RB picks up (hold: charged throw), LB dashes, right stick click down-smashes, d-pad or stick to move. Dash with no direction: dodge.',
   'opt.reset_all': 'Reset options',
   'act.left': 'Left',
   'act.right': 'Right',
@@ -403,6 +403,24 @@ export const en: Record<MessageKey, string> = {
   'act.block': 'Block',
   'act.pickup': 'Pick up / throw',
   'act.dash': 'Dash',
+  'act.spike': 'Down smash (in the air)',
+  'opt.mouse_hint':
+    'The mouse is set like the keys: click a slot, then click with the button you want. Nothing is assumed.',
+  'opt.warn_title': 'Watch out for these combinations',
+  'opt.warn.shift_rightclick':
+    'Shift + right click: Firefox always shows its menu, even when the game blocks it. Use another dash key (for example Q).',
+  'opt.warn.ctrl_click': 'On Mac, Ctrl + click is a right click.',
+  'opt.warn.ctrl_tab':
+    'Ctrl with W, T, N, Q or Tab closes or opens tabs: the browser keeps those shortcuts.',
+  'opt.warn.alt_arrows': 'Alt + left or right arrow goes back / forward.',
+  'opt.warn.alt_alone': 'Alt alone can open the menu bar and steal the focus from the game.',
+  'opt.warn.meta':
+    'The Windows / Command keys open system menus and can take you out of the game.',
+  'opt.warn.function_key':
+    'F1 to F12 do things in the browser (F5 reloads, F11 full screen, F12 dev tools).',
+  'opt.warn.mouse_side': 'The side mouse buttons are often "back / forward" in the browser.',
+  'opt.warn.mouse_middle': 'Middle click can start auto-scroll.',
+  'opt.warn.duplicate': 'The same key is used by several actions.',
 
   'help.title': 'How to play',
   'help.goal': 'The last one standing wins the round; the first to several rounds wins the match.',

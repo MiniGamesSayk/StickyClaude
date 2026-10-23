@@ -48,6 +48,16 @@ export function playersInPlay(world: World): number {
 }
 const HEART_SIZE = 12;
 const CRATE_HP = 20;
+/** Probabilité qu'une caisse brisée laisse une arme. */
+export const CRATE_WEAPON_CHANCE = 0.5;
+/** Bande de scotch posée au sol et couverture dressée (dimensions, solidité, durée de vie). */
+export const TAPE_W = 44;
+export const TAPE_H = 3;
+export const TAPE_LIFE_TICKS = 12 * 60;
+export const COVER_W = 6;
+export const COVER_H = 30;
+export const COVER_HP = 6;
+export const COVER_LIFE_TICKS = 9 * 60;
 const CRATE_SIZE = 16;
 const BALLOON_SIZE = 14;
 const TACK_W = 14;
@@ -198,14 +208,10 @@ export function triggerMine(world: World, o: Obj): void {
 export function breakCrate(world: World, o: Obj): void {
   o.active = false;
   emit(world, SimEvent.CRATE_BREAK, 0, o.x, o.y - o.h / 2);
-  if (
-    world.rules.weapons &&
-    countGroundWeapons(world) < maxGroundWeapons(playersInPlay(world)) + 1
-  ) {
-    if (world.rng.float() < 0.5) {
-      const w = randomWeapon(world);
-      spawnWeaponObj(world, w, weaponDef(w).ammo, o.x, o.y - 4, 0, -100);
-    }
+  // Une chance sur deux, sans plafond d'armes au sol (seule la réserve d'objets limite).
+  if (world.rules.weapons && world.rng.float() < CRATE_WEAPON_CHANCE) {
+    const w = randomWeapon(world);
+    spawnWeaponObj(world, w, weaponDef(w).ammo, o.x, o.y - 4, 0, -100);
   }
 }
 
@@ -222,6 +228,12 @@ export function damageObject(world: World, o: Obj, dmg: number, byPlayer: number
     if (o.a <= 0) breakCrate(world, o);
   } else if (o.type === ObjType.BALLOON) {
     popBalloon(world, o, byPlayer);
+  } else if (o.type === ObjType.COVER) {
+    o.a -= Math.max(1, Math.round(dmg / 4));
+    if (o.a <= 0) {
+      o.active = false;
+      emit(world, SimEvent.CRATE_BREAK, 0, o.x, o.y - o.h / 2);
+    }
   }
 }
 
@@ -312,6 +324,21 @@ export function stepObjects(world: World): void {
             }
           }
         }
+        break;
+      }
+      case ObjType.TAPE: {
+        gravityStep(world, o, dt);
+        const ticks = weaponDef(WeaponId.TAPE).statusTicks;
+        for (let s = 0; s < MAX_PLAYERS; s++) {
+          const p = world.players[s];
+          if (!p.active || p.dead || p.ghost || !p.grounded) continue;
+          if (s === o.owner || (o.team >= 0 && world.team[s] === o.team)) continue;
+          if (overlapsPlayer(world, o, p) && p.glueTicks < ticks) p.glueTicks = ticks;
+        }
+        break;
+      }
+      case ObjType.COVER: {
+        gravityStep(world, o, dt);
         break;
       }
       case ObjType.HEART: {

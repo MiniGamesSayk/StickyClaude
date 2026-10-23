@@ -26,6 +26,7 @@ import {
   fightWorld,
   paperWall,
   pl,
+  tap,
   tick,
   ticks,
 } from './fight.ts';
@@ -39,17 +40,17 @@ function cellOf(w: World, cx: number, cy: number): number {
   return w.cells[cy * GRID_W + cx];
 }
 
-describe('les 12 armes sont des données', () => {
-  it('douze armes, hors poings et caisse, toutes paramétrées', () => {
+describe('les 22 armes sont des données', () => {
+  it('vingt-deux armes, hors poings et caisse, toutes paramétrées', () => {
     const real = WEAPONS.filter((x) => x.id !== WeaponId.NONE && x.id !== WeaponId.CRATE);
-    expect(real).toHaveLength(12);
+    expect(real).toHaveLength(22);
     for (const d of real) {
       expect(d.ammo).toBeGreaterThan(0);
       expect(d.startup + d.active + d.recovery).toBeGreaterThan(0);
       expect(d.name.fr.length).toBeGreaterThan(0);
       expect(d.name.en.length).toBeGreaterThan(0);
     }
-    expect(new Set(real.map((x) => x.key)).size).toBe(12);
+    expect(new Set(real.map((x) => x.key)).size).toBe(22);
   });
 });
 
@@ -58,7 +59,7 @@ describe('règle', () => {
     const w = fightWorld();
     give(w, 0, WeaponId.RULER);
     pl(w, 1).x = 340; // hors de portée des poings (≤ 339)
-    ticks(w, 14, ATTACK);
+    tap(w, 14, ATTACK);
     expect(pl(w, 1).hp).toBe(100 - weaponDef(WeaponId.RULER).damage);
     expect(pl(w, 0).ammo).toBeLessThan(weaponDef(WeaponId.RULER).ammo);
   });
@@ -67,7 +68,7 @@ describe('règle', () => {
     const w = fightWorld();
     give(w, 0, WeaponId.RULER, 0);
     pl(w, 1).x = 340;
-    ticks(w, 40, ATTACK);
+    tap(w, 40, ATTACK);
     expect(pl(w, 0).weapon).toBe(WeaponId.NONE);
     expect(pl(w, 1).hp).toBe(100 - COMBAT.emptyThrowDamage);
     ticks(w, 120, 0);
@@ -83,14 +84,14 @@ describe('compas', () => {
     q.x = 330;
     q.facing = -1;
     ticks(w, 20, 0, BLOCK);
-    ticks(w, 16, ATTACK, BLOCK);
+    tap(w, 16, ATTACK, BLOCK);
     expect(q.hp).toBe(100 - weaponDef(WeaponId.COMPASS).damage);
 
     const w2 = fightWorld();
     give(w2, 0, WeaponId.COMPASS);
     pl(w2, 1).x = 330;
     pl(w2, 1).facing = -1;
-    ticks(w2, 4, ATTACK, 0);
+    tap(w2, 4, ATTACK, 0);
     ticks(w2, 14, 0, BLOCK);
     expect(pl(w2, 1).hp).toBe(100);
   });
@@ -223,7 +224,7 @@ describe('lance-avions en papier', () => {
     const w = fightWorld();
     give(w, 0, WeaponId.PLANE_LAUNCHER);
     const q = pl(w, 1);
-    q.x = 480;
+    q.x = 520;
     q.y = FLOOR;
     ticks(w, 6, ATTACK | UP | RIGHT); // vise en diagonale haute : sans guidage, il passerait au-dessus
     ticks(w, 160, 0);
@@ -460,6 +461,7 @@ describe('ramasser, lancer, lâcher', () => {
     o.vx = o.vy = 0;
     o.life = 1200;
     tick(w, PICKUP);
+    tick(w, 0); // l'appui bref est résolu au relâchement (sinon il charge un lancer)
     expect(p.weapon).toBe(WeaponId.PISTOL);
     expect(p.ammo).toBe(8);
     expect(
@@ -472,6 +474,7 @@ describe('ramasser, lancer, lâcher', () => {
     give(w, 0, WeaponId.PISTOL);
     pl(w, 1).x = 360;
     tick(w, PICKUP | RIGHT);
+    tick(w, RIGHT);
     expect(pl(w, 0).weapon).toBe(WeaponId.NONE);
     ticks(w, 40, 0);
     expect(pl(w, 1).hp).toBe(100 - COMBAT.throwDamage);

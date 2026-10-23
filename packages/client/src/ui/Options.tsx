@@ -16,6 +16,7 @@ import { actions, overlay } from '../app/store.ts';
 import { t } from '../i18n/index.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import { currentLayout, keyLabel } from '../input/bindings.ts';
+import { bindingWarnings, detectEnv } from '../input/warnings.ts';
 import { isTouchDevice } from '../input/touch.ts';
 import { Button, Check, Choice, Modal, Slider } from './components.tsx';
 
@@ -39,6 +40,7 @@ const ACTION_KEYS: Record<Action, MessageKey> = {
   block: 'act.block',
   pickup: 'act.pickup',
   dash: 'act.dash',
+  spike: 'act.spike',
 };
 
 const pct = (v: number): string => `${Math.round(v * 100)} %`;
@@ -60,10 +62,10 @@ function KeyCap(p: { action: Action; slot: 0 | 1 }): JSX.Element {
     <button
       type="button"
       class={`keycap${listening ? ' listening' : ''}`}
-      aria-label={`${t(ACTION_KEYS[p.action])} : ${keyLabel(code, o.layout, t('act.jump'))}`}
+      aria-label={`${t(ACTION_KEYS[p.action])} : ${keyLabel(code, o.layout, t('act.jump'), o.lang)}`}
       onClick={() => setListening(!listening)}
     >
-      {listening ? '…' : keyLabel(code, o.layout, 'Space')}
+      {listening ? '…' : keyLabel(code, o.layout, 'Space', o.lang)}
     </button>
   );
 }
@@ -99,6 +101,28 @@ function PadCap(p: { action: PadAction; slot: 0 | 1 }): JSX.Element {
   );
 }
 
+/** Combinaisons de touches qui risquent de se heurter au navigateur. */
+function BindingWarnings(): JSX.Element | null {
+  const o = options.value;
+  const list = bindingWarnings(o.bindings, detectEnv());
+  if (list.length === 0) return null;
+  return (
+    <div class="warn-list" role="status">
+      <strong>⚠ {t('opt.warn_title')}</strong>
+      <ul>
+        {list.map((w) => (
+          <li key={w.id}>
+            {t(`opt.warn.${w.id}` as MessageKey)}{' '}
+            <span class="hint">
+              ({w.keys.map((c) => keyLabel(c, o.layout, t('act.jump'), o.lang)).join(' + ')})
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Controls(): JSX.Element {
   const o = options.value;
   return (
@@ -131,7 +155,9 @@ function Controls(): JSX.Element {
           ))}
         </div>
         <p class="hint">{t('opt.key_press')}</p>
+        <p class="hint">{t('opt.mouse_hint')}</p>
         <p class="hint">{t('opt.keys_emotes')}</p>
+        <BindingWarnings />
         <div>
           <Button small secondary onClick={() => resetBindings()}>
             {t('opt.key_reset')}

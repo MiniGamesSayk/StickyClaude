@@ -16,6 +16,7 @@ import { GhostMark, placeMark, spawnProps } from '../src/index.ts';
 import type { World } from '../src/index.ts';
 import {
   ATTACK,
+  BLOCK,
   DOWN,
   FLOOR,
   RIGHT,
@@ -103,13 +104,14 @@ const SCENARIOS: Scenario[] = [
       p.grounded = false;
       pl(w, 1).x = p.x + 4;
       pl(w, 1).hp = 1;
-      tick(w, DOWN | ATTACK);
+      tick(w, ATTACK | BLOCK);
       return { w, victim: 1, ticks: 40, masks: [DOWN] };
     },
   },
   {
     cause: Cause.WEAPON_MELEE,
     name: 'une arme de mêlée (règle)',
+    tap: true,
     build: () => {
       const w = fightWorld({ ghosts: false });
       give(w, 0, WeaponId.RULER);

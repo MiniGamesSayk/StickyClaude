@@ -136,6 +136,9 @@ export interface OwnState {
   respawns: number;
   respawnTimer: number;
   ghostCd: number;
+  glueTicks: number;
+  dashX: number;
+  dashY: number;
 }
 
 export type OwnKey = keyof OwnState;
@@ -182,6 +185,9 @@ export const OWN_FIELDS: readonly { key: OwnKey; t: FieldType }[] = [
   { key: 'stunImmune', t: 'u8' },
   { key: 'dashTicks', t: 'u8' },
   { key: 'dashCd', t: 'u8' },
+  { key: 'glueTicks', t: 'u8' },
+  { key: 'dashX', t: 'i8' },
+  { key: 'dashY', t: 'i8' },
   { key: 'prevInput', t: 'u16' },
   { key: 'respawns', t: 'u16' },
   { key: 'respawnTimer', t: 'u16' },
@@ -463,7 +469,7 @@ export function decodeSnapshot(buf: Uint8Array, out: Snapshot): void {
     const o = out.objects[i];
     o.uid = r.u16();
     o.type = r.u8();
-    if (o.type < ObjType.WEAPON || o.type > ObjType.HEART) throw new DecodeError('bad object type');
+    if (o.type < ObjType.WEAPON || o.type > ObjType.COVER) throw new DecodeError('bad object type');
     o.x = r.i16() / POS_SCALE;
     o.y = r.i16() / POS_SCALE;
     o.vx = r.i16() / POS_SCALE;
@@ -475,7 +481,7 @@ export function decodeSnapshot(buf: Uint8Array, out: Snapshot): void {
     const p = out.projectiles[i];
     p.uid = r.u16();
     p.type = r.u8();
-    if (p.type < ProjType.PELLET || p.type > ProjType.THROWN) {
+    if (p.type < ProjType.PELLET || p.type > ProjType.HOOK) {
       throw new DecodeError('bad projectile type');
     }
     p.x = r.i16() / POS_SCALE;

@@ -74,6 +74,11 @@ export interface Player {
   /** Ticks de dash restants (0 = ne dash pas) et recharge. */
   dashTicks: number;
   dashCd: number;
+  /** Colle (pistolet à colle, scotch) : ticks restants de ralentissement. */
+  glueTicks: number;
+  /** Direction du dash en cours (-1, 0, 1 sur chaque axe). */
+  dashX: number;
+  dashY: number;
   /** Direction de visée (0 à 7, voir `AIM_DX`). */
   aim: number;
   grappleTicks: number;
@@ -102,6 +107,8 @@ export interface Player {
   /** Arme lancée ce tick (identifiant et munitions), résolue par la passe d'autorité. */
   throwW: number;
   throwA: number;
+  /** Charge du lancer en cours de résolution (0 à 1). */
+  throwLevel: number;
   /** Retard de compensation de latence (ticks) lu dans l'entrée. */
   rewind: number;
   lastAttacker: number;
@@ -271,6 +278,8 @@ export interface PendingHit {
   y: number;
   /** Le coup ignore la parade (explosion, décor). */
   unblockable: boolean;
+  /** Touche légère : ni projection ni interruption (laser). */
+  light: boolean;
 }
 
 export interface Stats {
@@ -379,6 +388,9 @@ export function createPlayer(): Player {
     pickupCd: 0,
     dashTicks: 0,
     dashCd: 0,
+    glueTicks: 0,
+    dashX: 0,
+    dashY: 0,
     aim: 0,
     grappleTicks: 0,
     grappleX: 0,
@@ -399,6 +411,7 @@ export function createPlayer(): Player {
     wantDrop: false,
     throwW: 0,
     throwA: 0,
+    throwLevel: 0,
     rewind: 0,
     lastAttacker: -1,
     lastAttackTick: -1000,
@@ -645,6 +658,7 @@ export function createWorld(arena: ArenaData, seed: number): World {
       x: 0,
       y: 0,
       unblockable: false,
+      light: false,
     });
   }
 

@@ -11,7 +11,16 @@ import type { QualitySetting } from '../render/quality.ts';
  */
 
 export type Action =
-  'left' | 'right' | 'up' | 'down' | 'jump' | 'attack' | 'block' | 'pickup' | 'dash';
+  | 'left'
+  | 'right'
+  | 'up'
+  | 'down'
+  | 'jump'
+  | 'attack'
+  | 'block'
+  | 'pickup'
+  | 'dash'
+  | 'spike';
 export const ACTIONS: readonly Action[] = [
   'left',
   'right',
@@ -22,7 +31,19 @@ export const ACTIONS: readonly Action[] = [
   'block',
   'pickup',
   'dash',
+  'spike',
 ];
+
+/**
+ * Boutons de souris : ils se rattachent aux actions comme des touches, sous le code `Mouse0`
+ * (gauche), `Mouse1` (molette), `Mouse2` (droit), `Mouse3`/`Mouse4` (latéraux).
+ */
+export function mouseCode(button: number): string {
+  return `Mouse${button}`;
+}
+export function mouseButtonOf(code: string): number {
+  return /^Mouse[0-4]$/.test(code) ? Number(code.slice(5)) : -1;
+}
 
 /** Deux touches par action (position physique, `event.code`) : principale et secondaire. */
 export type Bindings = Record<Action, [string, string]>;
@@ -33,16 +54,27 @@ export const DEFAULT_BINDINGS: Readonly<Bindings> = {
   up: ['KeyW', 'ArrowUp'],
   down: ['KeyS', 'ArrowDown'],
   jump: ['Space', ''],
-  attack: ['KeyJ', ''],
+  // Plus aucune touche « sous-entendue » : la souris se règle ici comme le reste.
+  attack: ['KeyJ', 'Mouse0'],
   block: ['KeyE', ''],
   pickup: ['KeyL', ''],
-  // Maj seul ouvre le menu du navigateur avec un clic droit sous Firefox : A (AZERTY) en secours.
+  // Maj + clic droit ouvre le menu du navigateur sous Firefox (voir `bindingWarnings`) : A (AZERTY)
+  // sert de secours.
   dash: ['ShiftLeft', 'KeyQ'],
+  // Smash bas : coup de pied plongeant en l'air (annulable par un dash, un saut ou la parade).
+  spike: ['KeyK', 'Mouse2'],
 };
 
 /** Actions de manette reconfigurables (les directions restent au stick et à la croix). */
-export type PadAction = 'jump' | 'attack' | 'block' | 'pickup' | 'dash';
-export const PAD_ACTIONS: readonly PadAction[] = ['jump', 'attack', 'block', 'pickup', 'dash'];
+export type PadAction = 'jump' | 'attack' | 'block' | 'pickup' | 'dash' | 'spike';
+export const PAD_ACTIONS: readonly PadAction[] = [
+  'jump',
+  'attack',
+  'block',
+  'pickup',
+  'dash',
+  'spike',
+];
 
 /** Deux boutons par action (indice du bouton standard, -1 : aucun). */
 export type PadBindings = Record<PadAction, [number, number]>;
@@ -53,6 +85,7 @@ export const DEFAULT_PAD_BINDINGS: Readonly<PadBindings> = {
   block: [1, 6], // B, gâchette gauche
   pickup: [3, 5], // Y, RB
   dash: [4, -1], // LB
+  spike: [11, -1], // clic du stick droit
 };
 
 /** Boutons réservés : Start ouvre la pause, la croix déplace. */
@@ -174,6 +207,21 @@ export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()):
   }
   // ancienne touche de parade par défaut (K) : on passe à la nouvelle (E)
   if (bindings.block[0] === 'KeyK' && bindings.block[1] === '') bindings.block = ['KeyE', ''];
+  // Réglages enregistrés avant la touche « smash bas » : la souris était sous-entendue (clic
+  // gauche attaque, clic droit parade). Elle devient explicite : clic gauche reste l'attaque et le
+  // clic droit passe au smash bas, sauf si ces touches sont déjà prises ailleurs.
+  if (rb.spike === undefined) {
+    const used = new Set<string>();
+    for (const a of ACTIONS) {
+      if (a !== 'spike') for (const c of bindings[a]) if (c !== '') used.add(c);
+    }
+    if (bindings.attack[1] === '' && !used.has('Mouse0')) bindings.attack[1] = 'Mouse0';
+    used.add(bindings.attack[1]);
+    const free = (c: string): string => (used.has(c) ? '' : c);
+    const first = free(DEFAULT_BINDINGS.spike[0]);
+    const second = free(DEFAULT_BINDINGS.spike[1]);
+    bindings.spike = first !== '' ? [first, second] : [second, ''];
+  }
   return {
     lang: pick(r.lang, ['fr', 'en'] as const, base.lang),
     master: num(r.master, 0, 1, base.master),
@@ -247,9 +295,9 @@ export function rebind(action: Action, slot: 0 | 1, keyCode: string): void {
     }
   }
   next[action][slot] = keyCode;
-  // une action ne reste jamais sans touche
-  if (next[action][0] === '' && next[action][1] !== '') {
-    next[action] = [next[action][1], ''];
+  // aucune action ne garde une première touche vide devant une seconde
+  for (const a of ACTIONS) {
+    if (next[a][0] === '' && next[a][1] !== '') next[a] = [next[a][1], ''];
   }
   setOptions({ bindings: next });
 }
