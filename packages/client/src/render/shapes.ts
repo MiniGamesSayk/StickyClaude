@@ -181,15 +181,24 @@ const shotgun = shape(
   [true, true, false, false],
 );
 
+/** Sarbacane : long tube rayé, embout évasé côté bouche, boulette de papier prête au bout. */
 const blowgun = shape(
   [
-    rect(0, -1.8, 27, 1.8),
-    circle(0, 0, 2.2, 2.2, 8),
-    [27, -2.4, 27, 2.4],
-    circle(31, -4, 1.7, 1.7, 7),
-    circle(33.5, -1.2, 1.4, 1.4, 7),
+    rect(0, -2.2, 30, 2.2),
+    // embout évasé
+    [0, -2.2, -3.4, -4.2, -3.4, 4.2, 0, 2.2],
+    // anneaux de couleur
+    [6, -2.2, 6, 2.2],
+    [7.6, -2.2, 7.6, 2.2],
+    [21, -2.2, 21, 2.2],
+    [22.6, -2.2, 22.6, 2.2],
+    // bord du tube côté tir
+    [30, -3.4, 30, 3.4],
+    // boulette de papier froissé prête à partir
+    [31.4, -1.2, 32.6, -2.8, 34.2, -2, 34.6, -0.2, 34, 1.6, 32.4, 2.6, 31.2, 1.2],
+    [32.2, -0.6, 33.2, 0.4, 32.6, 1.4],
   ],
-  [true, true, false, true, true],
+  [true, false, false, false, false, false, false, true, false],
 );
 
 const planeLauncher = shape(
@@ -223,23 +232,170 @@ const eraser = shape(
   [true, false, false],
 );
 
+/** Trombone-grappin : un pistolet à crochet, avec sa bobine de corde et sa griffe de trombone. */
 const grapple = shape(
   [
-    [0, 0, 11, 0, 12.4, -1.8, 11, -3.6, 4, -3.6, 2.8, -2, 4, -0.4, 9, -0.4],
-    [6, 3.4, 15, 3.4, 16.4, 1.6, 15, -0.2, 8, -0.2],
-    [15, 3.4, 20, 5.4, 18, 8.4],
+    // corps et poignée
+    [0, -3, 12, -3, 12, 2.6, 7.6, 2.6, 6.6, 8.6, 1.4, 8.6, 0.8, 2.6, 0, 2.6],
+    // canon
+    rect(12, -2.6, 19, 1.8),
+    // bobine de corde sur le dessus
+    circle(5.6, -6.6, 3.4, 3.4, 10),
+    circle(5.6, -6.6, 1.3, 1.3, 6),
+    // griffe : trois pointes recourbées
+    [19, -2.6, 22.4, -5.8, 24.2, -5.2],
+    [19, -0.4, 23.6, -0.4],
+    [19, 1.8, 22.4, 5, 24.2, 4.4],
+    // corde qui sort du canon
+    [24, -0.4, 21.6, 1.8, 24.4, 3.6],
   ],
-  [false, false, false],
+  [true, true, true, true, false, false, false, false],
 );
 
-const inkMine = shape(
+/** Bombe d'encre : une bille ronde, sa mèche allumée et une coulée d'encre. */
+function bombBody(cy: number): number[][] {
+  return [
+    circle(0, cy, 5.8, 5.4, 14),
+    // culot et mèche
+    [-1.8, cy - 5.2, -1.8, cy - 7.2, 1.8, cy - 7.2, 1.8, cy - 5.2],
+    [0, cy - 7.2, 1.6, cy - 9.4, 3.6, cy - 9.2],
+    // étincelle au bout de la mèche
+    star(4.6, cy - 9.6, 2, 4),
+    // reflet et coulée
+    [-3.6, cy - 2.4, -2.4, cy - 3.8],
+    [3.6, cy + 3.4, 3.8, cy + 6.4],
+  ];
+}
+const bombClosed = [true, false, false, true, false, false];
+const inkMine = shape(bombBody(0), bombClosed);
+
+/** Grenade d'encre : un flacon à goupille, levier et goutte sur l'étiquette. */
+const inkGrenade = shape(
   [
-    circle(0, 0, 5.2, 4.4, 14),
-    [-3, -5.5, -4, -8, -2, -7],
-    [3.4, -5, 6, -7.6, 5.4, -4.4],
-    [0, 0, 2, 1, 0.4, 2.6],
+    [-5, -3, -5, 5, 5, 5, 5, -3, 3, -4, 3, -7, -3, -7, -3, -4],
+    rect(-3.4, 0.2, 3.4, 3.6),
+    [-3, -7, -3.6, -9.4, 4, -8.8],
+    circle(6.8, -6.2, 1.9, 1.9, 7),
+    [3, -6.6, 5, -6.2],
+    [0, 1, 0.9, 2.2, 0, 3.2, -0.9, 2.2],
   ],
-  [true, false, false, false],
+  [true, true, false, true, false, true],
+);
+
+/** Règle-boomerang : une règle coudée, graduée sur ses deux branches. */
+const boomerang = shape(
+  [
+    [-2, 0, 12, -10.5, 14.6, -7.2, 4, 0, 14.6, 7.2, 12, 10.5],
+    [3, -2.2, 4.8, -3.8],
+    [6.6, -4.4, 8.2, -6],
+    [10, -6.8, 11.2, -8.2],
+    [3, 2.2, 4.8, 3.8],
+    [6.6, 4.4, 8.2, 6],
+    [10, 6.8, 11.2, 8.2],
+  ],
+  [true, false, false, false, false, false, false],
+);
+
+/** Ciseaux : deux lames croisées, deux anneaux de poignée. */
+const scissors = shape(
+  [
+    [4, -0.4, 28, -1.8, 28.8, -0.4, 4, 1.6],
+    [4, 0.4, 28, 1.8, 28.8, 0.4, 4, -1.6],
+    circle(5, 0, 1, 1, 6),
+    circle(-3.2, -3.8, 3.2, 2.7, 9),
+    circle(-3.2, 3.8, 3.2, 2.7, 9),
+    [0, -2.2, 2.6, -0.6],
+    [0, 2.2, 2.6, 0.6],
+  ],
+  [true, true, true, true, true, false, false],
+);
+
+/** Surligneur : gros feutre jaune à pointe biseautée. */
+const highlighter = shape(
+  [
+    rect(0, -3.4, 16, 3.4),
+    [16, -3.4, 20.4, -1.6, 20.4, 1.6, 16, 3.4],
+    [4.6, -3.4, 4.6, 3.4],
+    [6.6, -3.4, 6.6, 3.4],
+    [0, -4.4, 9, -4.4],
+    [11, -1.6, 14, -1.6],
+  ],
+  [true, true, false, false, false, false],
+);
+
+/** Arc à trombones : deux arcs de fil, la corde tendue et une flèche encochée. */
+const bow = shape(
+  [
+    arc(-10, 0, 12.5, -1.2, 1.2, 10),
+    arc(-10, 0, 11, -1.2, 1.2, 10),
+    [-5.4, -11.4, -5.4, 11.4],
+    [-5, 0, 26, 0],
+    [26, 0, 21.6, -2.6],
+    [26, 0, 21.6, 2.6],
+    [-4, 0, -6.6, -2.4],
+    [-1.6, 0, -4.2, -2.4],
+    [-4, 0, -6.6, 2.4],
+    [-1.6, 0, -4.2, 2.4],
+  ],
+  false,
+);
+
+/** Lance-pierre à agrafes : manche, fourche, élastique tendu et une agrafe en poche. */
+const stapler = shape(
+  [
+    rect(0, -1.4, 8.4, 1.4),
+    [8, 0, 20, -7.4],
+    [8, 0, 20, 7.4],
+    [20, -7.4, 12.6, 0, 20, 7.4],
+    [13.8, -2.6, 11.4, -2.6, 11.4, 2.6, 13.8, 2.6],
+    [3, -1.4, 3, 1.4],
+    [5.4, -1.4, 5.4, 1.4],
+  ],
+  [true, false, false, false, false, false, false],
+);
+
+/** Pistolet à colle : corps arrondi, bâton de colle à l'arrière, buse et goutte. */
+const glueGun = shape(
+  [
+    [0, -3.8, 12, -3.8, 12, 1.4, 0, 1.4],
+    [2.4, 1.4, 2.6, 7.8, 6.8, 7.8, 7.4, 1.4],
+    [12, -2.4, 19.4, -0.8, 19.4, 0.4, 12, 0.8],
+    rect(-9, -1.6, 0, 0.4),
+    circle(20.6, 2.4, 1.1, 1.6, 6),
+    [4, -3.8, 4, -6.2, 9, -6.2, 9, -3.8],
+  ],
+  [true, true, true, true, true, false],
+);
+
+/** Rouleau de scotch, porté contre le torse. */
+const tape = shape(
+  [circle(0, 0, 5.6, 5.6, 14), circle(0, 0, 2.6, 2.6, 8), [5.2, 2.4, 9.6, 4.4, 9.2, 7, 5, 4.8]],
+  [true, true, false],
+);
+
+/** Cahier-paravent porté : couverture avec sa spirale. */
+const cover = shape(
+  [
+    rect(-5, -8, 5, 8),
+    ...[-6, -3, 0, 3, 6].map((y) => circle(-5, y, 1.1, 1.1, 5)),
+    [-2, -4, 3, -4],
+    [-2, -1, 3, -1],
+    [-2, 2, 3, 2],
+  ],
+  [true, true, true, true, true, true, false, false, false],
+);
+
+/** Trousse de soin : mallette à poignée et croix rouge. */
+const medkit = shape(
+  [
+    rect(-7, -5, 7, 5),
+    [-3, -5, -3, -8, 3, -8, 3, -5],
+    [
+      -1.4, -3.6, 1.4, -3.6, 1.4, -1.4, 3.6, -1.4, 3.6, 1.4, 1.4, 1.4, 1.4, 3.6, -1.4, 3.6, -1.4,
+      1.4, -3.6, 1.4, -3.6, -1.4, -1.4, -1.4,
+    ],
+  ],
+  [true, false, true],
 );
 
 const sharpener = shape(
@@ -273,12 +429,25 @@ export const WEAPON_SHAPES: Readonly<Record<number, Shape>> = {
   [WeaponId.INK_MINE]: inkMine,
   [WeaponId.SHARPENER_SHIELD]: sharpener,
   [WeaponId.CRATE]: crate,
+  [WeaponId.BOW]: bow,
+  [WeaponId.STAPLER]: stapler,
+  [WeaponId.GLUE_GUN]: glueGun,
+  [WeaponId.INK_GRENADE]: inkGrenade,
+  [WeaponId.BOOMERANG]: boomerang,
+  [WeaponId.SCISSORS]: scissors,
+  [WeaponId.HIGHLIGHTER]: highlighter,
+  [WeaponId.TAPE]: tape,
+  [WeaponId.COVER]: cover,
+  [WeaponId.MEDKIT]: medkit,
 };
 
-/** Couleur d'encre propre à chaque arme (id 0 à 13). */
+/** Couleur d'encre propre à chaque arme (id 0 à 23). */
 export const WEAPON_INK: readonly number[] = [
   0x22262e, 0x1f4fd1, 0x6b7280, 0x7a4a2b, 0x22262e, 0x22262e, 0x12a6a6, 0x1f4fd1, 0x7b3fb5,
   0xe5579a, 0x1f9d55, 0x1b2a5e, 0xc9a227, 0x7a4a2b,
+  // arc, lance-pierre, colle, grenade, boomerang, ciseaux, surligneur, scotch, cahier, trousse
+  0x8a5a2b, 0xd6322e, 0xe8801a, 0x1b2a5e, 0x1f4fd1, 0xc2410c, 0xd4b106, 0x6b7280, 0x2563a8,
+  0xd6322e,
 ];
 
 // --- Objets du décor dynamique (origine : centre du bas ; le haut est y négatif) ----------------
@@ -303,9 +472,30 @@ const objTack = shape(
   [true, false, true],
 );
 
-const objMine = shape(
-  [circle(0, -4.4, 5.4, 4.6, 14), [-3.4, -9, -4.4, -12, -2.4, -10.6], [3, -9, 5.4, -11.4, 5, -8.6]],
-  [true, false, false],
+const objMine = shape(bombBody(-5.4), bombClosed);
+
+/** Bande de scotch posée au sol (44 de large) : ruban hachuré, bout décollé. */
+const objTape = shape(
+  [
+    rect(-22, -3, 22, 0),
+    ...[-18, -12, -6, 0, 6, 12, 18].map((x) => [x - 2, 0, x + 2, -3]),
+    [22, -3, 25, -6.4, 27, -5.6],
+  ],
+  [true, false, false, false, false, false, false, false, false],
+);
+
+/** Cahier-paravent dressé : feuille haute, lignes d'écriture, spirale en tête, pied cartonné. */
+const objCover = shape(
+  [
+    rect(-3.4, -30, 3.4, 0),
+    [-3.4, -26, 3.4, -26],
+    [-3.4, -20, 3.4, -20],
+    [-3.4, -14, 3.4, -14],
+    [-3.4, -8, 3.4, -8],
+    ...[-28, -24, -20].map((y) => circle(-3.4, y, 0.9, 0.9, 5)),
+    [-7, 0, 7, 0],
+  ],
+  [true, false, false, false, false, true, true, true, false],
 );
 
 const objBall = shape(
@@ -342,21 +532,29 @@ export const OBJECT_SHAPES: Readonly<Record<number, Shape>> = {
   [ObjType.MINE]: objMine,
   [ObjType.BALL]: objBall,
   [ObjType.HEART]: objHeart,
+  [ObjType.TAPE]: objTape,
+  [ObjType.COVER]: objCover,
 };
 
 // --- Projectiles (centre en 0,0, dirigés vers +x) -----------------------------------------------
 
+/** Boulette de papier froissé (sarbacane). */
 const projPellet = shape(
-  [circle(0, 0, 3.2, 3.2, 9), [-1.4, -1.6, 0.4, 0.2, 1.6, -1.4]],
-  [true, false],
+  [
+    [3.2, 0, 2.2, -2.6, 0.4, -3.4, -1.8, -2.4, -3.2, -0.6, -2.8, 1.8, -1, 3.2, 1.4, 2.8],
+    [-1.6, -1.4, 0.2, 0.2, 1.6, -1.2],
+    [-1.4, 1.4, 0.6, 1.2],
+  ],
+  [true, false, false],
 );
 const projPlane = shape(
   [
-    [9, 0, -7, -5, -4, 0, -7, 5],
-    [-4, 0, 9, 0],
-    [-1, 0, -5, 2.4],
+    [10, 0, -7, -5.4, -4, 0, -7, 5.4],
+    [-4, 0, 10, 0],
+    [-1, 0, -5, 2.6],
+    [2, 0, 0, -2.4],
   ],
-  [true, false, false],
+  [true, false, false, false],
 );
 const projRocket = shape(
   [
@@ -364,15 +562,61 @@ const projRocket = shape(
     [-7, -2.6, -11, -6, -9, -2.6],
     [-7, 2.6, -11, 6, -9, 2.6],
     [-1, -2.6, -1, 2.6],
+    // pointe de crayon
+    [5, -2.6, 5, 2.6],
   ],
-  [true, false, false, false],
+  [true, false, false, false, false],
 );
 const projEraser = shape(
   [
     [-5, -3.6, 5, -3.6, 6, -2.4, 6, 2.4, 5, 3.6, -5, 3.6, -6, 2.4, -6, -2.4],
     [-1, -3.6, -1, 3.6],
+    [-4, -1.2, -2.2, 1],
   ],
-  [true, false],
+  [true, false, false],
+);
+/** Éclat de mine de crayon (fusil à pompe) : une esquille pointue. */
+const projShrapnel = shape([[4, 0, -1.2, -1.6, -3.4, -0.4, -3.4, 0.8, -1, 1.4]], true);
+/** Agrafe : un U de fil, ouverture vers l'avant. */
+const projStaple = shape(
+  [
+    [2.4, -3, -1.8, -3, -1.8, 3, 2.4, 3],
+    [2.4, -3, 3.6, -2.6],
+    [2.4, 3, 3.6, 2.6],
+  ],
+  false,
+);
+/** Goutte de colle étirée, avec un filament derrière. */
+const projGlue = shape(
+  [
+    [3.6, 0, 1.4, -2.8, -1.6, -2.4, -2.8, 0, -1.6, 2.4, 1.4, 2.8],
+    [-2.8, 0, -7.4, 0.8],
+    [-5, 0.4, -6.4, 2.6],
+  ],
+  [true, false, false],
+);
+/** Flèche en fil de trombone : fût, pointe, double empennage. */
+const projArrow = shape(
+  [
+    [-9, 0, 9, 0],
+    [9, 0, 5.2, -2.6],
+    [9, 0, 5.2, 2.6],
+    [-9, 0, -11.4, -2.8],
+    [-9, 0, -11.4, 2.8],
+    [-6.6, 0, -9, -2.8],
+    [-6.6, 0, -9, 2.8],
+  ],
+  false,
+);
+/** Crochet du grappin : une griffe à trois pointes au bout d'un anneau. */
+const projHook = shape(
+  [
+    [5, 0, -1.4, -5, -2.6, -3.4],
+    [5.6, 0, -2, 0],
+    [5, 0, -1.4, 5, -2.6, 3.4],
+    circle(-4.4, 0, 2.2, 2.2, 7),
+  ],
+  [false, false, false, true],
 );
 
 export const PROJECTILE_SHAPES: Readonly<Record<number, Shape>> = {
@@ -380,6 +624,13 @@ export const PROJECTILE_SHAPES: Readonly<Record<number, Shape>> = {
   [ProjType.PLANE]: projPlane,
   [ProjType.ROCKET]: projRocket,
   [ProjType.ERASER]: projEraser,
+  [ProjType.SHRAPNEL]: projShrapnel,
+  [ProjType.STAPLE]: projStaple,
+  [ProjType.GLUE]: projGlue,
+  [ProjType.ARROW]: projArrow,
+  [ProjType.GRENADE]: inkGrenade,
+  [ProjType.BOOMERANG]: boomerang,
+  [ProjType.HOOK]: projHook,
 };
 
 // --- Accessoires (origine : centre de la tête, rayon 4,4) --------------------------------------

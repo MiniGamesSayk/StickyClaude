@@ -88,11 +88,7 @@ export function phaseTicks(p: Player, phase: number): number {
           : a.recovery;
     }
     case AttackKind.THROW:
-      return phase === AtkPhase.STARTUP
-        ? THROW_STARTUP
-        : phase === AtkPhase.ACTIVE
-          ? 1
-          : 8;
+      return phase === AtkPhase.STARTUP ? THROW_STARTUP : phase === AtkPhase.ACTIVE ? 1 : 8;
     default: {
       const w = weaponDef(p.weapon);
       return phase === AtkPhase.STARTUP
@@ -443,11 +439,7 @@ function stepActions(
   // encore si c'est un coup ou une charge (quelle que soit la direction tenue). Le coup part au
   // relâchement (appui bref) ; au-delà du seuil, la charge commence directement, sans coup
   // parasite avant (le coup de pied plongeant a sa propre touche : « smash bas »).
-  if (
-    fists &&
-    (input & Input.ATTACK) !== 0 &&
-    p.attackHeld < COMBAT.chargeHoldTicks
-  ) {
+  if (fists && (input & Input.ATTACK) !== 0 && p.attackHeld < COMBAT.chargeHoldTicks) {
     p.atkBuffer = ATK_BUFFER_TICKS;
     return;
   }

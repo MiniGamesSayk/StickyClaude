@@ -293,7 +293,7 @@ export const en: Record<MessageKey, string> = {
   'train.punch': 'Hit a dummy',
   'train.combo': 'Chain 3 hits',
   'train.charged': 'Land a charged hit (hold attack)',
-  'train.kick': 'Dive kick (in the air, ↓ + attack)',
+  'train.kick': 'Dive kick (in the air: down smash, right click or K)',
   'train.lowpunch': 'Crouch strike, long reach (↓ on the ground + attack)',
   'train.upper': 'Upward strike (↑ + attack)',
   'train.block': 'Block a hit',
@@ -414,8 +414,7 @@ export const en: Record<MessageKey, string> = {
     'Ctrl with W, T, N, Q or Tab closes or opens tabs: the browser keeps those shortcuts.',
   'opt.warn.alt_arrows': 'Alt + left or right arrow goes back / forward.',
   'opt.warn.alt_alone': 'Alt alone can open the menu bar and steal the focus from the game.',
-  'opt.warn.meta':
-    'The Windows / Command keys open system menus and can take you out of the game.',
+  'opt.warn.meta': 'The Windows / Command keys open system menus and can take you out of the game.',
   'opt.warn.function_key':
     'F1 to F12 do things in the browser (F5 reloads, F11 full screen, F12 dev tools).',
   'opt.warn.mouse_side': 'The side mouse buttons are often "back / forward" in the browser.',

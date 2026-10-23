@@ -303,7 +303,7 @@ export const fr = {
   'train.punch': 'Frappe un mannequin',
   'train.combo': 'Enchaîne 3 coups',
   'train.charged': 'Frappe avec un coup chargé (maintiens l’attaque)',
-  'train.kick': 'Coup de pied plongeant (en l’air, ↓ + attaque)',
+  'train.kick': 'Coup de pied plongeant (en l’air : smash bas, clic droit ou K)',
   'train.lowpunch': 'Coup accroupi, longue portée (↓ au sol + attaque)',
   'train.upper': 'Coup vers le haut (↑ + attaque)',
   'train.block': 'Pare un coup',

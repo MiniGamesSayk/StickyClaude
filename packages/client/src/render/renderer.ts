@@ -2,7 +2,12 @@
 import 'pixi.js/unsafe-eval';
 import { Application, Container, Rectangle, Sprite, Texture } from 'pixi.js';
 import {
+  AIM_DX,
+  AIM_DY,
+  AtkPhase,
+  AttackKind,
   CELL,
+  COMBAT,
   GamePhase,
   GRID_W,
   INK_COLORS,
@@ -14,6 +19,7 @@ import {
   PlayerState,
   ProjType,
   WORLD_H,
+  MAX_PROJECTILES,
   WORLD_W,
   weaponDef,
   WeaponKind,
@@ -41,6 +47,7 @@ import { StickmanPainter } from './stickman.ts';
 import type { PaintEnv } from './stickman.ts';
 import { TerrainLayer } from './terrainLayer.ts';
 import { TextPool } from './textpool.ts';
+import type { ProjView } from '../net/interpolation.ts';
 import type { DrawPlayer, Scene } from './types.ts';
 
 export type { DrawPlayer, Scene } from './types.ts';
@@ -52,6 +59,119 @@ export interface RenderOptions {
   /** Téléphone : caméra plus serrée, qualité de départ moyenne. */
   mobile: boolean;
 }
+
+/** Dessin et traînée de chaque projectile. `spin` > 0 : tourne sur lui-même (rad/s). */
+interface ProjStyle {
+  color: number;
+  width: number;
+  trail: number;
+  trailSize: number;
+  spin: number;
+  /** Rond clair dessiné derrière (-1 : aucun) et son rayon. */
+  fill: number;
+  fillR: number;
+}
+const PROJ_STYLE: Record<number, ProjStyle> = {
+  [ProjType.PELLET]: {
+    color: 0x4b5563,
+    width: 1.7,
+    trail: 0xe7d6a4,
+    trailSize: 1.6,
+    spin: 9,
+    fill: 0xf4f1e6,
+    fillR: 3.1,
+  },
+  [ProjType.PLANE]: {
+    color: 0x1f4fd1,
+    width: 1.9,
+    trail: 0xa9dcf2,
+    trailSize: 2.2,
+    spin: 0,
+    fill: -1,
+    fillR: 0,
+  },
+  [ProjType.ROCKET]: {
+    color: 0x7b3fb5,
+    width: 1.9,
+    trail: 0xe8801a,
+    trailSize: 3.2,
+    spin: 0,
+    fill: -1,
+    fillR: 0,
+  },
+  [ProjType.ERASER]: {
+    color: 0xe5579a,
+    width: 1.9,
+    trail: 0xe5579a,
+    trailSize: 2.2,
+    spin: 8,
+    fill: 0xf9c6dc,
+    fillR: 4.6,
+  },
+  [ProjType.SHRAPNEL]: {
+    color: 0x374151,
+    width: 1.5,
+    trail: 0x9ca3af,
+    trailSize: 1.3,
+    spin: 0,
+    fill: 0x9ca3af,
+    fillR: 1.2,
+  },
+  [ProjType.STAPLE]: {
+    color: 0x6b7280,
+    width: 1.5,
+    trail: 0xcfd6dd,
+    trailSize: 1.1,
+    spin: 0,
+    fill: -1,
+    fillR: 0,
+  },
+  [ProjType.GLUE]: {
+    color: 0xe8801a,
+    width: 1.6,
+    trail: 0xf3efe0,
+    trailSize: 2,
+    spin: 0,
+    fill: 0xf3efe0,
+    fillR: 2.6,
+  },
+  [ProjType.ARROW]: {
+    color: 0x8a5a2b,
+    width: 1.8,
+    trail: 0xd6b98a,
+    trailSize: 1.5,
+    spin: 0,
+    fill: -1,
+    fillR: 0,
+  },
+  [ProjType.GRENADE]: {
+    color: 0x1b2a5e,
+    width: 1.9,
+    trail: 0x1b2a5e,
+    trailSize: 2.4,
+    spin: 11,
+    fill: 0xdbe3f7,
+    fillR: 4,
+  },
+  [ProjType.BOOMERANG]: {
+    color: 0x1f4fd1,
+    width: 1.9,
+    trail: 0xa9c1f5,
+    trailSize: 2.2,
+    spin: 17,
+    fill: 0xdbe7ff,
+    fillR: 4.5,
+  },
+  [ProjType.HOOK]: {
+    color: 0x1f9d55,
+    width: 1.9,
+    trail: 0xffffff,
+    trailSize: 0,
+    spin: 0,
+    fill: -1,
+    fillR: 0,
+  },
+};
 
 const tmpA = { x: 0, y: 0 };
 const tmpB = { x: 0, y: 0 };
@@ -485,6 +605,7 @@ export class Renderer {
     this.drawObjects(scene);
     this.drawPlayers(scene, paint);
     this.drawProjectiles(scene);
+    this.drawThrowHint(scene);
     if (scene.debug) this.drawHitboxes(scene);
     this.ragdolls.step(this.dtS, world.cells);
     this.ragdolls.draw(this.ragPen, this.boil);
@@ -978,6 +1099,14 @@ export class Renderer {
         alpha = o.a === 1 ? 0.55 : 0.95;
       } else if (o.type === ObjType.BALL) color = INK.black;
       else if (o.type === ObjType.HEART) color = INK.red;
+      else if (o.type === ObjType.TAPE) {
+        color = 0x6b7280;
+        pen.rect(o.x - 22, o.y - 3, 44, 3, 0xe5e7eb, 0.85);
+      } else if (o.type === ObjType.COVER) {
+        color = 0x2563a8;
+        // feuille blanche, qui jaunit à mesure qu'elle encaisse
+        pen.rect(o.x - 3.4, o.y - 30, 6.8, 30, o.a >= 4 ? 0xffffff : 0xf3e7c4, 0.9);
+      }
       const sway = o.type === ObjType.BALLOON ? Math.sin(t * 2 + o.uid) * 0.1 : 0;
       // le cœur bat et se balance légèrement : il se repère de loin
       const beat = o.type === ObjType.HEART ? 1 + Math.sin(t * 6 + o.uid) * 0.08 : 1;
@@ -1024,8 +1153,57 @@ export class Renderer {
     }
   }
 
+  /** Projectiles disparus depuis l'image précédente : leur dernière position (effet d'impact). */
+  private readonly prevProjUid = new Int32Array(MAX_PROJECTILES);
+  private readonly prevProj = new Float32Array(MAX_PROJECTILES * 5);
+  private prevProjCount = 0;
+
   private drawProjectiles(scene: Scene): void {
     const pen = this.projPen;
+    // impacts : ce qui était là à l'image précédente et n'y est plus
+    for (let k = 0; k < this.prevProjCount; k++) {
+      const uid = this.prevProjUid[k];
+      let alive = false;
+      for (let i = 0; i < scene.projCount; i++) {
+        if (scene.projectiles[i].uid === uid) {
+          alive = true;
+          break;
+        }
+      }
+      if (alive) continue;
+      const o = k * 5;
+      const type = this.prevProj[o];
+      if (type >= ProjType.SHRAPNEL && type <= ProjType.ARROW) {
+        this.fx.projectileImpact(
+          type,
+          this.prevProj[o + 1],
+          this.prevProj[o + 2],
+          this.prevProj[o + 3],
+          this.prevProj[o + 4],
+          this.fxEnv,
+        );
+      } else if (type === ProjType.PELLET || type === ProjType.PLANE) {
+        this.fx.projectileImpact(
+          type,
+          this.prevProj[o + 1],
+          this.prevProj[o + 2],
+          this.prevProj[o + 3],
+          this.prevProj[o + 4],
+          this.fxEnv,
+        );
+      }
+    }
+    this.prevProjCount = Math.min(scene.projCount, MAX_PROJECTILES);
+    for (let i = 0; i < this.prevProjCount; i++) {
+      const p = scene.projectiles[i];
+      this.prevProjUid[i] = p.uid;
+      this.prevProj[i * 5] = p.type;
+      this.prevProj[i * 5 + 1] = p.x;
+      this.prevProj[i * 5 + 2] = p.y;
+      this.prevProj[i * 5 + 3] = p.vx;
+      this.prevProj[i * 5 + 4] = p.vy;
+    }
+
     for (let i = 0; i < scene.projCount; i++) {
       const p = scene.projectiles[i];
       const ang = Math.atan2(p.vy, p.vx);
@@ -1059,33 +1237,105 @@ export class Renderer {
         trail = 0xb98a5a;
       } else {
         const shape = PROJECTILE_SHAPES[p.type];
-        if (shape) {
-          let col: number = INK.black;
-          if (p.type === ProjType.PLANE) col = INK.blue;
-          else if (p.type === ProjType.ROCKET) col = 0x7b3fb5;
-          else if (p.type === ProjType.ERASER) col = 0xe5579a;
+        const st = PROJ_STYLE[p.type];
+        if (shape && st) {
+          if (p.type === ProjType.HOOK) this.drawHookRope(scene, p);
+          // un rond clair derrière les projectiles « pleins » (papier, colle, gomme)
+          if (st.fill >= 0) pen.disc(p.x, p.y, st.fillR, st.fillR, st.fill, 0.95);
+          const rot = st.spin > 0 ? (this.nowMs / 1000) * st.spin + p.uid : ang;
+          // la forme tournante est centrée sur son milieu pour ne pas osciller autour du point
+          const c = Math.cos(rot);
+          const s = Math.sin(rot);
+          const ox = st.spin > 0 ? shape.cx * c - shape.cy * s : 0;
+          const oy = st.spin > 0 ? shape.cx * s + shape.cy * c : 0;
           drawShape(
             pen,
             shape,
-            p.x,
-            p.y,
+            p.x - ox,
+            p.y - oy,
             1,
             0,
             0,
-            p.type === ProjType.PELLET ? 0 : ang,
+            rot,
             1,
-            1.9,
-            col,
+            st.width,
+            st.color,
             1,
             PenStyle.BALLPOINT,
             boil,
           );
-          trail =
-            p.type === ProjType.ROCKET ? 0xe8801a : p.type === ProjType.PLANE ? 0xa9dcf2 : col;
-          size = p.type === ProjType.ROCKET ? 3.2 : 2.2;
+          trail = st.trail;
+          size = st.trailSize;
         }
       }
-      this.fx.trail(p.x - Math.cos(ang) * 5, p.y - Math.sin(ang) * 5, trail, size, this.fxEnv);
+      if (size > 0) {
+        this.fx.trail(p.x - Math.cos(ang) * 5, p.y - Math.sin(ang) * 5, trail, size, this.fxEnv);
+      }
+    }
+  }
+
+  /** Corde du crochet en vol, du bout du canon du tireur jusqu'au crochet. */
+  private drawHookRope(scene: Scene, hook: ProjView): void {
+    for (let i = 0; i < scene.playerCount; i++) {
+      const o = scene.players[i];
+      if (o.slot !== hook.owner) continue;
+      const dx = AIM_DX[o.aim];
+      const dy = AIM_DY[o.aim];
+      const n = Math.hypot(dx, dy) || 1;
+      const sx = o.x + o.facing * 1.6 + (dx / n) * 30;
+      const sy = o.y - (o.crouching ? 10.4 : 17.8) + (dy / n) * 30;
+      this.fx.rope(this.projPen, sx, sy, hook.x, hook.y, 1, this.nowMs);
+      return;
+    }
+  }
+
+  /**
+   * Indice de trajectoire d'un lancer chargé : quelques points, seulement pour le joueur local.
+   * Il ne montre que le début de l'arc (et s'allonge avec la charge), jamais toute la trajectoire.
+   */
+  private drawThrowHint(scene: Scene): void {
+    for (let i = 0; i < scene.playerCount; i++) {
+      const p = scene.players[i];
+      if (!p.self) continue;
+      let level = -1;
+      if (p.state === PlayerState.CHARGE && p.weapon !== 0) {
+        // lancer chargé avec « ramasser » : l'indice apparaît dès que l'appui n'est plus un simple geste
+        if (p.variant >= COMBAT.throwHoldTicks) {
+          level = Math.min(
+            1,
+            (p.variant - COMBAT.throwHoldTicks + 1) /
+              (COMBAT.throwChargeMax - COMBAT.throwHoldTicks + 1),
+          );
+        }
+      } else if (
+        p.state === PlayerState.ATTACK &&
+        (p.variant & 15) === AttackKind.THROW &&
+        p.variant >> 4 === AtkPhase.STARTUP &&
+        p.animProg > 5
+      ) {
+        level = Math.min(1, (p.animProg - 3) / (COMBAT.throwChargeMax - 3));
+      }
+      if (level < 0) continue;
+      const dx = AIM_DX[p.aim];
+      const dy = AIM_DY[p.aim];
+      const n = Math.hypot(dx, dy) || 1;
+      const ux = dx / n;
+      const uy = dy / n;
+      const sx = p.x + p.facing * 1.6 + ux * 9;
+      const sy = p.y - (p.crouching ? 10.4 : 17.8) + uy * 9;
+      const speed = COMBAT.throwSpeed * (1 + 1.1 * level);
+      const vx = ux * speed;
+      const vy = uy * speed - COMBAT.throwUp * (1 + 0.3 * level);
+      const g = scene.params.gravity * 0.6;
+      const dots = 3 + Math.round(level * 4);
+      const pen = this.projPen;
+      for (let k = 1; k <= dots; k++) {
+        const t = k * 0.055;
+        const x = sx + vx * t;
+        const y = sy + vy * t + 0.5 * g * t * t;
+        const fade = 1 - (k - 1) / (dots + 1);
+        pen.disc(x, y, 1.6 + 0.6 * fade, 1.6 + 0.6 * fade, INK.black, 0.25 + 0.5 * fade);
+      }
     }
   }
 

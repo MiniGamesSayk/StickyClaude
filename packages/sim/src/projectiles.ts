@@ -7,7 +7,6 @@ import {
   ProjType,
   SimEvent,
   WeaponId,
-  weaponChargeLevel,
   weaponDef,
 } from '@stickyclaude/shared';
 import { bodyHeight, raycastGrid, segmentBox } from './collision.ts';
@@ -251,7 +250,16 @@ function stepHook(world: World, p: Proj): void {
   // Plateformes mobiles.
   for (let i = 0; i < world.moverCount; i++) {
     const m = world.movers[i];
-    const t = segmentBox(p.x, p.y, p.x + ux * dist, p.y + uy * dist, m.x, m.y, m.x + m.w, m.y + m.h);
+    const t = segmentBox(
+      p.x,
+      p.y,
+      p.x + ux * dist,
+      p.y + uy * dist,
+      m.x,
+      m.y,
+      m.x + m.w,
+      m.y + m.h,
+    );
     if (t >= 0 && t < bestT) {
       bestT = t;
       kind = 1;
@@ -327,7 +335,19 @@ function stepHook(world: World, p: Proj): void {
     q.grappleY = o.y - bodyHeight(world, o) * 0.5;
     q.dashTicks = 0;
     q.dodging = false;
-    queueHit(world, which, ownerSlot, def.damage, 0, 0, 0, Cause.PROJECTILE, HitFlag.RANGED, hx, hy);
+    queueHit(
+      world,
+      which,
+      ownerSlot,
+      def.damage,
+      0,
+      0,
+      0,
+      Cause.PROJECTILE,
+      HitFlag.RANGED,
+      hx,
+      hy,
+    );
     emit(world, SimEvent.GRAPPLE, ownerSlot, q.x, q.y - 14, which);
   } else {
     const c = world.objects[which];
@@ -624,11 +644,7 @@ export function stepProjectiles(world: World): void {
     p.y += dy;
     p.life--;
     if (p.life <= 0) {
-      if (
-        p.type === ProjType.ROCKET ||
-        p.type === ProjType.GRENADE ||
-        p.type === ProjType.THROWN
-      ) {
+      if (p.type === ProjType.ROCKET || p.type === ProjType.GRENADE || p.type === ProjType.THROWN) {
         endProjectile(world, p, p.x, p.y);
       } else if (p.type === ProjType.BOOMERANG) {
         spawnWeaponObj(world, WeaponId.BOOMERANG, 1, p.x, p.y - 4, 0, -60);

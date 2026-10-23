@@ -11,16 +11,7 @@ import type { QualitySetting } from '../render/quality.ts';
  */
 
 export type Action =
-  | 'left'
-  | 'right'
-  | 'up'
-  | 'down'
-  | 'jump'
-  | 'attack'
-  | 'block'
-  | 'pickup'
-  | 'dash'
-  | 'spike';
+  'left' | 'right' | 'up' | 'down' | 'jump' | 'attack' | 'block' | 'pickup' | 'dash' | 'spike';
 export const ACTIONS: readonly Action[] = [
   'left',
   'right',

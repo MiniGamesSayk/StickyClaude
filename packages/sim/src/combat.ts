@@ -569,19 +569,7 @@ export function resolveMelee(world: World): void {
         }
       }
       if (p.atkKind === AttackKind.WEAPON && weaponDef(p.weapon).cuts) q.grappleTicks = 0;
-      queueHit(
-        world,
-        v,
-        s,
-        spec.damage,
-        kx,
-        ky,
-        spec.stun,
-        spec.cause,
-        spec.flags,
-        p.x,
-        p.y - 14,
-      );
+      queueHit(world, v, s, spec.damage, kx, ky, spec.stun, spec.cause, spec.flags, p.x, p.y - 14);
     }
     // Ciseaux : coupent les crochets de grappin en vol.
     if (p.atkKind === AttackKind.WEAPON && weaponDef(p.weapon).cuts) {
@@ -750,7 +738,8 @@ export function traceRay(
   for (let i = 0; i < world.objects.length; i++) {
     const o = world.objects[i];
     if (!o.active) continue;
-    if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON && o.type !== ObjType.COVER) continue;
+    if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON && o.type !== ObjType.COVER)
+      continue;
     const t = segmentBox(ox, oy, ex, ey, o.x - o.w / 2, o.y - o.h, o.x + o.w / 2, o.y);
     if (t >= 0 && t < best) {
       best = t;
