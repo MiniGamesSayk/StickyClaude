@@ -1,4 +1,11 @@
-import { Cell, GamePhase, Input, PlayerState, SimEvent } from '@stickyclaude/shared';
+import {
+  Cell,
+  GamePhase,
+  Input,
+  LAG_COMP_TICKS,
+  PlayerState,
+  SimEvent,
+} from '@stickyclaude/shared';
 import { destroyCircle, killPlayer, pointBlocked } from '@stickyclaude/sim';
 import { describe, expect, it } from 'vitest';
 import { TestWorld } from './harness.ts';
@@ -283,7 +290,7 @@ describe('compensation de latence', () => {
       expect(st.rewindMs).toBeGreaterThan(st.rttMs + 100);
       expect(st.rewindMs).toBeLessThan(st.rttMs + 400);
       const member = room.slots[p.client.slot]!;
-      const expected = Math.min(15, Math.round(st.rewindMs / (1000 / 60)));
+      const expected = Math.min(LAG_COMP_TICKS, Math.round(st.rewindMs / (1000 / 60)));
       expect(Math.abs(member.rewindTicks - expected)).toBeLessThanOrEqual(2);
     }
   });

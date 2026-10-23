@@ -74,6 +74,25 @@ export interface ServerConfig {
   controlPerSec: number;
 }
 
+/** Fréquences de snapshots possibles : les diviseurs de 60 Hz (un snapshot tous les N ticks). */
+export const SNAPSHOT_HZ_CHOICES = [10, 12, 15, 20, 30, 60] as const;
+
+/** La fréquence demandée, ramenée à la plus proche des valeurs permises (la plus haute en cas d'égalité). */
+function snapshotHzOf(v: string | undefined): number {
+  const n = v === undefined || v === '' ? Number.NaN : Number(v);
+  if (!Number.isFinite(n)) return SNAPSHOT_HZ_DEFAULT;
+  let best: number = SNAPSHOT_HZ_DEFAULT;
+  let gap = Infinity;
+  for (const hz of SNAPSHOT_HZ_CHOICES) {
+    const d = Math.abs(hz - n);
+    if (d < gap || (d === gap && hz > best)) {
+      best = hz;
+      gap = d;
+    }
+  }
+  return best;
+}
+
 function int(v: string | undefined, def: number, min: number, max: number): number {
   if (v === undefined || v === '') return def;
   const n = Number(v);
@@ -91,7 +110,7 @@ export function loadConfig(
     host: env.HOST ?? (production ? '0.0.0.0' : '127.0.0.1'),
     production,
     tickHz: int(env.TICK_HZ, TICK_HZ, TICK_HZ, TICK_HZ), // la simulation est à 60 Hz fixe
-    snapshotHz: int(env.SNAPSHOT_HZ, SNAPSHOT_HZ_DEFAULT, 20, 60),
+    snapshotHz: snapshotHzOf(env.SNAPSHOT_HZ),
     maxRooms: int(env.MAX_ROOMS, 40, 1, 10_000),
     maxConnections: int(env.MAX_CONNECTIONS, 400, 1, 100_000),
     maxConnPerIp: int(env.MAX_CONN_PER_IP, 8, 1, 10_000),

@@ -1,9 +1,19 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { GamePhase, MAX_SPECTATORS, PROTOCOL_VERSION } from '@stickyclaude/shared';
+import {
+  GamePhase,
+  LAG_COMP_TICKS,
+  MAX_SPECTATORS,
+  PROTOCOL_VERSION,
+  REWIND_MASK,
+  REWIND_STEP,
+  rewindOf,
+  TICK_HZ,
+  withRewind,
+} from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
-import { writeRecording } from '../src/index.ts';
+import { loadConfig, Room, SNAPSHOT_HZ_CHOICES, writeRecording } from '../src/index.ts';
 import { Bot, harness } from './helpers.ts';
 import type { FakeConn, Harness } from './helpers.ts';
 
@@ -270,5 +280,35 @@ describe('événements de simulation perdus', () => {
     expect(h.server.metrics.eventsDropped).toBe(3);
     expect(h.server.metrics.snapshot({}).eventsDropped).toBe(3);
     expect(ev.dropped).toBe(0);
+  });
+});
+
+describe('fréquence des snapshots', () => {
+  const hz = (v: string | undefined): number =>
+    loadConfig({ NODE_ENV: 'test', SNAPSHOT_HZ: v }, '/none').snapshotHz;
+
+  it('ne prend que des diviseurs de 60 Hz, la valeur annoncée est la valeur réelle', () => {
+    for (const v of ['10', '12', '15', '20', '30', '60']) expect(hz(v)).toBe(Number(v));
+    expect(hz('25')).toBe(30);
+    expect(hz('24')).toBe(20);
+    expect(hz('45')).toBe(60);
+    expect(hz('1')).toBe(10);
+    expect(hz('1000')).toBe(60);
+    expect(hz('abc')).toBe(30);
+    expect(hz(undefined)).toBe(30);
+    for (const v of ['7', '25', '40', '50', '33']) {
+      const h = harness({ SNAPSHOT_HZ: v });
+      expect(SNAPSHOT_HZ_CHOICES).toContain(h.config.snapshotHz);
+      expect(h.server.snapshotInterval * h.config.snapshotHz).toBe(TICK_HZ);
+    }
+  });
+});
+
+describe('compensation de latence', () => {
+  it('le plafond annoncé est celui que le masque d’entrées peut porter (12 ticks)', () => {
+    expect(LAG_COMP_TICKS).toBe(REWIND_MASK * REWIND_STEP);
+    expect(Room.rewindFromWire(255)).toBe(12);
+    expect(rewindOf(withRewind(0, 15))).toBe(12);
+    expect(rewindOf(withRewind(0, 100))).toBe(12);
   });
 });

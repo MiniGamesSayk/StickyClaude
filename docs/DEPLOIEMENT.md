@@ -140,35 +140,35 @@ Toutes sont facultatives et ont une valeur par défaut sûre ; `.env.example` le
 
 **Plateforme** (lues par `games`, pas par le jeu) : `MEM_LIMIT` (`512m`), `CPUS` (`1.0`).
 
-| Variable             | Défaut (code)          | Sens                                                                                                                                                                                           |
-| -------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`           | `production` (image)   | `production` : en-têtes de sécurité complets, `Origin` strict, hôte `0.0.0.0`                                                                                                                  |
-| `PORT`               | `3000`                 | port d'écoute (doit correspondre à la colonne « port » de `games.conf`)                                                                                                                        |
-| `HOST`               | `0.0.0.0`              | adresse d'écoute (`127.0.0.1` hors production)                                                                                                                                                 |
-| `PUBLIC_ORIGIN`      | vide                   | origine publique (`https://stickyclaude.sayk.fr`) : seule origine acceptée pour le WebSocket, et utilisée dans la CSP et HSTS. Vide : l'origine de la page doit être celle de l'en-tête `Host` |
-| `TRUSTED_PROXY`      | vide                   | proxys dont on croit `X-Forwarded-For` : `caddy` (réseaux privés dont Docker) ou une liste d'adresses et de CIDR. Vide : en-tête ignoré                                                        |
-| `METRICS_TOKEN`      | vide                   | jeton `Authorization: Bearer …` pour lire `/metrics` depuis l'extérieur. Vide : lisible seulement depuis l'intérieur (réseau privé, sans proxy)                                                |
-| `LOG_LEVEL`          | `info`                 | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent`                                                                                                                                   |
-| `SHUTDOWN_GRACE_SEC` | `30` (0 à 300)         | arrêt propre : délai donné aux joueurs après `SIGTERM` (§ 7)                                                                                                                                   |
-| `MAX_ROOMS`          | `40`                   | salons simultanés ; au-delà : « serveur plein »                                                                                                                                                |
-| `MAX_CONNECTIONS`    | `400`                  | connexions simultanées (joueurs et spectateurs)                                                                                                                                                |
-| `MAX_CONN_PER_IP`    | `8`                    | connexions simultanées par adresse                                                                                                                                                             |
-| `SNAPSHOT_HZ`        | `30` (20 à 60)         | instantanés par seconde envoyés à chaque joueur                                                                                                                                                |
-| `TICK_HZ`            | `60`                   | fixé à 60 (la simulation est à pas fixe)                                                                                                                                                       |
-| `CREATE_PER_MIN`     | `3`                    | créations de salon par minute et par IP                                                                                                                                                        |
-| `CODE_TRIES_PER_MIN` | `10`                   | essais de code de salon ratés par minute et par IP                                                                                                                                             |
-| `ROOM_IDLE_TTL_SEC`  | `300`                  | durée de vie d'un salon vide                                                                                                                                                                   |
-| `HEARTBEAT_MS`       | `10000`                | intervalle des pings WebSocket ; déconnexion après 3 pings sans réponse                                                                                                                        |
-| `RECONNECT_GRACE_MS` | `20000`                | délai de reconnexion d'un joueur                                                                                                                                                               |
-| `AUTOSTART_MS`       | `20000`                | lancement automatique d'un salon public quand 2 joueurs sont prêts (0 : jamais)                                                                                                                |
-| `IDLE_PLAYING_MS`    | `60000`                | inactivité en manche : le joueur devient spectateur                                                                                                                                            |
-| `IDLE_LOBBY_MS`      | `600000`               | inactivité dans le salon : déconnexion                                                                                                                                                         |
-| `MATCH_END_MS`       | `12000`                | durée du podium avant le retour au salon                                                                                                                                                       |
-| `VOTE_MS`            | `12000`                | durée du vote de la carte avant chaque manche (clôture anticipée quand tout le monde a voté)                                                                                                   |
-| `VOTE_DEFAULT`       | `1`                    | `0` : le vote de carte est désactivé par défaut dans les nouveaux salons (l'hôte peut le réactiver)                                                                                            |
-| `EMOTE_COOLDOWN_MS`  | `3000`                 | délai minimal entre deux emotes                                                                                                                                                                |
-| `CONTROL_PER_SEC`    | `20`                   | messages de contrôle (JSON) acceptés par seconde et par connexion                                                                                                                              |
-| `STATIC_DIR`         | `packages/client/dist` | dossier du client construit (l'image le fixe déjà)                                                                                                                                             |
+| Variable             | Défaut (code)                 | Sens                                                                                                                                                                                           |
+| -------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`           | `production` (image)          | `production` : en-têtes de sécurité complets, `Origin` strict, hôte `0.0.0.0`                                                                                                                  |
+| `PORT`               | `3000`                        | port d'écoute (doit correspondre à la colonne « port » de `games.conf`)                                                                                                                        |
+| `HOST`               | `0.0.0.0`                     | adresse d'écoute (`127.0.0.1` hors production)                                                                                                                                                 |
+| `PUBLIC_ORIGIN`      | vide                          | origine publique (`https://stickyclaude.sayk.fr`) : seule origine acceptée pour le WebSocket, et utilisée dans la CSP et HSTS. Vide : l'origine de la page doit être celle de l'en-tête `Host` |
+| `TRUSTED_PROXY`      | vide                          | proxys dont on croit `X-Forwarded-For` : `caddy` (réseaux privés dont Docker) ou une liste d'adresses et de CIDR. Vide : en-tête ignoré                                                        |
+| `METRICS_TOKEN`      | vide                          | jeton `Authorization: Bearer …` pour lire `/metrics` depuis l'extérieur. Vide : lisible seulement depuis l'intérieur (réseau privé, sans proxy)                                                |
+| `LOG_LEVEL`          | `info`                        | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent`                                                                                                                                   |
+| `SHUTDOWN_GRACE_SEC` | `30` (0 à 300)                | arrêt propre : délai donné aux joueurs après `SIGTERM` (§ 7)                                                                                                                                   |
+| `MAX_ROOMS`          | `40`                          | salons simultanés ; au-delà : « serveur plein »                                                                                                                                                |
+| `MAX_CONNECTIONS`    | `400`                         | connexions simultanées (joueurs et spectateurs)                                                                                                                                                |
+| `MAX_CONN_PER_IP`    | `8`                           | connexions simultanées par adresse                                                                                                                                                             |
+| `SNAPSHOT_HZ`        | `30` (10, 12, 15, 20, 30, 60) | instantanés par seconde envoyés à chaque joueur                                                                                                                                                |
+| `TICK_HZ`            | `60`                          | fixé à 60 (la simulation est à pas fixe)                                                                                                                                                       |
+| `CREATE_PER_MIN`     | `3`                           | créations de salon par minute et par IP                                                                                                                                                        |
+| `CODE_TRIES_PER_MIN` | `10`                          | essais de code de salon ratés par minute et par IP                                                                                                                                             |
+| `ROOM_IDLE_TTL_SEC`  | `300`                         | durée de vie d'un salon vide                                                                                                                                                                   |
+| `HEARTBEAT_MS`       | `10000`                       | intervalle des pings WebSocket ; déconnexion après 3 pings sans réponse                                                                                                                        |
+| `RECONNECT_GRACE_MS` | `20000`                       | délai de reconnexion d'un joueur                                                                                                                                                               |
+| `AUTOSTART_MS`       | `20000`                       | lancement automatique d'un salon public quand 2 joueurs sont prêts (0 : jamais)                                                                                                                |
+| `IDLE_PLAYING_MS`    | `60000`                       | inactivité en manche : le joueur devient spectateur                                                                                                                                            |
+| `IDLE_LOBBY_MS`      | `600000`                      | inactivité dans le salon : déconnexion                                                                                                                                                         |
+| `MATCH_END_MS`       | `12000`                       | durée du podium avant le retour au salon                                                                                                                                                       |
+| `VOTE_MS`            | `12000`                       | durée du vote de la carte avant chaque manche (clôture anticipée quand tout le monde a voté)                                                                                                   |
+| `VOTE_DEFAULT`       | `1`                           | `0` : le vote de carte est désactivé par défaut dans les nouveaux salons (l'hôte peut le réactiver)                                                                                            |
+| `EMOTE_COOLDOWN_MS`  | `3000`                        | délai minimal entre deux emotes                                                                                                                                                                |
+| `CONTROL_PER_SEC`    | `20`                          | messages de contrôle (JSON) acceptés par seconde et par connexion                                                                                                                              |
+| `STATIC_DIR`         | `packages/client/dist`        | dossier du client construit (l'image le fixe déjà)                                                                                                                                             |
 
 **Développement seulement (ne jamais mettre en production)** : `DEV_TOOLS=1` (réglage en direct, enregistrement exposé), `RECORD_DIR` (enregistrement des entrées de chaque salon), `ALLOW_NO_ORIGIN=1` (accepte les connexions WebSocket sans `Origin`, pour les outils de charge).
 
@@ -236,3 +236,51 @@ Mise en ligne du hub : `git pull` dans `~/apps/hub/src`, puis `docker compose ex
 | « Serveur plein » alors que le jeu est vide                               | `MAX_CONN_PER_IP` atteint parce que `TRUSTED_PROXY` manque (tous les joueurs ont la même adresse), ou salons vides pas encore expirés (`ROOM_IDLE_TTL_SEC`) |
 | `tick overrun` fréquents                                                  | serveur surchargé : voir `/metrics`, § 10 ; baisser `MAX_ROOMS`                                                                                             |
 | Les joueurs sont coupés à chaque mise à jour sans annonce                 | `SHUTDOWN_GRACE_SEC` supérieur au délai d'arrêt de Docker (10 s) : voir § 7                                                                                 |
+
+## 13. Correctifs VPS proposés (audit du 2026-10-23)
+
+**Rien de ce qui suit n'a été appliqué** : ce sont des propositions, à faire par l'utilisateur sur le VPS (le dépôt ne touche ni au serveur, ni au générateur `games`). Elles viennent de l'audit du 23/10/2026 (journaux de Caddy et état de la machine).
+
+### 13.1 502 à chaque `games update`
+
+**Constat.** 27 erreurs Caddy `connection refused` ou `lookup stickyclaude: i/o timeout` aux heures de déploiement : pendant que le conteneur est recréé, Caddy n'a plus de destination et répond 502 tout de suite, au lieu d'attendre.
+
+**Correctif.** Le `Caddyfile` est **généré** par `games` (dépôt goldmine, `deploy/platform/games`) : ne pas le modifier à la main, le prochain `games update` l'écraserait. Remplacer le `reverse_proxy` du **template du générateur** par :
+
+```
+reverse_proxy stickyclaude:3000 {
+    lb_try_duration 8s
+    lb_try_interval 250ms
+    health_uri /healthz
+    health_interval 5s
+    stream_close_delay 5m
+}
+```
+
+- `lb_try_duration` / `lb_try_interval` : Caddy réessaie pendant 8 s (toutes les 250 ms) au lieu de répondre 502 ; le serveur neuf démarre en moins de 2 s.
+- `health_uri` / `health_interval` : sonde active sur `/healthz` ; le serveur répond 503 en arrêt propre, Caddy cesse alors d'y envoyer de nouvelles connexions.
+- `stream_close_delay` : un rechargement de la configuration ne coupe plus les WebSocket tout de suite (jusqu'à 5 min), ce qui laisse les joueurs finir leur manche pendant l'arrêt propre (§ 7).
+
+Pour le nom du service, reprendre celui que le générateur met déjà (`stickyclaude:3000` ci-dessus). Vérifier ensuite avec `games update stickyclaude` en regardant `docker logs caddy` : plus de `connection refused` pendant la fenêtre de mise à jour.
+
+### 13.2 Réglages TCP du noyau (jeu temps réel)
+
+Fichier `/etc/sysctl.d/90-realtime.conf` (avec `sudo`) :
+
+```
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+net.ipv4.tcp_slow_start_after_idle=0
+net.ipv4.tcp_notsent_lowat=16384
+```
+
+**Vérifier d'abord que `bbr` est disponible** : `sysctl net.ipv4.tcp_available_congestion_control` doit le lister (sinon `sudo modprobe tcp_bbr`, et si le module n'existe pas, ne pas appliquer cette ligne). Puis `sudo sysctl --system` et contrôle avec `sysctl net.ipv4.tcp_congestion_control`. Effets : moins de latence en file (`fq` + BBR), pas de retour au démarrage lent après un silence (les joueurs immobiles), et peu d'octets en attente dans le noyau (`tcp_notsent_lowat`) pour que `bufferedAmount` côté serveur reflète la réalité. Retour en arrière : supprimer le fichier et `sudo sysctl --system`.
+
+### 13.3 Disque et Docker
+
+- `docker system df` puis **`docker builder prune`** : environ **24 Go** de cache de construction récupérables.
+- Une **mise à jour de Docker** est en attente : à faire **hors des heures de jeu** (le démon redémarre et les conteneurs sont coupés ; choisir un moment sans partie en cours).
+
+### 13.4 CLAUDE.md du serveur périmé
+
+Le `CLAUDE.md` de la machine mentionne **Debian 12** et la mise à jour par `apps/goldmine ./update.sh`. La machine est en **Debian 13** et les jeux sont gérés par la commande **`games`** (`games list`, `games update stickyclaude`, `games logs stickyclaude`…, voir § 2 à 6). À corriger à la main.

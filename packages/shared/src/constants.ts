@@ -56,10 +56,11 @@ export const MARGIN_TARGET = 2;
 /**
  * Compensation de latence : historique des positions conservé côté serveur. L'analyse prévoit
  * 200 ms ; les entrées étant étiquetées dans le futur (voir DECISIONS.md), la durée à remonter est
- * 2 × latence aller + avance + interpolation, d'où 250 ms (15 ticks).
+ * 2 × latence aller + avance + interpolation. Le retard voyage sur 2 bits du masque, par pas de
+ * 4 ticks (`REWIND_STEP`) : au plus 12 ticks, soit 200 ms.
  */
-export const LAG_COMP_MS = 250;
-export const LAG_COMP_TICKS = 15;
+export const LAG_COMP_MS = 200;
+export const LAG_COMP_TICKS = 12;
 /** Taille de l'anneau d'historique (puissance de 2 > LAG_COMP_TICKS). */
 export const HISTORY_TICKS = 16;
 

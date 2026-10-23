@@ -74,20 +74,22 @@ Tout est en **little-endian**. Le premier octet est toujours le type. Client →
 
 ### Masque d'entrées (u16)
 
-| Bit   | Valeur | Action                                                                         |
-| ----- | ------ | ------------------------------------------------------------------------------ |
-| 0     | `0x01` | gauche                                                                         |
-| 1     | `0x02` | droite                                                                         |
-| 2     | `0x04` | haut (visée)                                                                   |
-| 3     | `0x08` | bas (accroupi, chute rapide, traversée, coup de pied, lâcher avec `ramasser`)  |
-| 4     | `0x10` | saut                                                                           |
-| 5     | `0x20` | attaque (maintenu : coup chargé ; tir en continu avec une arme à tir)          |
-| 6     | `0x40` | parade                                                                         |
-| 7     | `0x80` | ramasser / lancer                                                              |
-| 8–11  |        | réservés                                                                       |
-| 12–15 |        | retard de compensation de latence en ticks (0 à 15), **ajouté par le serveur** |
+| Bit   | Valeur   | Action                                                                                                     |
+| ----- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| 0     | `0x01`   | gauche                                                                                                     |
+| 1     | `0x02`   | droite                                                                                                     |
+| 2     | `0x04`   | haut (visée)                                                                                               |
+| 3     | `0x08`   | bas (accroupi, chute rapide, traversée, coup de pied, lâcher avec `ramasser`)                              |
+| 4     | `0x10`   | saut                                                                                                       |
+| 5     | `0x20`   | attaque (maintenu : coup chargé ; tir en continu avec une arme à tir)                                      |
+| 6     | `0x40`   | parade                                                                                                     |
+| 7     | `0x80`   | ramasser / lancer                                                                                          |
+| 8–11  |          | secteur de visée explicite (0 à 15), valable si le bit 12 est levé                                         |
+| 12    | `0x1000` | drapeau de visée explicite (souris, joystick) ; sinon la visée se déduit des directions                    |
+| 13    | `0x2000` | dash                                                                                                       |
+| 14–15 |          | retard de compensation de latence, en pas de 4 ticks (0 à 3, soit 0 à 12 ticks), **ajouté par le serveur** |
 
-Le serveur ne lit que les 14 bits de poids faible d'un paquet (`INPUT_MASK_USED`) : un client ne peut pas se donner une compensation de latence qu'il n'a pas. Le curseur du fantôme-crayon utilise les mêmes bits (directions pour le déplacer, attaque pour poser un trait, parade pour une goutte d'encre).
+Le serveur ne lit que les 14 bits de poids faible d'un paquet (`INPUT_MASK_USED` = `0x3fff`) : un client ne peut pas se donner une compensation de latence qu'il n'a pas. Le curseur du fantôme-crayon utilise les mêmes bits (directions pour le déplacer, attaque pour poser un trait, parade pour une goutte d'encre).
 
 ### `INPUT` (client → serveur) : 9 à 15 octets
 
@@ -141,7 +143,7 @@ Un snapshot par client : l'en-tête, le bloc `own`, les événements et la liste
 | …      |       | objets        | O × 13 octets                                                                                                                                                                      |
 | …      |       | projectiles   | P × 13 octets                                                                                                                                                                      |
 | …      | u16[] | `modeData`    | M valeurs propres au mode (colline : temps tenu par équipe ; boulette-ball : buts des deux camps et délai de remise en jeu ; patate : porteur + 1, mèche, pause avant la suivante) |
-| …      |       | `own`         | 71 octets si `flags & 1`                                                                                                                                                           |
+| …      |       | `own`         | 74 octets si `flags & 1`                                                                                                                                                           |
 | …      |       | événements    | `eventCount` × (4 + `len`) octets                                                                                                                                                  |
 
 **Joueur (18 octets).** Positions et vitesses quantifiées au **1/8 d'unité** (i16, soit ±4 095 unités ; la page fait 1 024 × 576). Un fantôme-crayon est un joueur dont `anim` vaut `GHOST` et dont `x`, `y` sont ceux de son curseur.
@@ -168,15 +170,16 @@ Drapeaux de joueur (u16) : bit 0 vivant · 1 tourné à droite · 2 au sol · 3 
 
 **Projectile (13 octets).** `u16 uid, u8 type, i16 x, y, vx, vy, u8 owner, u8 a`. `type` : 1 boulette, 2 avion en papier, 3 roquette, 4 gomme, 5 objet lancé. `x`, `y` sont le centre, `owner` le tireur (255 aucun), `a` l'arme d'origine.
 
-**Bloc `own` (71 octets).** L'état _exact_ de prédiction du destinataire : tout ce qui influence l'évolution future de sa simulation. Flottants 32 bits (l'arrondi vaut moins de 10⁻⁴ unité). Ordre des champs (`OWN_FIELDS`, `packages/shared/src/codec/snapshot.ts`) :
+**Bloc `own` (74 octets).** L'état _exact_ de prédiction du destinataire : tout ce qui influence l'évolution future de sa simulation. Flottants 32 bits (l'arrondi vaut moins de 10⁻⁴ unité). Ordre des champs (`OWN_FIELDS`, `packages/shared/src/codec/snapshot.ts`) :
 
-| Octets | Type | Champs                                                                                                                                                                                                                                                                                                                                                      |
-| ------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0–31   | f32  | `x`, `y`, `vx`, `vy`, `grappleX`, `grappleY`, `ghostX`, `ghostY`                                                                                                                                                                                                                                                                                            |
-| 32–37  | u8   | `flags` (bit 0 au sol · 1 accroupi · 2 double saut disponible · 3 saut en cours · 4 tourné à droite), `coyote`, `jumpBuffer`, `wallLock`, `wallCoyote`, `dropTimer`                                                                                                                                                                                         |
-| 38–39  | i8   | `wallDir` (−1, 0, 1), `groundMover` (indice de plateforme mobile, −1 sinon)                                                                                                                                                                                                                                                                                 |
-| 40–62  | u8   | `hp`, `weapon`, `ammo`, `stun`, `hitLock`, `invuln` (plafonné à 255), `atkPhase`, `atkKind`, `atkTicks`, `combo`, `comboWindow`, `chargeTicks`, `attackHeld`, `blockTicks`, `blockCd`, `atkBuffer`, `pickupCd`, `aim`, `grappleTicks`, `status` (bit 0 fantôme · 1 mort · 2 porte la bombe · 3 coup de pied plongeant), `stunImmune`, `dashTicks`, `dashCd` |
-| 63–70  | u16  | `prevInput`, `respawns`, `respawnTimer`, `ghostCd`                                                                                                                                                                                                                                                                                                          |
+| Octets | Type | Champs                                                                                                                                                                                                                                                                                                                                                                   |
+| ------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0–31   | f32  | `x`, `y`, `vx`, `vy`, `grappleX`, `grappleY`, `ghostX`, `ghostY`                                                                                                                                                                                                                                                                                                         |
+| 32–37  | u8   | `flags` (bit 0 au sol · 1 accroupi · 2 double saut disponible · 3 saut en cours · 4 tourné à droite), `coyote`, `jumpBuffer`, `wallLock`, `wallCoyote`, `dropTimer`                                                                                                                                                                                                      |
+| 38–39  | i8   | `wallDir` (−1, 0, 1), `groundMover` (indice de plateforme mobile, −1 sinon)                                                                                                                                                                                                                                                                                              |
+| 40–63  | u8   | `hp`, `weapon`, `ammo`, `stun`, `hitLock`, `invuln` (plafonné à 255), `atkPhase`, `atkKind`, `atkTicks`, `combo`, `comboWindow`, `chargeTicks`, `attackHeld`, `blockTicks`, `blockCd`, `atkBuffer`, `pickupCd`, `aim`, `grappleTicks`, `status` (bit 0 fantôme · 1 mort · 2 porte la bombe · 3 coup de pied plongeant), `stunImmune`, `dashTicks`, `dashCd`, `glueTicks` |
+| 64–65  | i8   | `dashX`, `dashY` (direction du dash, −1, 0, 1)                                                                                                                                                                                                                                                                                                                           |
+| 66–73  | u16  | `prevInput`, `respawns`, `respawnTimer`, `ghostCd`                                                                                                                                                                                                                                                                                                                       |
 
 **Événement fiable (4 + `len` octets).**
 
@@ -214,11 +217,11 @@ Les événements de mouvement (`JUMP`, `DOUBLE_JUMP`, `WALL_JUMP`, `LAND`, `DROP
 
 Les événements qui **changent le monde** sont appliqués par le client à son propre monde dès leur réception, par les mêmes fonctions entières que le serveur : `TERRAIN` (`destroyCircle`), `GHOST_DRAW` (`placeMark` : l'expiration est `tick de pose + durée`, donc identique), `PUDDLE`. Les autres ne servent qu'aux effets : ils sont rejoués à l'écran quand le tick de leur snapshot est atteint par l'interpolation (≈ 100 à 300 ms après leur réception), pour rester synchrones avec ce que l'on voit des autres joueurs.
 
-Taille typique à 8 joueurs en combat : 17 + 8 × 18 + 71 + une dizaine d'objets et de projectiles + 1 à 3 événements ≈ **280 octets**, soit **8,7 Ko/s** par client à 30 Hz avec les messages de salon (mesuré, §10). Maximum théorique : `SNAPSHOT_MAX_BYTES`.
+Taille à 8 joueurs en combat : 17 (en-tête) + 8 × 18 (joueurs) + 74 (`own`) = **235 octets** de base, auxquels s'ajoutent 13 octets par objet ou projectile et 4 à 17 par événement : **≈ 280 octets** en pratique, soit **8,4 Ko/s** par client à 30 Hz avec les messages de salon (mesuré, §10). Maximum théorique `SNAPSHOT_MAX_BYTES` = 17 + 8 × 18 + 32 × 13 + 64 × 13 + 8 × 2 + 74 + 24 × 20 = **1 979 octets** (32 objets, 64 projectiles, 8 données de mode, 24 événements de 16 octets de charge).
 
 ### Messages de contrôle (JSON, texte)
 
-Client → serveur (validés par zod : types stricts, longueurs bornées, énumérations, clés inconnues refusées, 1 Ko maximum, 20 messages par seconde) :
+Client → serveur (validés par zod : types stricts, longueurs bornées, énumérations, clés inconnues refusées, 1 Ko maximum (8 Ko pour l'envoi d'un niveau), 20 messages par seconde) :
 
 | Message                                                      | Effet                                                                                                                                                |
 | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -254,32 +257,34 @@ Serveur → client (`packages/shared/src/messages.ts`) :
 
 ## 4. Délais et paramètres
 
-| Quoi                                  | Valeur                                                                                                                                                                         |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Simulation                            | 60 Hz (16,667 ms), pas fixe                                                                                                                                                    |
-| Entrées client → serveur              | 1 paquet par image qui simule ≥ 1 tick (jusqu'à 3 si plusieurs ticks d'un coup), 4 entrées chacun                                                                              |
-| Snapshots serveur → client            | 30 Hz par client (`SNAPSHOT_HZ`, 20 à 60), **décalés d'un tick d'un client à l'autre** du salon                                                                                |
-| Marge visée de l'entrée               | 1 à 4 ticks (cible 2), avance client adaptative de 1 à 30 ticks                                                                                                                |
-| Fenêtre d'entrées acceptées           | de `world.tick + 1` à `+ 24` ticks ; anneau de 64 entrées par joueur                                                                                                           |
-| Compensation de latence               | historique de 16 ticks ; au plus 15 ticks (250 ms) remontés ; `rewind` = RTT + avance + interpolation                                                                          |
-| Retard d'interpolation                | `max(100, 2 × 33 + 3 × gigue)` ms, borné à 300 ; glisse vers sa cible (+2 / −0,5 ms par snapshot)                                                                              |
-| Délai visuel des autres joueurs       | demi-RTT + retard d'interpolation                                                                                                                                              |
-| Extrapolation si le snapshot manque   | 6 ticks (100 ms) puis arrêt de l'image                                                                                                                                         |
-| Lissage visuel d'une correction (soi) | décroissance exponentielle, τ = 40 ms + 2 ms par unité d'écart (une grosse correction glisse au lieu de sauter) ; écart limité à 4 cellules, le surplus est appliqué d'un coup |
-| Lissage des autres joueurs            | zone morte de 4 unités, τ = 40 ms, saut direct au-delà de 96 unités                                                                                                            |
-| Historique de prédiction              | 128 ticks (2,1 s)                                                                                                                                                              |
-| Ping applicatif                       | 6 × à 80 ms, puis toutes les 2 s ; au plus 10 par seconde accepté                                                                                                              |
-| Heartbeat WebSocket                   | ping toutes les 10 s, déconnexion après 3 pings sans réponse (`HEARTBEAT_MS`)                                                                                                  |
-| Reconnexion                           | place gardée 20 s (`RECONNECT_GRACE_MS`)                                                                                                                                       |
-| Inactivité                            | 60 s sans entrée en manche → spectateur ; 10 min en salon d'attente → déconnexion                                                                                              |
-| Lancement automatique                 | salon public : 20 s après que 2 joueurs ou plus sont prêts                                                                                                                     |
-| Podium                                | 12 s (`MATCH_END_MS`) puis retour au salon                                                                                                                                     |
-| Débit d'entrées toléré                | 70 paquets/s par client, le surplus est ignoré                                                                                                                                 |
-| Messages de contrôle                  | 20 par seconde par connexion (`CONTROL_PER_SEC`)                                                                                                                               |
-| Emotes                                | 1 par seconde et par joueur                                                                                                                                                    |
-| Taille maximale d'un message client   | 1 024 octets (`maxPayload` de `ws`, vérifié aussi par le décodeur)                                                                                                             |
-| Messages invalides                    | 20 → déconnexion (code 1008)                                                                                                                                                   |
-| Contre-pression                       | `bufferedAmount` > 64 Ko : snapshots sautés ; > 1 Mo : déconnexion                                                                                                             |
+| Quoi                                  | Valeur                                                                                                                                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Simulation                            | 60 Hz (16,667 ms), pas fixe                                                                                                                                                              |
+| Entrées client → serveur              | 1 paquet par image qui simule ≥ 1 tick (jusqu'à 3 si plusieurs ticks d'un coup), 4 entrées chacun                                                                                        |
+| Snapshots serveur → client            | 30 Hz par client (`SNAPSHOT_HZ` : 10, 12, 15, 20, 30 ou 60, les diviseurs de 60 ; toute autre valeur est ramenée à la plus proche), **décalés d'un tick d'un client à l'autre** du salon |
+| Marge visée de l'entrée               | 1 à 4 ticks (cible 2), avance client adaptative de 1 à 30 ticks                                                                                                                          |
+| Fenêtre d'entrées acceptées           | de `world.tick + 1` à `+ 24` ticks ; anneau de 64 entrées par joueur                                                                                                                     |
+| Compensation de latence               | historique de 16 ticks ; au plus 12 ticks (200 ms) remontés ; `rewind` = RTT + avance + interpolation                                                                                    |
+| Retard d'interpolation                | `max(100, 2 × 33 + 3 × gigue)` ms, borné à 300 ; glisse vers sa cible (+2 / −0,5 ms par snapshot)                                                                                        |
+| Délai visuel des autres joueurs       | demi-RTT + retard d'interpolation                                                                                                                                                        |
+| Extrapolation si le snapshot manque   | 6 ticks (100 ms) puis arrêt de l'image                                                                                                                                                   |
+| Lissage visuel d'une correction (soi) | décroissance exponentielle, τ = 40 ms + 2 ms par unité d'écart (une grosse correction glisse au lieu de sauter) ; écart limité à 4 cellules, le surplus est appliqué d'un coup           |
+| Lissage des autres joueurs            | zone morte de 4 unités, τ = 40 ms, saut direct au-delà de 96 unités                                                                                                                      |
+| Historique de prédiction              | 128 ticks (2,1 s)                                                                                                                                                                        |
+| Ping applicatif                       | 6 × à 80 ms, puis toutes les 2 s ; au plus 10 par seconde accepté                                                                                                                        |
+| Heartbeat WebSocket                   | ping toutes les 10 s, déconnexion après 3 pings sans réponse (`HEARTBEAT_MS`)                                                                                                            |
+| Connexion sans salon                  | fermée par le serveur après 60 s (code 1000, `no room`) ; le client ne se connecte qu'au moment de créer ou rejoindre (la liste publique est une requête HTTP)                           |
+| Socket muette (côté client)           | aucun pong depuis 6 s (hors reprise d'un onglet masqué) : socket fermée, reprise automatique                                                                                             |
+| Reconnexion                           | place gardée 20 s (`RECONNECT_GRACE_MS`)                                                                                                                                                 |
+| Inactivité                            | 60 s sans entrée en manche → spectateur ; 10 min en salon d'attente → déconnexion                                                                                                        |
+| Lancement automatique                 | salon public : 20 s après que 2 joueurs ou plus sont prêts                                                                                                                               |
+| Podium                                | 12 s (`MATCH_END_MS`) puis retour au salon                                                                                                                                               |
+| Débit d'entrées toléré                | 70 paquets/s par client, le surplus est ignoré                                                                                                                                           |
+| Messages de contrôle                  | 20 par seconde par connexion (`CONTROL_PER_SEC`)                                                                                                                                         |
+| Emotes                                | 1 toutes les 3 s par joueur (`EMOTE_COOLDOWN_MS`)                                                                                                                                        |
+| Taille maximale d'un message client   | 1 024 octets (vérifiés par le cœur du serveur et les décodeurs) ; 8 192 pour l'envoi d'un niveau (`maxPayload` de `ws`)                                                                  |
+| Messages invalides                    | 20 par minute et par connexion → déconnexion (code 1008)                                                                                                                                 |
+| Contre-pression                       | `bufferedAmount` > 64 Ko : snapshots sautés ; > 1 Mo : déconnexion                                                                                                                       |
 
 ## 5. Pertes, retards et blocages
 
@@ -321,17 +326,17 @@ Sans elle, il faudrait viser là où l'adversaire _sera_ : ce que le tireur voit
 
 1. Il conserve les positions (x, y, hauteur) de chaque joueur sur les **16 derniers ticks**.
 2. Chaque client annonce, dans le champ `rewind` de ses paquets, la durée qui sépare ses entrées de ce qu'il voit des autres : `RTT + (avance + durée d'une image) × 16,7 ms + retard d'interpolation`, en pas de 4 ms.
-3. Le serveur borne ce retard à **15 ticks (250 ms)**, le place dans les bits 14 et 15 du masque (par pas de 4 ticks) d'entrées du joueur et, pour chaque coup de mêlée ou tir instantané, teste les cibles à leur position d'il y a `rewind` ticks (`rewoundBox`).
+3. Le serveur borne ce retard à **12 ticks (200 ms)**, le place dans les bits 14 et 15 du masque (par pas de 4 ticks : 0, 4, 8 ou 12) d'entrées du joueur et, pour chaque coup de mêlée ou tir instantané, teste les cibles à leur position d'il y a `rewind` ticks (`rewoundBox`).
 4. L'aide à la visée (±8° vers la cible la plus proche dans le cône) est calculée avec les mêmes positions passées, pour tous les appareils.
 
-Les projectiles lents (boulettes, avions, roquettes, gomme) **ne sont pas compensés** : ils sont simulés sur le serveur et apparaissent chez les autres à leur place du moment. Une parade parfaite se juge elle aussi sur le serveur, au tick où le coup arrive (fenêtre de 100 ms après l'appui). Au-delà de 250 ms de retard annoncé, la compensation est partielle : un joueur très lent doit viser un peu devant.
+Les projectiles lents (boulettes, avions, roquettes, gomme) **ne sont pas compensés** : ils sont simulés sur le serveur et apparaissent chez les autres à leur place du moment. Une parade parfaite se juge elle aussi sur le serveur, au tick où le coup arrive (fenêtre de 100 ms après l'appui). Au-delà de 200 ms de retard annoncé, la compensation est partielle : un joueur très lent doit viser un peu devant.
 
-Le champ `rewind` ne vient que du client, mais il est borné, et ne peut servir qu'à tester des positions que le serveur a réellement eues : le pire qu'un tricheur obtienne est un coup contre une position vieille de 250 ms.
+Le champ `rewind` ne vient que du client, mais il est borné, et ne peut servir qu'à tester des positions que le serveur a réellement eues : le pire qu'un tricheur obtienne est un coup contre une position vieille de 200 ms.
 
 ## 8. Salons, spectateurs, reconnexion
 
 - **Jeton.** `joined` porte un jeton de 128 bits (hexadécimal). Le client le garde en `localStorage` avec l'heure de la dernière vie de la connexion.
-- **Reconnexion.** À la perte de la connexion, le joueur garde sa place **20 s** : son stickman reste immobile (entrées neutres) et le salon l'affiche « en reconnexion ». Si c'était l'hôte, le plus ancien joueur connecté le devient tout de suite. Le client rouvre une connexion et envoie `resume` avec le jeton (délais croissants de 0,4 à 2,5 s, jusqu'à 20 s) ; un rechargement de la page dans les 17 s tente la même chose. Le serveur répond par un nouveau `joined` complet (terrain courant compris). Un jeton déjà utilisé ou périmé donne `bad_token`, et les essais comptent dans la limite d'essais de code. Le délai écoulé : en salon d'attente ou entre deux manches, le joueur est retiré ; en manche, il est éliminé et retiré à la fin de la manche.
+- **Reconnexion.** À la perte de la connexion, le joueur garde sa place **20 s** : son stickman reste immobile (entrées neutres) et le salon l'affiche « en reconnexion ». Si c'était l'hôte, le plus ancien joueur connecté le devient tout de suite. Le client rouvre une connexion et envoie `resume` avec le jeton (délais croissants de 0,4 à 2,5 s, jusqu'à 20 s) ; un rechargement de la page dans les 17 s tente la même chose. Le serveur répond par un nouveau `joined` complet (terrain courant compris). Un jeton inconnu ou périmé donne `bad_token`, et les essais comptent dans la limite d'essais de code. Un jeton **valide** reprend la place même si le serveur croit encore l'ancienne connexion ouverte (une socket morte n'est vue qu'après 3 pings manqués, bien après les 20 s de grâce) : l'ancienne est fermée avec le code **4000** (`replaced`), et le client qui la reçoit ne se reconnecte pas. Côté client, une socket qui ne reçoit plus aucun pong depuis 6 s est fermée pour lancer la reprise, sans attendre le navigateur ; la première tentative attend 0,4 s, un refus autre que `bad_token` (limite de débit) est réessayé tant que la grâce dure. Le délai écoulé : en salon d'attente ou entre deux manches, le joueur est retiré ; en manche, il est éliminé et retiré à la fin de la manche.
 - **Spectateurs.** 4 au plus. Quiconque arrive pendant une partie est spectateur ; il reçoit les mêmes snapshots (sans bloc `own`, avec **toutes** les mines), accuse les événements fiables, et prend une place de joueur à la fin de la manche en cours s'il en reste une. Un joueur inactif depuis 60 s devient spectateur jusqu'à la fin de la partie.
 - **Changement de manche.** Le serveur envoie `round` avant le premier snapshot de la manche : le client vide ses tampons d'interpolation, charge la nouvelle arène et redémarre sa prédiction au premier snapshot reçu. `scores` suit chaque fin de manche, `results` la fin de partie, puis le salon rejoue l'arène d'entraînement.
 
@@ -413,7 +418,7 @@ Sans le lissage d'affichage des autres joueurs, la reprise après un blocage TCP
 
 ## 11. Limites connues
 
-- **Compensation de latence plafonnée à 250 ms** : au-delà (RTT > ≈ 100 ms avec 100 ms d'interpolation), le tireur doit viser un peu devant. Les projectiles lents ne sont pas compensés.
+- **Compensation de latence plafonnée à 200 ms** : au-delà (RTT > ≈ 60 ms avec 100 ms d'interpolation), le tireur doit viser un peu devant. Les projectiles lents ne sont pas compensés.
 - **Pas de collision entre joueurs** : voir `DECISIONS.md` (D4). Elle rendrait la prédiction dépendante des autres joueurs.
 - **Corrections après blocage TCP** : l'écart maximal observé est de ≈ 20 unités à 2 % de pertes (jusqu'à ≈ 60 à 5 %). Reprendre les entrées arrivées en retard pour ré-simuler un seul joueur n'est plus possible depuis que le combat lie les joueurs entre eux.
 - **Salles d'attente à 60 Hz** : l'optimisation « 30 Hz, 15 snapshots/s » de §2.5 reste repoussée : tous les salons coûtent la même chose, ce qui est le pire cas mesuré.

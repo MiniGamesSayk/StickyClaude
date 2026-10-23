@@ -147,7 +147,7 @@ Suite : la compensation de latence est faite (D26) ; l'enregistrement des entré
 ### D26. Historique de 250 ms au lieu de 200, et `rewind` = RTT + avance + interpolation
 
 - **Contexte.** L'analyse (§2.4) remonte au « tick de l'entrée moins le retard d'interpolation ». Mais les entrées sont étiquetées _dans le futur_ (D1) : ce que le tireur voit date de `RTT/2 + interpolation` avant l'instant où il tire, et son entrée s'exécute `RTT/2 + avance` après. Il faut donc remonter du tick d'exécution de `RTT + avance + interpolation`, soit jusqu'à 230 ms pour 100 ms de RTT.
-- **Choix.** Le serveur garde 16 ticks de positions (`HISTORY_TICKS`) et remonte au plus de 15 ticks (250 ms, `LAG_COMP_MS`). Le client annonce la durée totale (champ `rewind` des paquets d'entrées, pas de 4 ms), bornée par le serveur ; elle sert à la mêlée, aux tirs instantanés et à l'aide à la visée (±8°, identique pour tous les appareils). Les projectiles lents ne sont pas compensés (§2.4). Au-delà de 250 ms, la compensation est partielle.
+- **Choix.** Le serveur garde 16 ticks de positions (`HISTORY_TICKS`) et remonte au plus de 15 ticks (250 ms, `LAG_COMP_MS`). **Corrigé par D60 puis D77 :** depuis que le retard tient sur 2 bits par pas de 4 ticks, le plafond réel est de **12 ticks (200 ms)**, et `LAG_COMP_TICKS` / `LAG_COMP_MS` le disent. Le client annonce la durée totale (champ `rewind` des paquets d'entrées, pas de 4 ms), bornée par le serveur ; elle sert à la mêlée, aux tirs instantanés et à l'aide à la visée (±8°, identique pour tous les appareils). Les projectiles lents ne sont pas compensés (§2.4). Au-delà de 250 ms, la compensation est partielle.
 - **Alternative.** 200 ms comme dans l'analyse : le tireur au-dessus de ≈ 70 ms de RTT n'aurait déjà plus été compensé en entier.
 
 ### D27. Les coups d'un tick sont mis en file, puis appliqués ensemble
@@ -156,10 +156,10 @@ Suite : la compensation de latence est faite (D26) ; l'enregistrement des entré
 - **Choix.** `resolveMelee` et `resolveActions` détectent d'abord tous les coups du tick (`queueHit`), puis `applyHits` les applique dans l'ordre de détection : deux coups simultanés se touchent tous les deux. Un coup détecté ne dépend pas de l'état que ceux du même tick vont produire. La parade (70 % de dégâts en moins de face, parfaite dans les 6 premiers ticks) se juge à l'application.
 - **Alternative.** Appliquer chaque coup tout de suite : plus simple, mais l'emplacement 0 aurait un avantage systématique.
 
-### D28. Bloc « état exact » de 69 octets
+### D28. Bloc « état exact » de 69 octets (74 aujourd'hui)
 
 - **Contexte.** D2 : 28 octets suffisaient pour le mouvement. La rejouabilité du combat demande aussi les compteurs d'attaque, de charge, de parade, d'étourdissement, les munitions, le grappin, le curseur fantôme.
-- **Choix.** 41 champs, 69 octets, flottants 32 bits pour les positions (`OWN_FIELDS`). C'est ≈ 2 Ko/s par client ; le snapshot de 8 joueurs en combat fait ≈ 280 octets et le total mesuré 8,7 Ko/s (budget 20). Tout le bloc est comparé à la prédiction (D40) : une divergence sur un seul champ restaure l'état et rejoue.
+- **Choix.** 41 champs, 69 octets à l'époque (46 champs et **74 octets** aujourd'hui, avec la colle, la direction du dash, l'attente de coup…), flottants 32 bits pour les positions (`OWN_FIELDS`). C'est ≈ 2 Ko/s par client ; le snapshot de 8 joueurs en combat fait ≈ 280 octets et le total mesuré 8,7 Ko/s (budget 20). Tout le bloc est comparé à la prédiction (D40) : une divergence sur un seul champ restaure l'état et rejoue.
 - **Alternative.** Ne restaurer que le mouvement et « laisser rattraper » le combat : une parade ou un coup chargé en cours se décalerait d'un tick à chaque correction.
 
 ### D29. Événements fiables génériques
@@ -220,7 +220,7 @@ Suite : la compensation de latence est faite (D26) ; l'enregistrement des entré
 
 ### D39. Sécurité et limites de la phase 2
 
-- **Choix.** Messages JSON : 20 par seconde et par connexion (au-delà : comptés comme invalides), 1 Ko, schémas stricts (clés inconnues refusées) ; 20 messages invalides ferment la connexion (1008). Entrées : 70 paquets/s, étiquette bornée à 24 ticks d'avance, masque filtré. Pseudos : NFKC, caractères de contrôle, de largeur nulle et d'inversion retirés, 2 à 16 caractères, filtre de mots (FR et EN, `badwords.ts`). Création de salon (3/min/IP), essais de code (10/min/IP, les échecs seulement), emotes (1/s), connexions par IP (8), origine du WebSocket vérifiée en production. L'arène d'attente à la création et le réglage des constantes de mouvement sont réservés à `DEV_TOOLS=1`.
+- **Choix.** Messages JSON : 20 par seconde et par connexion (au-delà : comptés comme invalides), 1 Ko, schémas stricts (clés inconnues refusées) ; 20 messages invalides **par minute** ferment la connexion (1008, voir D77). Entrées : 70 paquets/s, étiquette bornée à 24 ticks d'avance, masque filtré. Pseudos : NFKC, caractères de contrôle, de largeur nulle et d'inversion retirés, 2 à 16 caractères, filtre de mots (FR et EN, `badwords.ts`). Création de salon (3/min/IP), essais de code (10/min/IP, les échecs seulement), emotes (1 toutes les 3 s, voir D69), connexions par IP (8), origine du WebSocket vérifiée en production. L'arène d'attente à la création et le réglage des constantes de mouvement sont réservés à `DEV_TOOLS=1`.
 - **Alternative.** Aucune pour ces valeurs : ce sont celles de §2.9, rendues configurables par variables d'environnement.
 
 ### D40. Le client prédit dans un monde non autoritaire et compare tout, phase comprise
@@ -489,3 +489,50 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - Trois nouveaux types de case, donc dans la grille (`l` lave, `s` scie, `t` trampoline : le schéma et `parseGrid` les acceptent) : rien de nouveau dans les snapshots ni les objets.
 - **Lave** : traversable, `lavaDamage` 40 toutes les 24 ticks et un fort rebond vertical (cause de mort `LAVA`). **Scie** : traversable, `sawDamage` 20 toutes les 20 ticks, recul latéral qui éloigne du centre de la scie (cause `SAW`) ; ses dents changent à chaque variante de dessin (elle tourne). Les deux s'ajoutent à `stepHazards` ; la lave l'emporte sur la scie, qui l'emporte sur l'encre. Les marques du fantôme-crayon gardent la priorité d'attribution.
 - **Trampoline** : case **pleine** (`isBlocking`), qui renvoie le joueur en l'air quand il retombe dessus : vitesse = chute × 0,95, entre 620 et 820 u/s (bien plus haut qu'un saut, 395), événement `BOUNCE` (son, anneau rose). Maintenir ↓ à l'arrivée annule le rebond. L'analyse d'accessibilité le traite comme un sol ; elle refuse un départ de joueur dans la lave ou une scie, et les points d'arme au-dessus d'un danger sont écartés.
+
+### D77. Audit qualité d'octobre 2026 : robustesse, netcode client, entrées, simulation
+
+Correctifs de l'audit du commit `3f66483` ; chaque point a son test. Les choix qui ne vont pas de soi :
+
+**Serveur.**
+
+- **Une exception ne tue plus le processus.** `room.tick`, `onMessage` et `onClose` sont gardés : un salon qui lève est fermé (ses participants reçoivent 1011) et journalisé (`level: error`, code du salon, pile), une connexion dont le message fait lever est fermée en 1011, les autres salons continuent. `writeRecording` journalise ses erreurs (disque plein) au lieu de les lever. Le compteur `errors` est dans `/metrics`. _Alternative écartée_ : laisser `uncaughtException` quitter et compter sur le redémarrage de Docker (tous les salons coupés pour un bug d'un seul).
+- **Le dernier joueur connecté n'est jamais rétrogradé** (`connectedPlayers <= 1`, et non `playerCount`, qui compte aussi les absents en reconnexion) : le salon ne se fige plus. Si la liste des spectateurs est pleine, l'inactif est retiré (`left: idle`) au lieu de dépasser `MAX_SPECTATORS`. Avec un seul joueur actif et un inactif, l'inactif devient spectateur et la manche se termine par forfait.
+- **La reprise par jeton évince l'ancienne connexion** (fermée en **4000**, `replaced`). Le jeton (128 bits) authentifie déjà ; sans cela une socket morte (30 à 40 s de détection) bloquait la reprise (grâce : 20 s). Le client ne se reconnecte pas sur 4000, sinon deux onglets avec la même session s'évinceraient à tour de rôle.
+- **Connexion sans salon : fermée au bout de 60 s** (`ORPHAN_CONN_MS`, code 1000), contrôlée une fois par seconde. Le flux normal n'est pas touché : le client ne se connecte qu'à la création ou à l'entrée dans un salon (la liste publique est `GET /api/rooms`). Une socket restée ouverte après `left` comptait dans `MAX_CONNECTIONS` et `MAX_CONN_PER_IP`.
+- **Messages invalides** : fenêtre fixe d'une minute (20 maximum), comme les autres fenêtres de la connexion, au lieu d'un compteur à vie. Une connexion en cours de fermeture (`closing`) n'est plus écoutée et n'est refermée qu'une fois (une minuterie de 2 s par appel auparavant).
+- **Diffusion du salon** : `setReady`, `setLook`, `setSettings` et `setTeams` se contentent de marquer le salon ; le tick envoie dès que 500 ms se sont écoulées depuis le dernier envoi (un clic isolé part donc au tick suivant, sans attendre 500 ms). Aucun flush immédiat n'a été gardé pour le début du décompte : il est détecté dans le même tick que le clic qui le provoque, donc diffusé avec lui. Arrivées, départs, niveaux et débuts de manche restent immédiats (rares). Un client qui bascule « prêt » 20 fois par seconde ne provoque plus que 2 diffusions par seconde. Les réglages, « prêt », l'apparence, l'expulsion, le lancement et les niveaux comptent comme activité (un hôte qui règle son salon n'est plus expulsé pour inactivité).
+- **« Salon de spectateurs seuls fermé comme vide » : voulu, non modifié.** `housekeeping` teste `playerCount === 0` car un salon sans joueur ne tourne plus (`GameServer.tick` le saute, et `onJoin` le refuse hors salle d'attente, voir le commentaire « figé en attendant sa fermeture »). Utiliser `isEmpty` laisserait ces salons figés pour toujours (fuite contre `MAX_ROOMS`) ; ils sont fermés après `ROOM_IDLE_TTL_SEC` et les spectateurs reçoivent `left: closed`. Test de non-régression ajouté.
+
+**Client réseau.**
+
+- **Socket muette** : sans pong depuis 6 s (3 pings de 2 s), le client abandonne la socket et prévient tout de suite (`onClosed(4408)`), sans attendre `onclose` du navigateur. Le silence ne compte pas après une image séparée de la précédente de plus d'une seconde (onglet masqué : aucun ping n'est parti).
+- **Rattrapage** : après une longue interruption, la prédiction repart de l'état du dernier snapshot reçu (`pred.start`) et rejoue l'écart, borné à 120 ticks, avec l'entrée courante ; avancer l'horloge sans simuler laissait le joueur figé. Un snapshot plus vieux que l'historique de 128 ticks (RTT ≥ 2 s) resynchronise au lieu d'être ignoré, et un trou dans l'historique à rejouer fait ignorer la correction.
+- **Latence lissée partout** : l'interpolation des autres joueurs utilise `owdUsed` (comme la prédiction), y compris pour un spectateur, qui n'avait pas de latence lissée du tout.
+- **`send` sans allocation** : les paquets partent par `subarray` d'un tampon réutilisé. La spécification de `WebSocket.send` consomme les octets à l'appel ; `LagTransport` copie lui-même.
+- **Désynchro / version** : 30 snapshots illisibles de suite (`DecodeError`) affichent le message de rechargement (`err.version`) et ramènent à l'accueil ; un `joined` d'une autre version du protocole affiche `msg.new_version`. Le serveur écrit 0 pour un flottant non fini du bloc `own` plutôt que de rendre tous les snapshots illisibles.
+
+**Entrées et interface.**
+
+- **Qualité automatique** : le seuil de 50 FPS devient `min(50, 0,9 × plafond)` quand le joueur plafonne ses FPS ; 30 FPS sous un plafond de 30 ne baisse plus la qualité.
+- **Salon d'attente plein** : le bouton Rejoindre est désactivé (on n'y serait que spectateur jusqu'à la fin d'une partie) ; une partie en cours reste regardable même pleine.
+- **Clic relâché hors du canvas (C2) : déjà géré**, non modifié : le relâchement est traité avant le filtre sur le canvas (voir le commentaire de `onPointer`). Test de non-régression ajouté.
+- **Manette** : un appui de navigation est accepté tout de suite ; le délai de 350 ms ne vaut que pour la première répétition d'un maintien (puis 140 ms).
+- **Terrain** : au changement d'arène sans animation, le calque reste masqué jusqu'à ce que les morceaux soient dessinés (1,5 s au plus). Les traînées de projectiles sont émises à 60 par seconde au plus, quel que soit le nombre d'images, pour ne plus remplir le pool de 360 particules.
+
+**Simulation.**
+
+- **Un coup de mêlée ne touche un objet qu'une fois** : `Obj.hitBy` (un bit par emplacement), remis à zéro pour ce joueur au début de chaque coup (`clearSwingHits`). Les identifiants de coup par joueur proposés par l'audit n'étaient pas nécessaires : le masque suffit et ne grossit pas l'état du joueur.
+- **Gomme et boomerang** : `Obj.hitProj` (identifiant du dernier projectile qui a touché l'objet) ; un objet plus proche que le joueur le protège pour le tick où il est touché. Le projectile continue ensuite sa route (il traverse toujours : seul le coup multiple et le joueur « derrière » étaient le défaut).
+- **Boulette-ball** : la boule est créée avant les props (une arène à 40 caisses saturait les 32 objets), et la manche se termine à l'heure même sans boule. **Score à 3 ou 4 équipes : voulu.** Les deux cages définissent deux camps (équipes de parité égale ensemble : 0 et 2 contre 1 et 3 ; en chacun pour soi, les joueurs alternent) ; un but rapporte la manche à chaque équipe du camp. Test de documentation ajouté.
+- **Patate** : le porteur est tué avec `killer = -1` (le crédit va à son dernier attaquant récent, s'il y en a un, comme pour une chute) ; le souffle reste attribué au porteur.
+- **Départ d'un joueur** (`removePlayer`) : ses projectiles s'arrêtent ; ses mines et la dernière touche de la boule n'ont plus de propriétaire. Un futur occupant du slot n'en hérite pas.
+- **Empreinte (`hashWorld`)** : ajout des règles, équipes, camps, participation, vote, mémoire de coup (joueurs, objets, projectiles), flaques, traits, points d'apparition d'armes, historique de position, propriétaires et minuteries d'objets et de projectiles. Les statistiques d'affichage restent exclues. Les empreintes enregistrées avant ce commit ne sont plus comparables (les enregistrements restent rejouables : seul le hash final change).
+- **Événements perdus** : `events.dropped` compte les événements au-delà de 128 par pas ; `/metrics` expose `eventsDropped`.
+- **Schéma d'arène** : cases et origines de zones de 0 à `GRID − 1`, zone contenue dans la grille, période d'une plateforme mobile d'au moins 1 s. Les 10 arènes livrées passent.
+
+**Documentation et configuration.**
+
+- **Compensation de latence : alignée sur 12 ticks (200 ms)**, pas de passage de `REWIND_STEP` à 5 : cela changerait le sens des bits 14-15 des enregistrements (format `Recording`) pour gagner 50 ms que les projectiles lents, non compensés, ne justifient pas. `LAG_COMP_TICKS` vaut 12 (c'était déjà le plafond réel).
+- **`SNAPSHOT_HZ`** est ramené à la plus proche des valeurs 10, 12, 15, 20, 30, 60 (diviseurs de 60) : la fréquence annoncée au client est toujours la vraie.
+- Le test de bout en bout `2 onglets` cherchait « Rejoindre » sans tenir compte d'un salon public listé en dessous (`.first()`).

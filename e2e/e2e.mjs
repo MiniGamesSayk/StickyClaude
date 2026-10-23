@@ -435,7 +435,7 @@ await step('partie à 2 onglets : salon → combat → podium', async () => {
   await pageB.goto(`${base}/?salon=${code}`);
   await ready(pageB);
   await pageB.getByLabel('Ton pseudo').fill('Bob');
-  await pageB.getByRole('button', { name: 'Rejoindre', exact: true }).click();
+  await pageB.getByRole('button', { name: 'Rejoindre', exact: true }).first().click();
   await pageB.locator('.panel .code').waitFor();
   await pageA.getByText('Bob').first().waitFor();
   await pageA.waitForTimeout(1500);
