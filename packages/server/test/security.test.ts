@@ -168,7 +168,8 @@ describe('abus et inondation', () => {
   it('plus de 20 messages de contrôle par seconde : ignorés, puis déconnexion', () => {
     const { h, a } = twoPlayers();
     for (let i = 0; i < 60; i++) h.send(a, { t: 'ready', ready: i % 2 === 0 });
-    expect(h.server.metrics.controlLimited).toBeGreaterThan(30);
+    // la connexion coupée n'est plus écoutée : seuls les 20 excédentaires avant la coupure comptent
+    expect(h.server.metrics.controlLimited).toBeGreaterThanOrEqual(20);
     expect(a.closed?.code).toBe(1008);
   });
 

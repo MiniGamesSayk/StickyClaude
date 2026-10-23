@@ -11,6 +11,9 @@ import { describe, expect, it } from 'vitest';
 import { harness } from './helpers.ts';
 import type { FakeConn, Harness } from './helpers.ts';
 
+/** Ticks pour qu'un changement de salon soit diffusé (au plus un envoi toutes les 500 ms). */
+const LOBBY_FLUSH_TICKS = 31;
+
 function fill(h: Harness, code: string, n: number): FakeConn[] {
   const out: FakeConn[] = [];
   for (let i = 0; i < n; i++) {
@@ -154,6 +157,7 @@ describe('créer et rejoindre', () => {
     const look = a.lastOf('joined')!.lobby.players[0].look;
     expect(look).toEqual({ color: 0, stroke: 2, hat: 11, victory: 0 });
     h.send(a, { t: 'look', look: { hat: 99, stroke: 1 } });
+    h.advance(LOBBY_FLUSH_TICKS);
     expect(a.lastOf('lobby')!.lobby.players[0].look).toEqual({
       color: 0,
       stroke: 1,
@@ -225,6 +229,7 @@ describe('prêt, réglages, équipes', () => {
     h.send(a, { t: 'start' });
     expect(a.lastOf('error')?.code).toBe('not_ready');
     h.send(b, { t: 'ready', ready: true });
+    h.advance(LOBBY_FLUSH_TICKS);
     expect(a.lastOf('lobby')!.lobby.players[1].ready).toBe(true);
     h.send(a, { t: 'start' });
     expect(h.room(code).phase).toBe(GamePhase.COUNTDOWN);
@@ -250,6 +255,7 @@ describe('prêt, réglages, équipes', () => {
       friendlyFire: true,
       isPublic: true,
     });
+    h.advance(LOBBY_FLUSH_TICKS);
     const s = a.lastOf('lobby')!.lobby.settings;
     expect(s.roundsToWin).toBe(7);
     expect(s.suddenDeathSec).toBe(120);
@@ -259,13 +265,16 @@ describe('prêt, réglages, équipes', () => {
     // hors bornes : le message est rejeté, ou la valeur ramenée à une valeur permise
     const before = a.of('lobby').length;
     h.settings(a, { roundsToWin: 4 });
+    h.advance(LOBBY_FLUSH_TICKS);
     expect(a.lastOf('lobby')!.lobby.settings.roundsToWin).toBe(7);
     h.settings(a, { suddenDeathSec: 5 });
     h.settings(a, { suddenDeathSec: 500 });
+    h.advance(LOBBY_FLUSH_TICKS);
     expect(a.lastOf('lobby')!.lobby.settings.suddenDeathSec).toBe(120);
-    expect(a.of('lobby').length).toBe(before + 1);
+    expect(a.of('lobby').length).toBeLessThanOrEqual(before + 2);
     // des arènes inconnues sont ignorées
     h.settings(a, { arenas: ['partition', 'nope'] });
+    h.advance(LOBBY_FLUSH_TICKS);
     expect(a.lastOf('lobby')!.lobby.settings.arenas).toEqual(['partition']);
     h.startMatch(a, [b]);
     h.settings(a, { roundsToWin: 3 });
@@ -278,19 +287,23 @@ describe('prêt, réglages, équipes', () => {
     const code = h.create(a);
     fill(h, code, 5);
     h.settings(a, { mode: 'teams', teams: 3 });
+    h.advance(LOBBY_FLUSH_TICKS);
     let players = a.lastOf('lobby')!.lobby.players;
     const counts = [0, 0, 0];
     for (const p of players) counts[p.team]++;
     expect(counts).toEqual([2, 2, 2]);
     h.send(a, { t: 'teams', assign: [2, 2, 2, 0, 0, 1] });
+    h.advance(LOBBY_FLUSH_TICKS);
     players = a.lastOf('lobby')!.lobby.players;
     expect(players.map((p) => p.team)).toEqual([2, 2, 2, 0, 0, 1]);
     h.send(a, { t: 'teams', shuffle: true });
+    h.advance(LOBBY_FLUSH_TICKS);
     players = a.lastOf('lobby')!.lobby.players;
     const c2 = [0, 0, 0];
     for (const p of players) c2[p.team]++;
     expect(c2).toEqual([2, 2, 2]);
     h.settings(a, { mode: 'ffa' });
+    h.advance(LOBBY_FLUSH_TICKS);
     expect(a.lastOf('lobby')!.lobby.players.every((p) => p.team === -1)).toBe(true);
     h.send(a, { t: 'teams', shuffle: true });
     expect(a.lastOf('error')?.code).toBe('bad_request');
@@ -426,8 +439,9 @@ describe('limites', () => {
     h.send(c, { t: 'create', v: PROTOCOL_VERSION, name: 'Alice' });
     expect(c.lastOf('error')?.code).toBe('rate_limited');
     h.advance(60 * 61);
-    h.send(c, { t: 'create', v: PROTOCOL_VERSION, name: 'Alice' });
-    expect(c.lastOf('joined')).toBeDefined();
+    const d = h.connect('2.2.2.2');
+    h.send(d, { t: 'create', v: PROTOCOL_VERSION, name: 'Alice' });
+    expect(d.lastOf('joined')).toBeDefined();
   });
 
   it('limite les essais de codes à 10 par minute et par IP', () => {

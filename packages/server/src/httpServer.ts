@@ -26,6 +26,7 @@ const HEARTBEAT_MAX_MISSED = 3;
 class WsConnection implements Connection {
   rttMs = 0;
   userId?: string;
+  private closing = false;
   constructor(
     readonly id: number,
     readonly ip: string,
@@ -42,6 +43,8 @@ class WsConnection implements Connection {
   }
 
   close(code: number, reason: string): void {
+    if (this.closing) return;
+    this.closing = true;
     this.ws.close(code, reason);
     // Un client bloqué ne répond pas à la fermeture : on coupe après un court délai.
     setTimeout(() => this.ws.terminate(), 2000).unref();
@@ -86,12 +89,17 @@ function json(
   res.end(text);
 }
 
-function writeRecording(cfg: ServerConfig, room: Room): void {
+/** Écrit l'enregistrement d'un salon fermé ; une erreur (disque plein…) est journalisée, jamais levée. */
+export function writeRecording(cfg: ServerConfig, room: Room, log: LogFn = () => {}): void {
   const rec = room.recording;
   if (!rec || cfg.recordDir === '' || room.world.tick === 0) return;
-  mkdirSync(cfg.recordDir, { recursive: true });
-  const file = join(cfg.recordDir, `room-${room.code}-${Date.now()}.json`);
-  writeFileSync(file, JSON.stringify(rec.toRecording(room.world.tick, room.stateHash())));
+  try {
+    mkdirSync(cfg.recordDir, { recursive: true });
+    const file = join(cfg.recordDir, `room-${room.code}-${Date.now()}.json`);
+    writeFileSync(file, JSON.stringify(rec.toRecording(room.world.tick, room.stateHash())));
+  } catch (e) {
+    log({ level: 'error', msg: 'recording failed', room: room.code, err: String(e) });
+  }
 }
 
 export function startServer(cfg: ServerConfig, log: LogFn = () => {}): Promise<RunningServer> {
@@ -102,7 +110,8 @@ export function startServer(cfg: ServerConfig, log: LogFn = () => {}): Promise<R
   const site = new StaticSite(cfg.staticDir, !cfg.production);
   const accounts = createAccountService(cfg, log);
   const game = new GameServer(cfg, {
-    onRoomClosed: (room) => writeRecording(cfg, room),
+    onRoomClosed: (room) => writeRecording(cfg, room, log),
+    log,
     onMatchStats: accounts ? (id, add, max) => accounts.report(id, add, max) : undefined,
   });
   let warnedForwarded = false;
@@ -253,7 +262,7 @@ export function startServer(cfg: ServerConfig, log: LogFn = () => {}): Promise<R
       clearInterval(heartbeat);
       loop.stop();
       for (const ws of wss.clients) ws.close(1001, 'server stopping');
-      for (const room of game.rooms.values()) writeRecording(cfg, room);
+      for (const room of game.rooms.values()) writeRecording(cfg, room, log);
       game.stop();
       wss.close();
       server.closeAllConnections();

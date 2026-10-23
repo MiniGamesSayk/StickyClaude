@@ -64,6 +64,8 @@ export class Metrics {
   reconnects = 0;
   emotesLimited = 0;
   controlLimited = 0;
+  /** Exceptions interceptées (salon fermé, connexion coupée en 1011). */
+  errors = 0;
   private readonly loop: IntervalHistogram = monitorEventLoopDelay({
     resolution: LOOP_RESOLUTION_MS,
   });
@@ -118,6 +120,7 @@ export class Metrics {
       reconnects: this.reconnects,
       emotesLimited: this.emotesLimited,
       controlLimited: this.controlLimited,
+      errors: this.errors,
       heapUsedMB: round(mem.heapUsed / 1048576),
       rssMB: round(mem.rss / 1048576),
       eventLoopDelayMs: {

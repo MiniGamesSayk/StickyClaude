@@ -29,6 +29,7 @@ import { ClientState } from './client.ts';
 import type { Member } from './client.ts';
 import type { ServerConfig } from './config.ts';
 import type { Connection } from './connection.ts';
+import type { LogFn } from './logger.ts';
 import { Metrics } from './metrics.ts';
 import { sanitizeName } from './names.ts';
 import { RateLimiter } from './rateLimit.ts';
@@ -36,7 +37,15 @@ import { RoomRecorder } from './recorder.ts';
 import { Room } from './room.ts';
 import type { RoomIO } from './room.ts';
 
+/** Messages invalides tolérés par fenêtre d'une minute avant de couper la connexion (1008). */
 const MAX_INVALID = 20;
+const INVALID_WINDOW_MS = 60_000;
+/** Une connexion restée sans salon plus longtemps que cela est fermée (elle compte dans les plafonds). */
+export const ORPHAN_CONN_MS = 60_000;
+/** Code de fermeture WebSocket « Internal Error » : exception côté serveur. */
+const CLOSE_INTERNAL_ERROR = 1011;
+/** Code (applicatif) envoyé à l'ancienne socket d'un joueur qui reprend sa place depuis une autre. */
+const CLOSE_REPLACED = 4000;
 const INPUT_PACKETS_PER_SEC = 70;
 const PINGS_PER_SEC = 10;
 
@@ -46,6 +55,8 @@ export interface GameServerOptions {
   onRoomClosed?: (room: Room) => void;
   /** Statistiques de fin de partie d'un compte connecté (voir `account.ts`). */
   onMatchStats?: (userId: string, add: Record<string, number>, max: Record<string, number>) => void;
+  /** Journal des erreurs inattendues (salon fermé, connexion coupée). */
+  log?: LogFn;
 }
 
 /**
@@ -63,6 +74,7 @@ export class GameServer implements RoomIO {
   private readonly createLimiter: RateLimiter;
   private readonly codeLimiter: RateLimiter;
   private readonly now: () => number;
+  private readonly log: LogFn;
   private readonly pong = new Uint8Array(16);
   private readonly pkt = createInputPacket();
   private lastTickAt = 0;
@@ -76,6 +88,7 @@ export class GameServer implements RoomIO {
     this.createLimiter = new RateLimiter(config.createPerMin, 60_000);
     this.codeLimiter = new RateLimiter(config.codeTriesPerMin, 60_000);
     this.now = opts.now ?? ((): number => performance.now());
+    this.log = opts.log ?? ((): void => {});
     this.snapshotInterval = Math.max(1, Math.round(config.tickHz / config.snapshotHz));
     this.lastTickAt = this.now();
   }
@@ -99,7 +112,9 @@ export class GameServer implements RoomIO {
     const perIp = this.ipCounts.get(conn.ip) ?? 0;
     if (perIp >= this.config.maxConnPerIp) return false;
     this.ipCounts.set(conn.ip, perIp + 1);
-    this.clients.set(conn, new ClientState(conn));
+    const c = new ClientState(conn);
+    c.orphanSince = this.now();
+    this.clients.set(conn, c);
     return true;
   }
 
@@ -109,8 +124,12 @@ export class GameServer implements RoomIO {
     const m = c.member;
     if (m) {
       c.member = null;
-      m.room.onDisconnect(m, this.now());
-      this.maybeCloseRoom(m.room);
+      try {
+        m.room.onDisconnect(m, this.now());
+        this.maybeCloseRoom(m.room);
+      } catch (e) {
+        this.failRoom(m.room, e);
+      }
     }
     this.clients.delete(conn);
     const n = (this.ipCounts.get(conn.ip) ?? 1) - 1;
@@ -120,7 +139,23 @@ export class GameServer implements RoomIO {
 
   onMessage(conn: Connection, data: Uint8Array | string, isBinary: boolean): void {
     const c = this.clients.get(conn);
-    if (!c) return;
+    if (!c || c.closing) return;
+    try {
+      this.handleMessage(c, data, isBinary);
+    } catch (e) {
+      // Un message qui fait lever le serveur coupe sa connexion, pas le process ni les autres salons.
+      this.metrics.errors++;
+      this.log({
+        level: 'error',
+        msg: 'message handler failed',
+        room: c.room?.code,
+        err: e instanceof Error ? (e.stack ?? e.message) : String(e),
+      });
+      this.closeConn(c, CLOSE_INTERNAL_ERROR, 'internal error');
+    }
+  }
+
+  private handleMessage(c: ClientState, data: Uint8Array | string, isBinary: boolean): void {
     const size = typeof data === 'string' ? data.length : data.byteLength;
     this.metrics.bytesIn += size;
     // Le plafond est aussi fixé par `ws` (maxPayload) ; on le vérifie ici pour les autres transports.
@@ -436,9 +471,17 @@ export class GameServer implements RoomIO {
     if (this.codeLimiter.blocked(c.conn.ip, now)) return this.error(c, 'rate_limited');
     const room = this.rooms.get(msg.code.toUpperCase());
     const m = room?.findByToken(msg.token) ?? null;
-    if (!room || !m || m.client || m.leaving) {
+    if (!room || !m || m.leaving) {
       if (!this.codeLimiter.hit(c.conn.ip, now)) return this.error(c, 'rate_limited');
       return this.error(c, 'bad_token');
+    }
+    // Le serveur ne voit une socket morte qu'au bout de 3 pings manqués, bien après la grâce de
+    // reconnexion : le jeton (128 bits) authentifie à lui seul, l'ancienne connexion est évincée.
+    const old = m.client;
+    if (old) {
+      old.member = null;
+      m.client = null;
+      this.closeConn(old, CLOSE_REPLACED, 'replaced');
     }
     this.metrics.reconnects++;
     room.resume(m, c, now);
@@ -458,6 +501,30 @@ export class GameServer implements RoomIO {
 
   private maybeCloseRoom(room: Room): void {
     if (room.isEmpty && this.config.roomIdleTtlSec === 0) this.closeRoom(room);
+  }
+
+  /** Une exception dans un salon : il est fermé (1011) pour tous ses participants, les autres continuent. */
+  private failRoom(room: Room, e: unknown): void {
+    this.metrics.errors++;
+    this.log({
+      level: 'error',
+      msg: 'room failed',
+      room: room.code,
+      err: e instanceof Error ? (e.stack ?? e.message) : String(e),
+    });
+    this.rooms.delete(room.code);
+    for (const m of [...room.slots, ...room.spectators]) {
+      if (!m?.client) continue;
+      const c = m.client;
+      c.member = null;
+      m.client = null;
+      this.closeConn(c, CLOSE_INTERNAL_ERROR, 'internal error');
+    }
+    try {
+      this.opts.onRoomClosed?.(room);
+    } catch (e2) {
+      this.log({ level: 'error', msg: 'room close hook failed', room: room.code, err: String(e2) });
+    }
   }
 
   private closeRoom(room: Room): void {
@@ -489,7 +556,11 @@ export class GameServer implements RoomIO {
     this.tickCount++;
     for (const room of this.rooms.values()) {
       if (room.playerCount === 0) continue;
-      room.tick(nowMs);
+      try {
+        room.tick(nowMs);
+      } catch (e) {
+        this.failRoom(room, e);
+      }
     }
     if (this.tickCount % this.config.tickHz === 0) this.housekeeping(nowMs);
     this.metrics.tickMs.add(performance.now() - t0);
@@ -502,6 +573,14 @@ export class GameServer implements RoomIO {
     for (const room of this.rooms.values()) {
       if (room.playerCount === 0 && room.emptySince === null) room.emptySince = now;
       if (room.emptySince !== null && now - room.emptySince >= ttl) this.closeRoom(room);
+    }
+    // Une socket sans salon compte dans MAX_CONNECTIONS et MAX_CONN_PER_IP : on ne la garde pas.
+    for (const c of this.clients.values()) {
+      if (c.member) c.orphanSince = null;
+      else if (c.orphanSince === null) c.orphanSince = now;
+      else if (!c.closing && now - c.orphanSince >= ORPHAN_CONN_MS) {
+        this.closeConn(c, 1000, 'no room');
+      }
     }
   }
 
@@ -524,7 +603,12 @@ export class GameServer implements RoomIO {
 
   private invalid(c: ClientState): void {
     this.metrics.invalidMessages++;
-    if (++c.invalidCount >= MAX_INVALID) c.conn.close(1008, 'too many invalid messages');
+    const now = this.now();
+    if (now - c.invalidWindowStart >= INVALID_WINDOW_MS) {
+      c.invalidWindowStart = now;
+      c.invalidCount = 0;
+    }
+    if (++c.invalidCount >= MAX_INVALID) this.closeConn(c, 1008, 'too many invalid messages');
   }
 
   private error(c: ClientState, code: ErrorCode, msg?: string): void {
@@ -545,6 +629,8 @@ export class GameServer implements RoomIO {
   }
 
   closeConn(c: ClientState, code: number, reason: string): void {
+    if (c.closing) return;
+    c.closing = true;
     c.conn.close(code, reason);
   }
 

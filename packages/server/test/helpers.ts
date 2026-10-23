@@ -23,6 +23,8 @@ export class FakeConn implements Connection {
   bufferedAmount = 0;
   rttMs = 0;
   closed: { code: number; reason: string } | null = null;
+  /** Nombre d'appels à `close` (une connexion ne doit être fermée qu'une fois). */
+  closeCalls = 0;
   snapshotTotal = 0;
   constructor(
     readonly id: number,
@@ -44,6 +46,7 @@ export class FakeConn implements Connection {
     }
   }
   close(code: number, reason: string): void {
+    this.closeCalls++;
     this.closed = { code, reason };
   }
   messages(): ServerMessage[] {
@@ -97,7 +100,10 @@ export interface Harness {
   settings(conn: FakeConn, patch: Partial<RoomSettings>): void;
 }
 
-export function harness(env: Record<string, string> = {}): Harness {
+export function harness(
+  env: Record<string, string> = {},
+  log?: (o: Record<string, unknown>) => void,
+): Harness {
   const config = loadConfig({ NODE_ENV: 'test', VOTE_DEFAULT: '0', ...env }, '/nonexistent');
   const h: Harness = {
     config,
@@ -153,7 +159,7 @@ export function harness(env: Record<string, string> = {}): Harness {
     },
   };
   let nextId = 0;
-  h.server = new GameServer(config, { now: () => h.time });
+  h.server = new GameServer(config, { now: () => h.time, log });
   return h;
 }
 

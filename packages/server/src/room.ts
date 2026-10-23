@@ -436,7 +436,13 @@ export class Room {
     this.lobbyDirty = true;
   }
 
-  /** Envoie l'état du salon à tous les participants connectés. */
+  /**
+   * Envoie l'état du salon à tous les participants connectés. Les réglages, l'état « prêt » et
+   * l'apparence se contentent de `markLobby` : le tick envoie dès que 500 ms se sont écoulées
+   * depuis le dernier envoi (donc sans attendre pour un clic isolé), ce qui borne le débit d'un
+   * client qui bascule en rafale. Arrivées, départs, niveaux et débuts de manche restent
+   * immédiats : rares, et l'état affiché doit changer tout de suite.
+   */
   flushLobby(now: number): void {
     if (!this.lobbyDirty) return;
     this.lobbyDirty = false;
@@ -450,8 +456,8 @@ export class Room {
   setReady(m: Member, ready: boolean, now: number): boolean {
     if (this.phase !== GamePhase.LOBBY || m.slot < 0) return false;
     m.ready = ready;
+    m.lastActiveAt = now;
     this.markLobby();
-    this.flushLobby(now);
     return true;
   }
 
@@ -459,8 +465,8 @@ export class Room {
     const look: Look = sanitizeLook(raw, m.look);
     look.color = closestFreeColor(look.color, this.usedColors(m));
     m.look = look;
+    m.lastActiveAt = now;
     this.markLobby();
-    this.flushLobby(now);
   }
 
   /** Réglages de l'hôte (partie en attente seulement). */
@@ -470,8 +476,8 @@ export class Room {
     this.settings = normalizeSettings(patch, this.settings, this.knownArenaIds());
     this.setLobbyRules();
     this.assignTeams(false);
+    m.lastActiveAt = now;
     this.markLobby();
-    this.flushLobby(now);
     return 'ok';
   }
 
@@ -498,8 +504,8 @@ export class Room {
         if (mem && t >= 0 && t < this.settings.teams) mem.team = t;
       }
     }
+    m.lastActiveAt = now;
     this.markLobby();
-    this.flushLobby(now);
     return 'ok';
   }
 
@@ -540,6 +546,7 @@ export class Room {
     if (m.slot !== this.host) return 'not_host';
     const target = this.slots[slot];
     if (!target || target === m) return 'bad_request';
+    m.lastActiveAt = now;
     this.removeMember(target, 'kicked', now);
     return 'ok';
   }
@@ -562,6 +569,7 @@ export class Room {
   ): 'ok' | 'not_host' | 'in_game' | 'not_enough_players' | 'not_ready' {
     if (m && m.slot !== this.host) return 'not_host';
     if (this.phase !== GamePhase.LOBBY) return 'in_game';
+    if (m) m.lastActiveAt = now;
     // Les absents (reconnexion en cours) ne participent pas.
     for (const p of this.playersByJoin()) {
       if (!p.client) this.removeMember(p, 'closed', now);
@@ -641,6 +649,7 @@ export class Room {
     if (m.slot < 0 || this.phase !== GamePhase.LOBBY) return { code: 'in_game' };
     if (now - m.lastArenaAt < 2000) return { code: 'rate_limited' };
     m.lastArenaAt = now;
+    m.lastActiveAt = now;
     if (this.custom.size >= MAX_CUSTOM_ARENAS) return { code: 'too_many_arenas' };
     const names = [raw.name.fr, raw.name.en].map((n) =>
       n
@@ -675,6 +684,7 @@ export class Room {
     const e = this.custom.get(id);
     if (!e || this.phase !== GamePhase.LOBBY) return;
     if (e.owner !== m.id && m.slot !== this.host) return;
+    m.lastActiveAt = now;
     this.custom.delete(id);
     this.settings.arenas = this.settings.arenas.filter((a) => a !== id);
     this.sendAll({ t: 'arena_del', id });
@@ -895,6 +905,13 @@ export class Room {
   private demote(m: Member, now: number): void {
     const slot = m.slot;
     if (slot < 0 || !m.client) return;
+    // Jamais le dernier joueur connecté : sans joueur, le salon ne tournerait plus (plus de fin de manche).
+    if (this.connectedPlayers <= 1) return;
+    // Plus de place chez les spectateurs : il quitte le salon plutôt que de dépasser le plafond.
+    if (this.spectators.length >= MAX_SPECTATORS) {
+      this.removeMember(m, 'idle', now);
+      return;
+    }
     this.recorder?.op({ tick: this.world.tick, op: 'leave', slot });
     this.slots[slot] = null;
     removePlayer(this.world, slot);
@@ -1114,6 +1131,7 @@ export class Room {
 
   private sendTo(m: Member, hidden: boolean): void {
     const c = m.client!;
+    if (c.closing) return;
     const snap = this.snap;
     const w = this.world;
     const buffered = c.conn.bufferedAmount;

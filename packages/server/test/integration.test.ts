@@ -254,12 +254,13 @@ describe('reconnexion avec un vrai socket', () => {
       4000,
       'A de retour',
     );
-    // Le même jeton ne sert qu'une fois tant que la connexion est vivante
+    // Le jeton évince une connexion encore ouverte (socket fantôme) : la dernière reprise gagne
     const a3 = peer(url);
     await a3.ready();
     a3.send({ t: 'resume', v: V, token, code });
-    await a3.until(() => a3.last('error') !== undefined, 4000, 'refus');
-    expect(a3.last('error')!.code).toBe('bad_token');
+    await a3.until(() => a3.last('joined') !== undefined, 4000, 'reprise sur socket vivante');
+    await a2.until(() => a2.closeCode === 4000, 4000, 'ancienne socket évincée');
+    expect(a3.last('joined')!.slot).toBe(slot);
   });
 
   it('après le délai, la place est perdue', async () => {

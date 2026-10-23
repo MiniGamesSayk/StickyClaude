@@ -69,7 +69,13 @@ export class Member {
 /** État serveur d'une connexion WebSocket. */
 export class ClientState {
   member: Member | null = null;
+  /** Messages invalides dans la fenêtre courante (voir `invalidWindowStart`). */
   invalidCount = 0;
+  invalidWindowStart = 0;
+  /** Fermeture demandée : on ne referme plus (une minuterie par appel) et on n'écoute plus. */
+  closing = false;
+  /** Depuis quand la connexion n'a pas de salon (ms) ; null tant qu'elle en a un. */
+  orphanSince: number | null = null;
 
   // Limites de débit (fenêtres fixes d'une seconde).
   inputWindowStart = 0;
