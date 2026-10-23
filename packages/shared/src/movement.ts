@@ -42,6 +42,9 @@ export interface MovementParams {
   dashSpeed: number;
   dashTicks: number;
   dashCooldownTicks: number;
+  // Esquive (dash sans direction)
+  dodgeTicks: number;
+  dodgeCooldownTicks: number;
   // Événements
   /** Vitesse de chute minimale pour émettre l'événement d'atterrissage (son, poussière). */
   landEventSpeed: number;
@@ -65,7 +68,7 @@ export const DEFAULT_MOVEMENT: Readonly<MovementParams> = {
   fastFallGravityMul: 1.8,
   fastFallSpeed: 820,
   jumpSpeed: 395, // ≈ 3,9 cellules de haut
-  doubleJumpSpeed: 340, // ≈ 2,9 cellules de haut
+  doubleJumpSpeed: 395, // comme le premier saut : ≈ 3,9 cellules de haut
   jumpCut: 0.45,
   coyoteTicks: 6, // 100 ms
   jumpBufferTicks: 6, // 100 ms
@@ -81,6 +84,9 @@ export const DEFAULT_MOVEMENT: Readonly<MovementParams> = {
   dashSpeed: 420, // ≈ 2,2 × la course
   dashTicks: 9, // 150 ms, ≈ 3,9 cellules parcourues
   dashCooldownTicks: 45, // 750 ms, compté depuis le début du dash
+
+  dodgeTicks: 20, // 330 ms d'invulnérabilité sur place
+  dodgeCooldownTicks: 75, // 1,25 s, compté depuis le début de l'esquive
 
   landEventSpeed: 200,
 };
@@ -124,6 +130,8 @@ export const MOVEMENT_TUNING: Readonly<Record<MovementKey, TuningMeta>> = {
   dashSpeed: { label: 'Vitesse du dash', min: 100, max: 900, step: 5 },
   dashTicks: { label: 'Durée du dash (ticks)', min: 2, max: 30, step: 1 },
   dashCooldownTicks: { label: 'Recharge du dash (ticks)', min: 0, max: 180, step: 1 },
+  dodgeTicks: { label: 'Durée de l’esquive (ticks)', min: 2, max: 60, step: 1 },
+  dodgeCooldownTicks: { label: 'Recharge de l’esquive (ticks)', min: 0, max: 240, step: 1 },
   landEventSpeed: { label: 'Seuil d’atterrissage (événement)', min: 0, max: 800, step: 5 },
 };
 

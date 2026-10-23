@@ -362,7 +362,7 @@ export class GameServer implements RoomIO {
       if (!getArena(msg.arena)) return this.error(c, 'bad_request', 'arena');
       arenaId = msg.arena;
     }
-    const room = this.newRoom(c, arenaId, msg.isPublic ?? false, now);
+    const room = this.newRoom(c, arenaId, msg.isPublic ?? true, now);
     if (!room) return;
     room.addMember(c, name, msg.look, now);
   }

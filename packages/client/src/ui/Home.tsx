@@ -119,7 +119,7 @@ export function Home(): JSX.Element {
   const prof = profile.value;
   const n = net.value;
   const [code, setCode] = useState(urlCode.value);
-  const [isPublic, setPublic] = useState(false);
+  const [isPublic, setPublic] = useState(true);
   const [missing, setMissing] = useState(false);
   const busy = n.status === 'connecting';
   const list = rooms.value;

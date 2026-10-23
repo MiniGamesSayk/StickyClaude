@@ -399,7 +399,7 @@ export const en: Record<MessageKey, string> = {
   'help.title': 'How to play',
   'help.goal': 'The last one standing wins the round; the first to several rounds wins the match.',
   'help.move':
-    'Move: arrows or WASD/ZQSD, gamepad, joystick. Jump twice = double jump; against a wall = wall jump. Dash (Shift, LB): a 0.15 s horizontal burst, 0.75 s cooldown.',
+    'Move: arrows or WASD/ZQSD, gamepad, joystick. Jump twice = double jump; against a wall = wall jump. Dash (Shift, LB): a 0.15 s horizontal burst, 0.75 s cooldown; without a direction it becomes a spot dodge (invulnerable for 0.33 s, 1.25 s cooldown). Touching a wall gives the double jump back.',
   'help.fight':
     'Attack: 3-hit combo, hold to charge; ↑ + attack: upward strike; ↓ + attack: crouch strike (ground) or diving kick (air). Block: absorbs one hit only, stuns the attacker for 0.4 s, then a 0.5 s cooldown; right after pressing = perfect parry. Aim follows the mouse (or the joystick).',
   'help.weapons': 'Pick up / throw a weapon: pick-up key; ↓ + pick-up to drop it.',

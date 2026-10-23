@@ -83,6 +83,8 @@ export interface Player {
   dead: boolean;
   hasBomb: boolean;
   kicking: boolean;
+  /** Esquive sur place en cours (`dashTicks` compte sa durée). */
+  dodging: boolean;
   respawnTimer: number;
   ghostX: number;
   ghostY: number;
@@ -384,6 +386,7 @@ export function createPlayer(): Player {
     dead: false,
     hasBomb: false,
     kicking: false,
+    dodging: false,
     respawnTimer: 0,
     ghostX: 0,
     ghostY: 0,

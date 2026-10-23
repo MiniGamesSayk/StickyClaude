@@ -25,13 +25,14 @@ import {
   pl,
   tick,
   tickRewind,
+  tap,
   ticks,
 } from './fight.ts';
 
 describe('mains nues : enchaînement de 3 coups', () => {
   it('un jab touche à portée, retire des PV et repousse', () => {
     const w = fightWorld();
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(pl(w, 1).hp).toBe(100 - FIST[0].damage);
     expect(pl(w, 1).x).toBeGreaterThan(330);
   });
@@ -58,7 +59,7 @@ describe('mains nues : enchaînement de 3 coups', () => {
     // Rapproche la cible après chaque coup pour ne mesurer que l'enchaînement.
     for (let press = 0; press < 3; press++) {
       tick(w, ATTACK);
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 8; i++) {
         tick(w, 0);
         pl(w, 1).x = 330;
         pl(w, 1).vx = 0;
@@ -79,6 +80,7 @@ describe('mains nues : enchaînement de 3 coups', () => {
     expect(pl(w, 0).combo).toBe(0);
     pl(w, 1).x = 330;
     tick(w, ATTACK);
+    tick(w, 0); // le coup part au relâchement
     expect(pl(w, 0).atkKind).toBe(AttackKind.FIST1);
   });
 
@@ -109,6 +111,23 @@ describe('coup chargé', () => {
     expect(dmg).toBeGreaterThanOrEqual(COMBAT.charged.damageMax - 8);
     expect(pl(w, 1).stun).toBeGreaterThan(0);
     expect(Math.abs(pl(w, 1).vx)).toBeGreaterThan(200);
+  });
+
+  it('maintenir le bouton ne donne pas d abord un coup : la charge démarre directement', () => {
+    const w = fightWorld();
+    pl(w, 1).x = 330;
+    const swings = countEvents(w, 40, SimEvent.SWING, ATTACK);
+    expect(swings).toBe(0);
+    expect(pl(w, 1).hp).toBe(100);
+    expect(pl(w, 0).state).toBe(PlayerState.CHARGE);
+  });
+
+  it('un appui bref reste un jab, qui part au relâchement', () => {
+    const w = fightWorld();
+    tick(w, ATTACK);
+    expect(pl(w, 0).atkKind).toBe(AttackKind.NONE);
+    tick(w, 0);
+    expect(pl(w, 0).atkKind).toBe(AttackKind.FIST1);
   });
 
   it('une charge courte fait moins mal qu une charge pleine', () => {
@@ -167,7 +186,7 @@ describe('coup accroupi et coup vers le haut', () => {
     // hors de portée du jab (à 26 unités du corps : x_cible - 6,4 - 20 > x), dans celle du coup accroupi
     expect(FIST[0].reach).toBeLessThan(CROUCH_PUNCH.reach);
     pl(w, 1).x = 300 + 6.4 + FIST[0].reach + 6.4 + 8;
-    ticks(w, 14, ATTACK);
+    tap(w, 14, ATTACK);
     expect(pl(w, 1).hp).toBe(100);
     const w2 = fightWorld();
     pl(w2, 1).x = 300 + 6.4 + FIST[0].reach + 6.4 + 8;
@@ -217,7 +236,7 @@ describe('parade', () => {
     ticks(w, 20, 0, BLOCK); // parade bien établie (hors fenêtre parfaite)
     pl(w, 0).x = 300;
     q.x = 330;
-    ticks(w, 12, ATTACK, BLOCK);
+    tap(w, 12, ATTACK, BLOCK);
     expect(q.hp).toBe(100 - Math.round(FIST[0].damage * COMBAT.blockDamageTaken));
     expect(q.stun).toBe(0);
   });
@@ -228,7 +247,7 @@ describe('parade', () => {
     q.facing = 1; // tourné à l'opposé de l'attaquant
     ticks(w, 20, 0, BLOCK);
     q.x = 330;
-    ticks(w, 12, ATTACK, BLOCK);
+    tap(w, 12, ATTACK, BLOCK);
     expect(q.hp).toBe(100 - FIST[0].damage);
   });
 
@@ -259,7 +278,7 @@ describe('parade', () => {
     ticks(w, 20, 0, BLOCK);
     pl(w, 0).x = 300;
     q.x = 330;
-    ticks(w, 12, ATTACK, BLOCK);
+    tap(w, 12, ATTACK, BLOCK);
     expect(pl(w, 0).stun).toBeGreaterThan(0);
     expect(COMBAT.parryStunTicks).toBe(24);
     expect(pl(w, 0).stun).toBeLessThanOrEqual(COMBAT.parryStunTicks);
@@ -273,7 +292,7 @@ describe('parade', () => {
     pl(w, 0).x = 300;
     q.x = 330;
     // premier coup : paré (dégâts réduits), la parade retombe d'elle-même
-    ticks(w, 12, ATTACK, BLOCK);
+    tap(w, 12, ATTACK, BLOCK);
     const afterFirst = q.hp;
     expect(afterFirst).toBe(100 - Math.round(FIST[0].damage * COMBAT.blockDamageTaken));
     expect(q.blockTicks).toBe(0);
@@ -287,7 +306,7 @@ describe('parade', () => {
     pl(w, 0).x = 300;
     q.x = 330;
     q.vx = 0;
-    ticks(w, 12, ATTACK, BLOCK);
+    tap(w, 12, ATTACK, BLOCK);
     expect(q.hp).toBeLessThan(afterFirst - FIST[0].damage + 1);
     // relâcher puis rappuyer après la recharge : la parade revient
     ticks(w, COMBAT.parryCooldownTicks + 20, 0, 0);
@@ -343,7 +362,7 @@ describe('étourdissement et knockback', () => {
     pl(w, 0).combo = 2;
     pl(w, 0).comboWindow = 10;
     q.x = 330;
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(q.stun).toBe(0);
   });
 
@@ -351,7 +370,7 @@ describe('étourdissement et knockback', () => {
     const push = (hp: number): number => {
       const w = fightWorld();
       pl(w, 1).hp = hp;
-      ticks(w, 8, ATTACK);
+      tap(w, 8, ATTACK);
       return Math.abs(pl(w, 1).vx);
     };
     const full = push(100);
@@ -362,7 +381,7 @@ describe('étourdissement et knockback', () => {
 
   it('un joueur touché perd le contrôle un court instant', () => {
     const w = fightWorld();
-    ticks(w, 6, ATTACK);
+    tap(w, 6, ATTACK);
     expect(pl(w, 1).hitLock).toBeGreaterThan(0);
     const x = pl(w, 1).x;
     ticks(w, 3, 0, LEFT);
@@ -372,7 +391,7 @@ describe('étourdissement et knockback', () => {
   it('protégé après une apparition', () => {
     const w = fightWorld();
     pl(w, 1).invuln = 30;
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(pl(w, 1).hp).toBe(100);
   });
 
@@ -381,7 +400,7 @@ describe('étourdissement et knockback', () => {
     const q = pl(w, 1);
     q.atkPhase = AtkPhase.STARTUP;
     q.atkKind = AttackKind.FIST1;
-    ticks(w, 6, ATTACK);
+    tap(w, 6, ATTACK);
     expect(q.atkPhase).toBe(AtkPhase.NONE);
   });
 });
@@ -390,7 +409,8 @@ describe('mort', () => {
   it('PV à zéro : événement KO, le joueur devient fantôme-crayon', () => {
     const w = fightWorld();
     pl(w, 1).hp = 3;
-    const ko = countEvents(w, 12, SimEvent.KO, ATTACK);
+    tick(w, ATTACK);
+    const ko = countEvents(w, 11, SimEvent.KO);
     expect(ko).toBe(1);
     expect(pl(w, 1).ghost).toBe(true);
     expect(pl(w, 1).state).toBe(PlayerState.GHOST);
@@ -401,7 +421,7 @@ describe('mort', () => {
   it('sans fantômes, le mort reste inerte', () => {
     const w = fightWorld({ ghosts: false });
     pl(w, 1).hp = 3;
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(pl(w, 1).dead).toBe(true);
     expect(pl(w, 1).ghost).toBe(false);
   });
@@ -421,7 +441,7 @@ describe('mort', () => {
   it('dans le salon d attente les dégâts ne comptent pas', () => {
     const w = fightWorld();
     w.game.phase = GamePhase.LOBBY;
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(pl(w, 1).hp).toBe(100);
     expect(pl(w, 1).x).toBeGreaterThan(330); // mais la projection a lieu
   });
@@ -431,7 +451,7 @@ describe('mort', () => {
     pl(w, 1).hp = 3;
     pl(w, 1).weapon = 1;
     pl(w, 1).ammo = 10;
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(w.objects.some((o) => o.active && o.type === 1 && o.a === 1 && o.b === 10)).toBe(true);
   });
 });
@@ -439,20 +459,20 @@ describe('mort', () => {
 describe('équipes et tir ami', () => {
   it('pas de dégâts entre coéquipiers par défaut', () => {
     const w = fightWorld({ n: 3, teams: [0, 0, 1] });
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(pl(w, 1).hp).toBe(100);
     expect(pl(w, 1).stun).toBe(0);
   });
 
   it('tir ami activé : les coéquipiers se blessent', () => {
     const w = fightWorld({ n: 3, teams: [0, 0, 1], friendlyFire: true });
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(pl(w, 1).hp).toBeLessThan(100);
   });
 
   it('adversaires de deux équipes différentes', () => {
     const w = fightWorld({ teams: [0, 1] });
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(pl(w, 1).hp).toBeLessThan(100);
   });
 });
@@ -479,7 +499,7 @@ describe('compensation de latence', () => {
     q.x = 330;
     ticks(w, 10, 0);
     q.x = 420;
-    ticks(w, 12, ATTACK);
+    tap(w, 12, ATTACK);
     expect(q.hp).toBe(100);
   });
 
@@ -500,7 +520,8 @@ describe('compensation de latence', () => {
 describe('bits réservés', () => {
   it('le retard de compensation vient du serveur : les bits hauts sont ignorés comme boutons', () => {
     const w = fightWorld();
-    const swings = countEvents(w, 8, SimEvent.SWING, 0xf000 | ATTACK);
+    tick(w, 0xc000 | ATTACK);
+    const swings = countEvents(w, 7, SimEvent.SWING, 0xc000);
     expect(swings).toBe(1);
     expect(eventCount(w, SimEvent.SWING)).toBeGreaterThanOrEqual(0);
   });

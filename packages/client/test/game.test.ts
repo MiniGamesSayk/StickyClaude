@@ -119,7 +119,11 @@ describe('combat', () => {
     const room = w.room();
     const sb = b.client.slot;
     expect(room.world.players[sb].hp).toBe(100);
-    a.bot.forced = side > 0 ? Input.RIGHT | Input.ATTACK : Input.LEFT | Input.ATTACK;
+    // Les mains nues frappent au relâchement : un appui bref, direction tenue.
+    const dir = side > 0 ? Input.RIGHT : Input.LEFT;
+    a.bot.forced = dir | Input.ATTACK;
+    w.run(1000 / 60);
+    a.bot.forced = dir;
     let frames = 0;
     while (a.client.view.own.state !== PlayerState.ATTACK && frames < 6) {
       w.run(1000 / 60);
@@ -144,8 +148,14 @@ describe('combat', () => {
     const room = w.room();
     const sb = b.client.slot;
     b.bot.forced = Input.BLOCK;
-    a.bot.forced = side > 0 ? Input.RIGHT | Input.ATTACK : Input.LEFT | Input.ATTACK;
-    w.run(1500);
+    // Coups répétés par appuis brefs (un bouton tenu chargerait un coup).
+    const dir = side > 0 ? Input.RIGHT : Input.LEFT;
+    for (let i = 0; i < 12; i++) {
+      a.bot.forced = dir | Input.ATTACK;
+      w.run(1000 / 60);
+      a.bot.forced = dir;
+      w.run((1000 / 60) * 9);
+    }
     a.bot.forced = 0;
     w.run(500);
     const blocked = a.events.filter((e) => e.type === SimEvent.BLOCKED && e.slot === sb);

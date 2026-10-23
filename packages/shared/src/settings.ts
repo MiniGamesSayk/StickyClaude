@@ -45,7 +45,7 @@ export const DEFAULT_SETTINGS: Readonly<RoomSettings> = {
   bonusEvery: 3,
   ghosts: true,
   voteMaps: true,
-  isPublic: false,
+  isPublic: true,
 };
 
 export function cloneSettings(s: Readonly<RoomSettings> = DEFAULT_SETTINGS): RoomSettings {

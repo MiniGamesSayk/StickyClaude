@@ -154,7 +154,7 @@ export class Room {
     readonly seed: number,
     private readonly recorder: RoomRecorder | null,
     createdAt: number,
-    isPublic = false,
+    isPublic = true,
   ) {
     this.lobbyArena = getArena(lobbyArenaId) ?? ARENAS[LOBBY_ARENA_ID];
     this.settings = cloneSettings(DEFAULT_SETTINGS);

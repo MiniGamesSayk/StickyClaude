@@ -1,5 +1,5 @@
 import { Input } from '@stickyclaude/shared';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ACTIONS,
   DEFAULT_BINDINGS,
@@ -12,6 +12,7 @@ import {
 } from '../src/app/options.ts';
 import type { Bindings } from '../src/app/options.ts';
 import { detectLayout, keyLabel } from '../src/input/bindings.ts';
+import { GamepadInput } from '../src/input/gamepad.ts';
 import { buildKeymap } from '../src/input/keyboard.ts';
 import {
   resetTouch,
@@ -177,5 +178,48 @@ describe('options', () => {
   it('les touches par défaut couvrent les 8 actions', () => {
     const b: Bindings = DEFAULT_BINDINGS;
     for (const a of ACTIONS) expect(b[a][0]).not.toBe('');
+  });
+});
+
+describe('manette : un bouton tenu depuis les menus ne reste pas collé en jeu', () => {
+  const pad = (pressed: number[], axes: number[] = [0, 0]): unknown => ({
+    connected: true,
+    axes,
+    buttons: Array.from({ length: 17 }, (_, i) => ({
+      pressed: pressed.includes(i),
+      value: pressed.includes(i) ? 1 : 0,
+    })),
+  });
+  const plug = (p: unknown): void => {
+    vi.stubGlobal('navigator', { getGamepads: () => [p] });
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('un bouton déjà enfoncé après la remise à zéro est ignoré jusqu’au relâchement', () => {
+    const g = new GamepadInput();
+    plug(pad([1]));
+    g.disarm();
+    expect(g.sample() & Input.BLOCK).toBe(0);
+    expect(g.sample() & Input.BLOCK).toBe(0);
+    plug(pad([]));
+    g.sample();
+    plug(pad([1]));
+    expect(g.sample() & Input.BLOCK).toBe(Input.BLOCK);
+  });
+
+  it('une gâchette qui ment (pressée mais à zéro) ne compte pas', () => {
+    const g = new GamepadInput();
+    const liar = pad([]) as { buttons: { pressed: boolean; value: number }[] };
+    liar.buttons[6] = { pressed: true, value: 0 };
+    plug(liar);
+    g.sample();
+    expect(g.sample() & Input.BLOCK).toBe(0);
+  });
+
+  it('les directions ne sont pas désarmées', () => {
+    const g = new GamepadInput();
+    plug(pad([], [1, 0]));
+    g.disarm();
+    expect(g.sample() & Input.RIGHT).toBe(Input.RIGHT);
   });
 });

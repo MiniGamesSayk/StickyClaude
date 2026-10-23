@@ -88,14 +88,6 @@
     {
       "type": "balloon",
       "at": [31, 9]
-    },
-    {
-      "type": "tack",
-      "at": [24, 32]
-    },
-    {
-      "type": "tack",
-      "at": [39, 32]
     }
   ],
   "modes": {

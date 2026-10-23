@@ -14,7 +14,18 @@ import type { ArenaData, CauseId } from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import { GhostMark, placeMark, spawnProps } from '../src/index.ts';
 import type { World } from '../src/index.ts';
-import { ATTACK, DOWN, FLOOR, RIGHT, eventCount, fightWorld, pl, tick, ticks } from './fight.ts';
+import {
+  ATTACK,
+  DOWN,
+  FLOOR,
+  RIGHT,
+  eventCount,
+  fightWorld,
+  pl,
+  tap,
+  tick,
+  ticks,
+} from './fight.ts';
 import { boxArena } from './helpers.ts';
 
 /**
@@ -23,9 +34,17 @@ import { boxArena } from './helpers.ts';
  */
 
 /** Cause de l'événement KO de `victim` dans les `n` prochains ticks, -1 s'il n'est pas mort. */
-function koCause(w: World, victim: number, n: number, ...masks: number[]): number {
+function koCause(
+  w: World,
+  victim: number,
+  n: number,
+  tapAttack: boolean,
+  ...masks: number[]
+): number {
   for (let i = 0; i < n; i++) {
-    tick(w, ...masks);
+    // Les mains nues frappent au relâchement : un appui bref suffit.
+    if (tapAttack && i > 0) tick(w, ...masks.map((m) => m & ~ATTACK));
+    else tick(w, ...masks);
     for (let k = 0; k < w.events.count; k++) {
       if (w.events.type[k] === SimEvent.KO && w.events.slot[k] === victim) {
         return w.events.v[k * 6 + 3];
@@ -59,12 +78,15 @@ interface Scenario {
   cause: CauseId;
   name: string;
   build: () => { w: World; victim: number; ticks: number; masks: number[] };
+  /** Appui bref sur ATTACK (mains nues) au lieu d'un bouton tenu. */
+  tap?: boolean;
 }
 
 const SCENARIOS: Scenario[] = [
   {
     cause: Cause.MELEE,
     name: 'un coup de poing',
+    tap: true,
     build: () => {
       const w = fightWorld({ ghosts: false });
       pl(w, 1).hp = 1;
@@ -178,7 +200,7 @@ const SCENARIOS: Scenario[] = [
       const w = fightWorld({ ghosts: false });
       give(w, 0, WeaponId.INK_MINE);
       pl(w, 1).x = 700;
-      ticks(w, 10, ATTACK);
+      tap(w, 10, ATTACK);
       ticks(w, 70, 0);
       const mine = w.objects.find((o) => o.active && o.type === ObjType.MINE)!;
       const q = pl(w, 1);
@@ -203,6 +225,7 @@ const SCENARIOS: Scenario[] = [
   {
     cause: Cause.BALLOON,
     name: 'l’éclatement d’un ballon',
+    tap: true,
     build: () => {
       const w = fightWorld({
         arena: withProps([{ type: 'balloon', at: [20, 31] }]),
@@ -260,7 +283,7 @@ describe('mort par chaque cause', () => {
     it(`${Object.keys(Cause)[s.cause]} : ${s.name}`, () => {
       const { w, victim, ticks: n, masks } = s.build();
       expect(w.game.phase).toBe(GamePhase.PLAYING);
-      const cause = koCause(w, victim, n, ...masks);
+      const cause = koCause(w, victim, n, s.tap === true, ...masks);
       expect(cause).toBe(s.cause);
       expect(pl(w, victim).dead).toBe(true);
       expect(pl(w, victim).hp).toBe(0);

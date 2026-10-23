@@ -1,6 +1,7 @@
 import { Input } from '@stickyclaude/shared';
 
 const DEADZONE = 0.35;
+const ACTIONS = Input.JUMP | Input.ATTACK | Input.BLOCK | Input.PICKUP | Input.DASH;
 /** Inclinaison minimale du stick pour viser dans sa direction. */
 const AIM_DEADZONE = 0.4;
 
@@ -35,6 +36,12 @@ export class GamepadInput {
   private lastNav = 0;
   private navHeld = false;
   private prevButtons = 0;
+  /**
+   * Boutons d'action « armés » : vus relâchés depuis la dernière remise à zéro. Un bouton resté
+   * enfoncé depuis les menus (A, B) ou qui ment (gâchette qui lit « pressée » au repos) est ignoré
+   * tant qu'il n'a pas été relâché, au lieu de laisser le personnage en parade.
+   */
+  private armed = 0;
   private readonly nav: PadNav = { dx: 0, dy: 0, confirm: false, back: false, menu: false };
 
   private pads(): Gamepad[] {
@@ -42,6 +49,11 @@ export class GamepadInput {
     const out: Gamepad[] = [];
     for (const p of navigator.getGamepads()) if (p?.connected) out.push(p);
     return out;
+  }
+
+  /** Les boutons d'action actuellement tenus ne comptent plus tant qu'ils ne sont pas relâchés. */
+  disarm(): void {
+    this.armed = 0;
   }
 
   sample(): number {
@@ -54,17 +66,24 @@ export class GamepadInput {
       const ay = pad.axes[1] ?? 0;
       if (Math.hypot(ax, ay) > AIM_DEADZONE) this.aimAngle = Math.atan2(ay, ax);
       const b = (i: number): boolean => pad.buttons[i]?.pressed === true;
+      // Gâchettes (analogiques) : un appui net, pas un simple frémissement.
+      const trig = (i: number): boolean => {
+        const btn = pad.buttons[i];
+        return btn !== undefined && btn.pressed && btn.value > 0.5;
+      };
       if (ax < -DEADZONE || b(14)) m |= Input.LEFT;
       if (ax > DEADZONE || b(15)) m |= Input.RIGHT;
       if (ay < -DEADZONE || b(12)) m |= Input.UP;
       if (ay > DEADZONE || b(13)) m |= Input.DOWN;
       if (b(0)) m |= Input.JUMP;
-      if (b(2) || b(7)) m |= Input.ATTACK;
-      if (b(1) || b(6)) m |= Input.BLOCK;
+      if (b(2) || trig(7)) m |= Input.ATTACK;
+      if (b(1) || trig(6)) m |= Input.BLOCK;
       if (b(3) || b(5)) m |= Input.PICKUP;
       if (b(4)) m |= Input.DASH;
     }
-    return m;
+    if (pads.length === 0) this.armed = 0;
+    this.armed |= ~m & ACTIONS;
+    return (m & ~ACTIONS) | (m & this.armed);
   }
 
   /**

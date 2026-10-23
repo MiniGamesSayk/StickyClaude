@@ -65,6 +65,16 @@ export function ticks(w: World, n: number, ...masks: number[]): void {
   for (let i = 0; i < n; i++) tick(w, ...masks);
 }
 
+/**
+ * Un appui bref sur `mask0` (qui contient ATTACK) puis `n - 1` ticks sans ATTACK, les autres
+ * masques restant tenus. Les mains nues frappent au relâchement : un bouton tenu ne frappe pas
+ * avant le seuil de charge.
+ */
+export function tap(w: World, n: number, mask0: number, ...others: number[]): void {
+  tick(w, mask0, ...others);
+  ticks(w, n - 1, mask0 & ~ATTACK, ...others);
+}
+
 /** Un tick avec compensation de latence pour le joueur `slot`. */
 export function tickRewind(w: World, slot: number, mask: number, rewind: number): void {
   buf.fill(0);

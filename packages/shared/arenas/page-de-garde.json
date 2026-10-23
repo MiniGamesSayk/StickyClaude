@@ -79,10 +79,6 @@
     {
       "type": "balloon",
       "at": [31, 8]
-    },
-    {
-      "type": "tack",
-      "at": [31, 32]
     }
   ],
   "modes": {
@@ -116,7 +112,7 @@
     {
       "type": "note",
       "at": [22, 5],
-      "text": "CAHIER DE"
+      "text": "CAHIER DE CASTAGNE"
     }
   ],
   "suddenDeath": "tear-edges"

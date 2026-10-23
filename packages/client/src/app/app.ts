@@ -396,7 +396,10 @@ export async function startApp(): Promise<void> {
     const playing =
       mode.value !== 'menu' && overlay.value === null && !padFocus && podium.value === null;
     const mask = playing ? input.sample() : 0;
-    if (!playing) input.sample();
+    if (!playing) {
+      input.gamepad.disarm();
+      input.sample();
+    }
     source.update(mask, now, dt);
     source.scene.debug = debug;
     renderer.render(source.scene);

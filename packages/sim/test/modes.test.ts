@@ -123,7 +123,8 @@ describe('boulette-ball', () => {
     p.facing = 1;
     p.vx = 0;
     const x0 = ball.x;
-    tickAll(w, 20, [ATTACK]);
+    tickAll(w, 1, [ATTACK]);
+    tickAll(w, 19);
     expect(ball.x).toBeGreaterThan(x0 + 30);
   });
 });

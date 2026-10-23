@@ -13,7 +13,7 @@ import {
   weaponDef,
 } from '@stickyclaude/shared';
 import type { Explosion } from '@stickyclaude/shared';
-import { bodyHeight, cellAt, moveBoxX, moveBoxY } from './collision.ts';
+import { bodyHeight, cellAt, moveBoxX, moveBoxY, rectBlocked } from './collision.ts';
 import { explode, HitFlag, queueHit } from './combat.ts';
 import { emit, newUid } from './world.ts';
 import type { Obj, Player, World } from './world.ts';
@@ -350,9 +350,44 @@ function pushByPlayers(world: World, o: Obj): void {
   }
 }
 
+/** Décalages essayés, du plus proche au plus lointain, pour sortir un objet d'un décor plein. */
+const UNSTICK_STEP = 2;
+const UNSTICK_MAX = 64;
+
+/**
+ * Sort un objet resté pris dans le décor : arme lancée contre un mur (le centre du projectile
+ * s'arrête à 3 unités du mur, la boîte de l'arme est plus large), arme lâchée dans un angle,
+ * bloc de papier qui se referme. Sans cela, la collision par balayage ne le libère jamais et il
+ * reste hors de portée des joueurs. Retourne faux si aucun emplacement libre n'est proche.
+ */
+function unstick(world: World, o: Obj): boolean {
+  const hw = o.w / 2;
+  if (!rectBlocked(world, o.x - hw, o.y - o.h, o.x + hw, o.y)) return true;
+  for (let d = UNSTICK_STEP; d <= UNSTICK_MAX; d += UNSTICK_STEP) {
+    for (let k = 0; k < 8; k++) {
+      // côtés, haut, diagonales hautes, puis bas
+      const dx =
+        k === 0 ? -d : k === 1 ? d : k === 3 ? -d : k === 4 ? d : k === 6 ? -d : k === 7 ? d : 0;
+      const dy = k <= 1 ? 0 : k <= 4 ? -d : d;
+      if (!rectBlocked(world, o.x + dx - hw, o.y + dy - o.h, o.x + dx + hw, o.y + dy)) {
+        o.x += dx;
+        o.y += dy;
+        o.vx = 0;
+        if (o.vy > 0) o.vy = 0;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function gravityStep(world: World, o: Obj, dt: number): void {
   const P = world.params;
   const hw = o.w / 2;
+  if (!unstick(world, o) && o.type !== ObjType.BALL) {
+    o.active = false;
+    return;
+  }
   o.vy += P.gravity * dt;
   if (o.vy > P.maxFallSpeed) o.vy = P.maxFallSpeed;
   if (moveBoxX(world, o, hw, o.h, o.vx * dt)) o.vx = -o.vx * (o.type === ObjType.BALL ? 0.7 : 0.2);

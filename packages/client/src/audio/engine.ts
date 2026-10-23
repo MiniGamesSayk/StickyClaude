@@ -408,6 +408,9 @@ export class AudioEngine implements AudioSink {
       case SimEvent.SWING:
         this.play('swing', { x, vol: 0.6 });
         break;
+      case SimEvent.DODGE:
+        this.play('swing', { x, vol: 0.3 });
+        break;
       default:
         break;
     }
