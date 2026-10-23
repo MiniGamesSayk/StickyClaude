@@ -100,6 +100,20 @@ function cancelableRecovery(p: Player): boolean {
   );
 }
 
+/**
+ * Mains nues, bouton d'attaque tenu avant le seuil de charge : le coup n'est pas encore parti.
+ * Le personnage prend déjà la pose de charge, pour que l'appui ait un retour immédiat.
+ */
+function windingUp(p: Player, w: WeaponDef): boolean {
+  return (
+    w.kind === WeaponKind.FISTS &&
+    p.atkPhase === AtkPhase.NONE &&
+    p.atkBuffer > 0 &&
+    p.attackHeld > 0 &&
+    p.attackHeld < COMBAT.chargeHoldTicks
+  );
+}
+
 function endAttack(p: Player): void {
   p.atkPhase = AtkPhase.NONE;
   p.atkKind = AttackKind.NONE;
@@ -665,7 +679,7 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   if (p.stun > 0) state = PlayerState.STUN;
   else if (p.blockTicks > 0) state = PlayerState.BLOCK;
   else if (p.atkPhase !== AtkPhase.NONE) state = PlayerState.ATTACK;
-  else if (p.chargeTicks > 0) state = PlayerState.CHARGE;
+  else if (p.chargeTicks > 0 || windingUp(p, w)) state = PlayerState.CHARGE;
   else if (dashing) state = dodgingNow ? PlayerState.DODGE : PlayerState.DASH;
   else if (p.grounded) {
     state = p.crouching ? PlayerState.CROUCH : dir !== 0 ? PlayerState.RUN : PlayerState.IDLE;

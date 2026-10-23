@@ -142,6 +142,15 @@ describe('coup chargé', () => {
     expect(pl(w, 0).state).toBe(PlayerState.CHARGE);
   });
 
+  it('la pose de charge est visible dès l appui, et la charge démarre au seuil', () => {
+    const w = fightWorld();
+    tick(w, ATTACK);
+    expect(pl(w, 0).state).toBe(PlayerState.CHARGE);
+    expect(pl(w, 0).chargeTicks).toBe(0);
+    ticks(w, COMBAT.chargeHoldTicks, ATTACK);
+    expect(pl(w, 0).chargeTicks).toBeGreaterThan(0);
+  });
+
   it('un appui bref reste un jab, qui part au relâchement', () => {
     const w = fightWorld();
     tick(w, ATTACK);
