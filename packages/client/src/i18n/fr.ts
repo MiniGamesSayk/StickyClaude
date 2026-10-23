@@ -135,6 +135,8 @@ export const fr = {
   'cr.test_menu_only': 'Le test se lance depuis l’accueil (hors d’un salon).',
   'cr.save': 'Enregistrer',
   'cr.saved': 'Niveau enregistré.',
+  'cr.save_as': 'Enregistrer sous',
+  'cr.copy_suffix': '(copie)',
   'cr.full': 'Tu as déjà le maximum de niveaux : supprime-en un.',
   'cr.close': 'Fermer',
   'cr.tools': 'Outils',
