@@ -444,3 +444,8 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - **Choix.** `Input.DASH` = bit 13 ; le retard de compensation passe à 2 bits (14-15), par pas de 4 ticks (0 à 12 au lieu de 0 à 14 par pas de 2) : erreur de ±2 ticks (33 ms) au lieu de ±1, plafond 200 ms au lieu de 233 ms. `INPUT_MASK_USED` = `0x3fff`. Le dash : Maj (touche reconfigurable dans Options, action « Dash »), manette LB, bouton tactile ; ruée horizontale de 9 ticks à 420 u/s sans gravité, recharge 45 ticks, interrompue par saut, mur, coup reçu, attaque, parade, charge ou grappin. État `dashTicks`/`dashCd` dans `OwnState` (71 octets), le hash de déterminisme, objectif « Fais un dash » du carnet, pose de squelette `PlayerState.DASH`, événement local `SimEvent.DASH`.
 - **Alternatives.** Masque 32 bits (touche tous les tampons et enregistrements, voir D-visée) ; combo de boutons existants (ambigu).
 - **À valider.** Équilibre du dash, et la précision de la compensation à 4 ticks (à mesurer avec `loadtest`).
+
+### D72. Créateur : sélection et déplacement d'une zone
+
+- Outil « Sélectionner / déplacer » : encadrer une zone la sélectionne (si elle contient quelque chose), puis la glisser déplace **tout** : cases, apparitions de joueurs et d'armes, objets, départ de la boule, colline et cages entières, plateformes mobiles dont tout le trajet est dans la zone. Suppr efface le contenu, Échap annule.
+- Modèle pur (`liftSelection` / `dropPayload` / `clampShift`) : le niveau n'est modifié qu'au lâcher (l'aperçu se dessine sur une copie), donc un déplacement est une seule étape d'annulation ; le décalage est borné pour que la zone reste dans la page. À l'arrivée, les cases vides n'effacent rien, les cases pleines remplacent ce qu'elles recouvrent (marqueurs compris).

@@ -302,6 +302,152 @@ export function levelCheck(name: string, r: ArenaReport): LevelCheck {
   return { ok: problems.length === 0, problems, standing: r.standing, reachable: r.reachable };
 }
 
+/** Zone sélectionnée : cases (x0, y0) à (x1, y1), bornes comprises, x0 ≤ x1 et y0 ≤ y1. */
+export type Sel = [number, number, number, number];
+
+/** Ce qu'une sélection emporte : cases, apparitions, objets, plateformes mobiles, zones de mode. */
+export interface Payload {
+  cells: [number, number, number][];
+  spawns: [number, number][];
+  weaponSpawns: [number, number][];
+  props: { type: string; at: [number, number] }[];
+  ballSpawn: [number, number] | null;
+  movers: EditorState['movers'];
+  koth: Rect | null;
+  goalA: Rect | null;
+  goalB: Rect | null;
+}
+
+export function normSel(x0: number, y0: number, x1: number, y1: number): Sel {
+  return [Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)];
+}
+
+/** Nombre d'éléments emportés (une case de terrain compte pour un). */
+export function payloadSize(p: Payload): number {
+  return (
+    p.cells.length +
+    p.spawns.length +
+    p.weaponSpawns.length +
+    p.props.length +
+    (p.ballSpawn ? 1 : 0) +
+    p.movers.length +
+    (p.koth ? 1 : 0) +
+    (p.goalA ? 1 : 0) +
+    (p.goalB ? 1 : 0)
+  );
+}
+
+/**
+ * Retire du niveau tout ce que la zone contient et le rend : les cases non vides, les marqueurs
+ * dont la case est dans la zone, les zones de mode et les plateformes mobiles qui y tiennent
+ * entièrement (tout leur trajet).
+ */
+export function liftSelection(s: EditorState, sel: Sel): Payload {
+  const [x0, y0, x1, y1] = sel;
+  const inside = (x: number, y: number): boolean => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  const rectInside = (r: Rect): boolean =>
+    r[0] >= x0 && r[1] >= y0 && r[0] + r[2] - 1 <= x1 && r[1] + r[3] - 1 <= y1;
+  const p: Payload = {
+    cells: [],
+    spawns: [],
+    weaponSpawns: [],
+    props: [],
+    ballSpawn: null,
+    movers: [],
+    koth: null,
+    goalA: null,
+    goalB: null,
+  };
+  for (let y = Math.max(0, y0); y <= Math.min(GRID_H - 1, y1); y++) {
+    for (let x = Math.max(0, x0); x <= Math.min(GRID_W - 1, x1); x++) {
+      const v = s.cells[y * GRID_W + x];
+      if (v === Cell.EMPTY) continue;
+      p.cells.push([x, y, v]);
+      s.cells[y * GRID_W + x] = Cell.EMPTY;
+    }
+  }
+  const split = <T>(list: T[], hit: (v: T) => boolean): [T[], T[]] => {
+    const taken: T[] = [];
+    const kept: T[] = [];
+    for (const v of list) (hit(v) ? taken : kept).push(v);
+    return [taken, kept];
+  };
+  [p.spawns, s.spawns] = split(s.spawns, (c) => inside(c[0], c[1]));
+  [p.weaponSpawns, s.weaponSpawns] = split(s.weaponSpawns, (c) => inside(c[0], c[1]));
+  [p.props, s.props] = split(s.props, (q) => inside(q.at[0], q.at[1]));
+  [p.movers, s.movers] = split(s.movers, (m) =>
+    m.path.every(([px, py]) => rectInside([px, py, m.rect[2], m.rect[3]])),
+  );
+  if (s.ballSpawn && inside(s.ballSpawn[0], s.ballSpawn[1])) {
+    p.ballSpawn = s.ballSpawn;
+    s.ballSpawn = null;
+  }
+  if (s.koth && rectInside(s.koth)) {
+    p.koth = s.koth;
+    s.koth = null;
+  }
+  if (s.goalA && rectInside(s.goalA)) {
+    p.goalA = s.goalA;
+    s.goalA = null;
+  }
+  if (s.goalB && rectInside(s.goalB)) {
+    p.goalB = s.goalB;
+    s.goalB = null;
+  }
+  return p;
+}
+
+/**
+ * Dépose ce qu'une sélection emportait, décalé de (dx, dy). Les cases vides du paquet ne
+ * recouvrent rien ; ce qui est plein remplace ce qui se trouvait là (marqueurs compris).
+ */
+export function dropPayload(s: EditorState, p: Payload, dx: number, dy: number): void {
+  const on = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < GRID_W && y < GRID_H;
+  for (const [x, y, v] of p.cells) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (!on(nx, ny)) continue;
+    paintCell(s, nx, ny, v, false);
+  }
+  const add = (list: [number, number][], x: number, y: number): void => {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (on(nx, ny) && !list.some((c) => c[0] === nx && c[1] === ny)) list.push([nx, ny]);
+  };
+  for (const [x, y] of p.spawns) add(s.spawns, x, y);
+  for (const [x, y] of p.weaponSpawns) add(s.weaponSpawns, x, y);
+  for (const q of p.props) {
+    const nx = q.at[0] + dx;
+    const ny = q.at[1] + dy;
+    if (!on(nx, ny)) continue;
+    s.props = s.props.filter((o) => o.at[0] !== nx || o.at[1] !== ny);
+    s.props.push({ type: q.type, at: [nx, ny] });
+  }
+  if (p.ballSpawn && on(p.ballSpawn[0] + dx, p.ballSpawn[1] + dy)) {
+    s.ballSpawn = [p.ballSpawn[0] + dx, p.ballSpawn[1] + dy];
+  }
+  for (const m of p.movers) {
+    s.movers.push({
+      rect: [m.rect[0] + dx, m.rect[1] + dy, m.rect[2], m.rect[3]],
+      path: m.path.map(([x, y]): [number, number] => [x + dx, y + dy]),
+      period: m.period,
+    });
+  }
+  const shift = (r: Rect | null): Rect | null => (r ? [r[0] + dx, r[1] + dy, r[2], r[3]] : null);
+  if (p.koth) s.koth = shift(p.koth);
+  if (p.goalA) s.goalA = shift(p.goalA);
+  if (p.goalB) s.goalB = shift(p.goalB);
+}
+
+/** Décalage permis pour que la zone, déplacée de (dx, dy), reste dans la page. */
+export function clampShift(sel: Sel, dx: number, dy: number): [number, number] {
+  const [x0, y0, x1, y1] = sel;
+  return [
+    Math.max(-x0, Math.min(GRID_W - 1 - x1, dx)) + 0,
+    Math.max(-y0, Math.min(GRID_H - 1 - y1, dy)) + 0,
+  ];
+}
+
 /** Le niveau prêt à être gardé ou envoyé : noms nettoyés, décor retiré (inutile ici). */
 export function finalizeLevel(s: EditorState, id: string): ArenaData {
   const name = s.nameFr.trim().slice(0, 40);
