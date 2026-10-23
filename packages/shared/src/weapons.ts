@@ -498,7 +498,7 @@ export const WEAPONS: readonly WeaponDef[] = [
     key: 'ruler-boomerang',
     name: { fr: 'Règle-boomerang', en: 'Ruler boomerang' },
     kind: WeaponKind.PROJECTILE,
-    ammo: 6,
+    ammo: 1,
     startup: 4,
     active: 1,
     recovery: 16,

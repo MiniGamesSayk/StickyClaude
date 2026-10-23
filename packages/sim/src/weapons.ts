@@ -172,6 +172,8 @@ export function fire(world: World, p: Player, slot: number): void {
         );
       }
       emit(world, SimEvent.SHOT, slot, mz.x, mz.y, mz.x + ux * 8, mz.y + uy * 8, w.id);
+      // Le boomerang n'a qu'un lancer : il quitte la main et ne revient pas comme arme.
+      if (w.id === WeaponId.BOOMERANG && p.ammo === 0) p.weapon = WeaponId.NONE;
       break;
     }
     case WeaponKind.MINE: {

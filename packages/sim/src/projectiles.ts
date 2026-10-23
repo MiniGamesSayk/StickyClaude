@@ -132,24 +132,12 @@ function endProjectile(world: World, p: Proj, hitX: number, hitY: number): void 
   }
 }
 
-/** Le boomerang revient dans la main de son lanceur, ou tombe au sol s'il ne peut plus la reprendre. */
-function catchBoomerang(world: World, p: Proj): void {
+/**
+ * Le boomerang est à usage unique : une fois revenu (ou tombé), il disparaît. Le récupérer à chaque
+ * lancer le rendait trop fort.
+ */
+function catchBoomerang(p: Proj): void {
   p.active = false;
-  const o = p.owner >= 0 ? world.players[p.owner] : null;
-  const def = weaponDef(WeaponId.BOOMERANG);
-  if (o && o.active && !o.dead && !o.ghost) {
-    if (o.weapon === WeaponId.BOOMERANG && o.ammo < def.ammo) {
-      o.ammo++;
-      return;
-    }
-    if (o.weapon === WeaponId.NONE) {
-      o.weapon = WeaponId.BOOMERANG;
-      o.ammo = 1;
-      emit(world, SimEvent.PICKUP, p.owner, o.weapon, o.ammo, 0);
-      return;
-    }
-  }
-  spawnWeaponObj(world, WeaponId.BOOMERANG, 1, p.x, p.y - 4, 0, -60);
 }
 
 /** Dégâts d'un éclat selon la distance parcourue. */
@@ -399,7 +387,6 @@ export function stepProjectiles(world: World): void {
       if (p.bounces === 1) {
         const o = world.players[p.owner];
         if (!o || !o.active || o.dead || o.ghost) {
-          spawnWeaponObj(world, WeaponId.BOOMERANG, 1, p.x, p.y - 4, 0, -60);
           p.active = false;
           continue;
         }
@@ -407,7 +394,7 @@ export function stepProjectiles(world: World): void {
         const ty = o.y - bodyHeight(world, o) * 0.5 - p.y;
         const d = Math.hypot(tx, ty);
         if (d < 16) {
-          catchBoomerang(world, p);
+          catchBoomerang(p);
           continue;
         }
         const speed = def.speed * 1.1;
@@ -598,7 +585,6 @@ export function stepProjectiles(world: World): void {
         } else {
           p.x = hx;
           p.y = hy;
-          spawnWeaponObj(world, WeaponId.BOOMERANG, 1, p.x, p.y - 4, 0, -60);
           p.active = false;
         }
         continue;
@@ -647,7 +633,6 @@ export function stepProjectiles(world: World): void {
       if (p.type === ProjType.ROCKET || p.type === ProjType.GRENADE || p.type === ProjType.THROWN) {
         endProjectile(world, p, p.x, p.y);
       } else if (p.type === ProjType.BOOMERANG) {
-        spawnWeaponObj(world, WeaponId.BOOMERANG, 1, p.x, p.y - 4, 0, -60);
         p.active = false;
       } else p.active = false;
       continue;

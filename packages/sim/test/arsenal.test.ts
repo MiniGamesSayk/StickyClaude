@@ -1,5 +1,6 @@
 import {
   AttackKind,
+  Cause,
   Cell,
   COMBAT,
   Input,
@@ -10,7 +11,7 @@ import {
   weaponDef,
 } from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
-import { damageObject, spawnObj } from '../src/index.ts';
+import { damageObject, killPlayer, spawnObj } from '../src/index.ts';
 import type { World } from '../src/index.ts';
 import {
   ATTACK,
@@ -264,16 +265,19 @@ describe('grenade d’encre', () => {
 });
 
 describe('règle-boomerang', () => {
-  it('revient et rend la munition', () => {
+  it('est à usage unique : il part, revient et disparaît, sans rendre la munition', () => {
     const w = fightWorld();
     give(w, 0, WeaponId.BOOMERANG);
     pl(w, 1).x = 900;
     pl(w, 1).y = FLOOR - 400;
     tap(w, 10, ATTACK | RIGHT);
-    expect(pl(w, 0).ammo).toBe(weaponDef(WeaponId.BOOMERANG).ammo - 1);
+    expect(pl(w, 0).weapon).toBe(WeaponId.NONE);
+    expect(active(w, ProjType.BOOMERANG)).toBe(1);
     ticks(w, 160, 0);
     expect(active(w, ProjType.BOOMERANG)).toBe(0);
-    expect(pl(w, 0).ammo).toBe(weaponDef(WeaponId.BOOMERANG).ammo);
+    expect(pl(w, 0).weapon).toBe(WeaponId.NONE);
+    expect(pl(w, 0).ammo).toBe(0);
+    expect(w.objects.some((o) => o.active && o.type === ObjType.WEAPON)).toBe(false);
   });
 
   it('touche à l’aller et au retour', () => {
@@ -668,6 +672,74 @@ describe('lancers chargés', () => {
     ticks(w, 12, 0);
     expect(pl(w, 0).chargeTicks).toBe(0);
     expect(pl(w, 0).weapon).toBe(WeaponId.PISTOL);
+  });
+});
+
+describe('grappin : la corde ne reste jamais sans traction', () => {
+  /** Lance un grappin et note, tick par tick, les cordes lâchées (254) et accrochées (255 ou joueur). */
+  function trace(
+    w: World,
+    ticksN: number,
+  ): { released: number; anchored: number; pulling: boolean[] } {
+    let released = 0;
+    let anchored = 0;
+    const pulling: boolean[] = [];
+    for (let i = 0; i < ticksN; i++) {
+      tick(w, 0);
+      for (let k = 0; k < w.events.count; k++) {
+        if (w.events.type[k] !== SimEvent.GRAPPLE) continue;
+        if (w.events.v[k * 6 + 2] === 254) released++;
+        else anchored++;
+      }
+      pulling.push(pl(w, 0).grappleTicks > 0 || pl(w, 1).grappleTicks > 0);
+    }
+    return { released, anchored, pulling };
+  }
+
+  it('arrivée au point d’ancrage : un événement efface la corde', () => {
+    const w = fightWorld();
+    give(w, 0, WeaponId.GRAPPLE);
+    pl(w, 0).x = 700;
+    pl(w, 1).x = 400;
+    pl(w, 1).y = FLOOR - 400;
+    tap(w, 5, ATTACK | RIGHT);
+    const r = trace(w, 220);
+    expect(r.anchored).toBeGreaterThan(0);
+    expect(r.released).toBeGreaterThanOrEqual(1);
+    expect(r.pulling[r.pulling.length - 1]).toBe(false);
+  });
+
+  it('un adversaire tiré qui meurt efface la corde de son tireur', () => {
+    const w = fightWorld();
+    give(w, 0, WeaponId.GRAPPLE);
+    pl(w, 1).x = 700;
+    tap(w, 5, ATTACK | RIGHT);
+    ticks(w, 25, 0);
+    expect(pl(w, 1).grappleTicks).toBeGreaterThan(0);
+    killPlayer(w, 1, 0, Cause.MELEE);
+    let released = 0;
+    for (let k = 0; k < w.events.count; k++) {
+      if (
+        w.events.type[k] === SimEvent.GRAPPLE &&
+        w.events.slot[k] === 1 &&
+        w.events.v[k * 6 + 2] === 254
+      ) {
+        released++;
+      }
+    }
+    expect(released).toBe(1);
+    expect(pl(w, 1).grappleTicks).toBe(0);
+  });
+
+  it('un mur arrête la traction et la corde est lâchée', () => {
+    const w = fightWorld();
+    give(w, 0, WeaponId.GRAPPLE);
+    pl(w, 0).x = 100;
+    pl(w, 1).y = FLOOR - 400;
+    pl(w, 1).x = 900;
+    tap(w, 5, ATTACK | LEFT);
+    const r = trace(w, 120);
+    expect(r.released).toBeGreaterThanOrEqual(1);
   });
 });
 

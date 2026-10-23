@@ -684,7 +684,11 @@ export class FxSystem {
 
   /** Efface la corde d'un joueur. */
   private cutRope(slot: number): void {
-    for (let i = 0; i < MAX_ROPES; i++) if (this.cslot[i] === slot) this.cslot[i] = -1;
+    for (let i = 0; i < MAX_ROPES; i++) {
+      if (this.cslot[i] === slot || (this.cslot[i] >= 0 && this.ctarget[i] === slot)) {
+        this.cslot[i] = -1;
+      }
+    }
   }
 
   /** Corde tendue (légèrement ondulée) de (x1, y1) à (x2, y2). */

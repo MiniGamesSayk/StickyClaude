@@ -25,7 +25,7 @@ import {
 import type { Explosion } from '@stickyclaude/shared';
 import { bodyHeight, raycastGrid, segmentBox } from './collision.ts';
 import type { RayHit } from './collision.ts';
-import { cancelActions, endKick } from './player.ts';
+import { cancelActions, endKick, releaseGrapple } from './player.ts';
 import { addPuddle, explodeTerrain } from './terrain.ts';
 import { emit } from './world.ts';
 import type { Obj, Player, World } from './world.ts';
@@ -292,6 +292,7 @@ export function killPlayer(world: World, slot: number, killer: number, cause: nu
   p.blockTicks = 0;
   p.stun = 0;
   p.hitLock = 0;
+  releaseGrapple(world, p, slot);
   p.grappleTicks = 0;
   p.attackHeld = 0;
   p.vx = 0;
@@ -568,7 +569,7 @@ export function resolveMelee(world: World): void {
           kx = sx * spec.kbx;
         }
       }
-      if (p.atkKind === AttackKind.WEAPON && weaponDef(p.weapon).cuts) q.grappleTicks = 0;
+      if (p.atkKind === AttackKind.WEAPON && weaponDef(p.weapon).cuts) releaseGrapple(world, q, v);
       queueHit(world, v, s, spec.damage, kx, ky, spec.stun, spec.cause, spec.flags, p.x, p.y - 14);
     }
     // Ciseaux : coupent les crochets de grappin en vol.

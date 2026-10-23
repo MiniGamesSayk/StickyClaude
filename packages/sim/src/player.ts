@@ -141,6 +141,16 @@ function endAttack(p: Player): void {
   p.comboWindow = 0;
 }
 
+/**
+ * Lâche la corde d'un joueur tiré par un grappin (le sien ou celui d'un autre) et prévient les
+ * clients pour qu'ils effacent le fil : sans cet événement, la corde restait dessinée.
+ */
+export function releaseGrapple(world: World, p: Player, slot: number): void {
+  if (p.grappleTicks <= 0) return;
+  p.grappleTicks = 0;
+  emit(world, SimEvent.GRAPPLE, slot, p.x, p.y, 254);
+}
+
 /** Annule toute action en cours (touché, étourdi, mort). */
 export function cancelActions(p: Player): void {
   p.atkPhase = AtkPhase.NONE;
@@ -526,6 +536,7 @@ function finishAttack(p: Player): void {
  */
 export function stepPlayer(world: World, p: Player, slot: number, input: number): void {
   const P = world.params;
+  const hadGrapple = p.grappleTicks > 0;
   const pressed = input & ~p.prevInput;
   const jumpHeld = (input & Input.JUMP) !== 0;
   const downHeld = (input & Input.DOWN) !== 0;
@@ -675,9 +686,8 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   // --- Sauts ----------------------------------------------------------------------------------
   // Sauter pendant la traction du grappin lâche la corde et garde l'élan.
   if (p.grappleTicks > 0 && jumpPressed) {
-    p.grappleTicks = 0;
+    releaseGrapple(world, p, slot);
     p.jumpBuffer = 0;
-    emit(world, SimEvent.GRAPPLE, slot, p.x, p.y, 254);
   }
   if (p.jumpBuffer > 0 && !p.jumpLocked) {
     if (p.coyote > 0) {
@@ -832,4 +842,22 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   } else if (p.stateTicks < 65535) {
     p.stateTicks++;
   }
+  // La traction a pris fin (arrivée, mur, plafond, durée écoulée) : on efface la corde.
+  if (hadGrapple && p.grappleTicks === 0 && !releasedThisTick(world, slot)) {
+    emit(world, SimEvent.GRAPPLE, slot, p.x, p.y, 254);
+  }
+}
+
+/** Un événement de corde lâchée a-t-il déjà été émis pour ce joueur dans ce tick ? */
+function releasedThisTick(world: World, slot: number): boolean {
+  for (let i = 0; i < world.events.count; i++) {
+    if (
+      world.events.type[i] === SimEvent.GRAPPLE &&
+      world.events.slot[i] === slot &&
+      world.events.v[i * 6 + 2] === 254
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
