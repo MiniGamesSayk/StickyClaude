@@ -939,6 +939,10 @@ export class Room {
     const ev = this.world.events;
     const n = ev.count;
     ev.count = 0;
+    if (ev.dropped > 0) {
+      this.io.metrics.eventsDropped += ev.dropped;
+      ev.dropped = 0;
+    }
     let roundStart = false;
     let roundEnd = -1;
     let matchEnd = false;

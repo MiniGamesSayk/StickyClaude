@@ -592,8 +592,11 @@ export function resolveMelee(world: World): void {
         o.type !== ObjType.COVER
       )
         continue;
+      // un coup ne touche un objet qu'une fois (comme `hitMask` pour les joueurs)
+      if ((o.hitBy & (1 << s)) !== 0) continue;
       if (o.x + o.w / 2 < box.l || o.x - o.w / 2 > box.r || o.y < box.t || o.y - o.h > box.b)
         continue;
+      o.hitBy |= 1 << s;
       if (o.type === ObjType.BALL) kickBall(world, o, p, spec.kbx, spec.kby);
       else damageObject(world, o, Math.max(spec.damage, 8), s);
     }

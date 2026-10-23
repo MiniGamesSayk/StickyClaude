@@ -66,6 +66,8 @@ export class Metrics {
   controlLimited = 0;
   /** Exceptions interceptées (salon fermé, connexion coupée en 1011). */
   errors = 0;
+  /** Événements de simulation perdus faute de place dans un pas (128 au plus). */
+  eventsDropped = 0;
   private readonly loop: IntervalHistogram = monitorEventLoopDelay({
     resolution: LOOP_RESOLUTION_MS,
   });
@@ -121,6 +123,7 @@ export class Metrics {
       emotesLimited: this.emotesLimited,
       controlLimited: this.controlLimited,
       errors: this.errors,
+      eventsDropped: this.eventsDropped,
       heapUsedMB: round(mem.heapUsed / 1048576),
       rssMB: round(mem.rss / 1048576),
       eventLoopDelayMs: {

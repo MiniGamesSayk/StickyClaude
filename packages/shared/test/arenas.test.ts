@@ -95,4 +95,45 @@ describe('arènes', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('les coordonnées restent dans la grille (le premier indice hors grille est refusé)', () => {
+    const base = structuredClone(ARENAS['test-flat']);
+    const withSpawn = (at: [number, number]): boolean =>
+      arenaSchema.safeParse({
+        ...base,
+        spawns: { ...base.spawns, players: [...base.spawns.players.slice(1), at] },
+      }).success;
+    expect(withSpawn([GRID_W - 1, GRID_H - 1])).toBe(true);
+    expect(withSpawn([GRID_W, 5])).toBe(false);
+    expect(withSpawn([5, GRID_H])).toBe(false);
+    const zone = (rect: [number, number, number, number]): boolean =>
+      arenaSchema.safeParse({ ...base, modes: { koth: { zone: rect } } }).success;
+    expect(zone([GRID_W - 4, GRID_H - 4, 4, 4])).toBe(true);
+    expect(zone([GRID_W, 0, 1, 1])).toBe(false);
+    expect(zone([GRID_W - 2, 0, 4, 1])).toBe(false);
+    expect(zone([0, GRID_H - 1, 1, 2])).toBe(false);
+  });
+
+  it('la période d’une plateforme mobile est d’au moins une seconde', () => {
+    const base = structuredClone(ARENAS['test-flat']);
+    const mover = (period: number): boolean =>
+      arenaSchema.safeParse({
+        ...base,
+        movers: [
+          {
+            rect: [5, 5, 2, 1],
+            path: [
+              [5, 5],
+              [9, 5],
+            ],
+            period,
+          },
+        ],
+      }).success;
+    expect(mover(1)).toBe(true);
+    expect(mover(0.01)).toBe(false);
+    expect(mover(0)).toBe(false);
+    expect(mover(120)).toBe(true);
+    expect(mover(121)).toBe(false);
+  });
 });

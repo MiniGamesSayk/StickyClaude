@@ -257,3 +257,18 @@ describe('salon de spectateurs seuls', () => {
     expect(s.lastOf('left')?.reason).toBe('closed');
   });
 });
+
+describe('événements de simulation perdus', () => {
+  it('le dépassement du tampon de 128 événements est visible dans /metrics', () => {
+    const { h, code } = twoPlayers();
+    h.advance(5);
+    expect(h.server.metrics.snapshot({}).eventsDropped).toBe(0);
+    const ev = h.room(code).world.events;
+    // 3 événements perdus pendant un pas : le serveur les relève au pas suivant
+    ev.dropped = 3;
+    h.advance(1);
+    expect(h.server.metrics.eventsDropped).toBe(3);
+    expect(h.server.metrics.snapshot({}).eventsDropped).toBe(3);
+    expect(ev.dropped).toBe(0);
+  });
+});

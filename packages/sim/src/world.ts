@@ -164,6 +164,10 @@ export interface Obj {
   life: number;
   /** Compteur libre : armement d'une mine, remise en jeu de la boule… */
   timer: number;
+  /** Joueurs dont le coup de mêlée en cours a déjà touché cet objet (un bit par emplacement). */
+  hitBy: number;
+  /** Dernier projectile traversant (gomme, boomerang) à l'avoir touché : une fois par projectile. */
+  hitProj: number;
 }
 
 export interface Proj {
@@ -220,6 +224,8 @@ export const EVENT_STRIDE = 6;
 
 export interface EventBuffer {
   count: number;
+  /** Événements perdus faute de place (au-delà de `MAX_SIM_EVENTS` dans un pas), cumulés. */
+  dropped: number;
   type: Uint8Array;
   slot: Uint8Array;
   /** `EVENT_STRIDE` arguments par événement. */
@@ -460,6 +466,8 @@ function createObj(): Obj {
     team: -1,
     life: 0,
     timer: 0,
+    hitBy: 0,
+    hitProj: 0,
   };
 }
 
@@ -687,6 +695,7 @@ export function createWorld(arena: ArenaData, seed: number): World {
     rng: new Rng(seed),
     events: {
       count: 0,
+      dropped: 0,
       type: new Uint8Array(MAX_SIM_EVENTS),
       slot: new Uint8Array(MAX_SIM_EVENTS),
       v: new Float64Array(MAX_SIM_EVENTS * EVENT_STRIDE),
@@ -724,6 +733,12 @@ export function createWorld(arena: ArenaData, seed: number): World {
   return world;
 }
 
+/** Un nouveau coup de mêlée de `slot` commence : il peut de nouveau toucher chaque objet une fois. */
+export function clearSwingHits(world: World, slot: number): void {
+  const bit = ~(1 << slot);
+  for (let i = 0; i < world.objects.length; i++) world.objects[i].hitBy &= bit;
+}
+
 export function emit(
   world: World,
   type: number,
@@ -736,7 +751,10 @@ export function emit(
   f = 0,
 ): void {
   const ev = world.events;
-  if (ev.count >= MAX_SIM_EVENTS) return;
+  if (ev.count >= MAX_SIM_EVENTS) {
+    ev.dropped++;
+    return;
+  }
   const i = ev.count++;
   ev.type[i] = type;
   ev.slot[i] = slot;

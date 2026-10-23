@@ -149,6 +149,16 @@ export function removePlayer(world: World, slot: number): void {
   p.active = false;
   p.prevInput = 0;
   p.hasBomb = false;
+  // Ce que le joueur a laissé derrière lui ne doit pas revenir à un futur occupant du slot : ses
+  // tirs s'arrêtent, ses mines et la dernière touche de la boule restent mais sans propriétaire.
+  for (let i = 0; i < world.projectiles.length; i++) {
+    const pr = world.projectiles[i];
+    if (pr.active && pr.owner === slot) pr.active = false;
+  }
+  for (let i = 0; i < world.objects.length; i++) {
+    const o = world.objects[i];
+    if (o.owner === slot) o.owner = -1;
+  }
 }
 
 export const WORLD_ROWS = GRID_H * CELL;

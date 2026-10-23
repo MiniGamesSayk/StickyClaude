@@ -288,6 +288,11 @@ export function beginRound(world: World, arena: ArenaData, mode: number): void {
       COUNTDOWN_TICKS + COMBAT.spawnInvulnTicks,
     );
   }
+  // La boule d'abord : une arène chargée de props ne doit pas lui prendre sa place (32 objets).
+  if (mode === ModeId.BALL) {
+    assignSides(world);
+    spawnBall(world);
+  }
   spawnProps(world);
 
   if (mode === ModeId.SAME_WEAPON) {
@@ -300,10 +305,6 @@ export function beginRound(world: World, arena: ArenaData, mode: number): void {
         p.ammo = w.ammo;
       }
     }
-  }
-  if (mode === ModeId.BALL) {
-    assignSides(world);
-    spawnBall(world);
   }
   emit(world, SimEvent.ROUND_START, 0, g.round, mode);
 }
@@ -544,6 +545,11 @@ function stepBall(world: World): void {
   let ball = null;
   for (const o of world.objects) if (o.active && o.type === ObjType.BALL) ball = o;
   if (!ball) {
+    // Sans boule (plus de place pour la recréer), la manche doit tout de même finir à l'heure.
+    if (g.roundTick >= MODE_PARAMS.ballMaxTicks) {
+      endBallRound(world);
+      return;
+    }
     if (g.modeData[2] > 0) {
       g.modeData[2] = g.modeData[2] - 1;
       if (g.modeData[2] === 0) spawnBall(world);
@@ -580,19 +586,23 @@ function stepBall(world: World): void {
       return;
     }
   }
-  if (g.roundTick >= MODE_PARAMS.ballMaxTicks) {
-    const d0 = g.modeData[0];
-    const d1 = g.modeData[1];
-    let mask = 0;
-    if (d0 !== d1) {
-      const side = d0 > d1 ? 0 : 1;
-      for (let s = 0; s < MAX_PLAYERS; s++) {
-        const p = world.players[s];
-        if (participates(world, p, s) && world.side[s] === side) mask |= 1 << world.team[s];
-      }
+  if (g.roundTick >= MODE_PARAMS.ballMaxTicks) endBallRound(world);
+}
+
+/** Temps écoulé : le camp qui a marqué le plus gagne, une égalité n'est attribuée à personne. */
+function endBallRound(world: World): void {
+  const g = world.game;
+  const d0 = g.modeData[0];
+  const d1 = g.modeData[1];
+  let mask = 0;
+  if (d0 !== d1) {
+    const side = d0 > d1 ? 0 : 1;
+    for (let s = 0; s < MAX_PLAYERS; s++) {
+      const p = world.players[s];
+      if (participates(world, p, s) && world.side[s] === side) mask |= 1 << world.team[s];
     }
-    endRound(world, mask);
   }
+  endRound(world, mask);
 }
 
 const POTATO_EXPLOSION = { radius: 52, damage: 35, kb: 380, destroys: false, puddle: false };
@@ -653,7 +663,7 @@ function stepPotato(world: World): void {
     g.modeData[0] = 0;
     g.modeData[2] = MODE_PARAMS.potatoNextTicks;
     // Le porteur meurt, le souffle touche les autres.
-    killPlayer(world, holder, holder, Cause.POTATO);
+    killPlayer(world, holder, -1, Cause.POTATO);
     explode(world, x, y, POTATO_EXPLOSION, holder, Cause.EXPLOSION, 3);
     applyHits(world);
   }

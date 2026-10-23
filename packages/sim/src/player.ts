@@ -30,7 +30,7 @@ import {
   wallContact,
 } from './collision.ts';
 import { inPuddle, PUDDLE_GRIP } from './terrain.ts';
-import { emit } from './world.ts';
+import { clearSwingHits, emit } from './world.ts';
 import type { Player, World } from './world.ts';
 
 /** Appui d'attaque mémorisé (ticks), comme la mémoire du saut. */
@@ -180,6 +180,7 @@ function enterPhase(world: World, p: Player, slot: number, phase: number): void 
 
 function onActiveStart(world: World, p: Player, slot: number, held: number): void {
   p.hitMask = 0;
+  clearSwingHits(world, slot);
   const k = p.atkKind;
   const dir = p.facing;
   emit(world, SimEvent.SWING, slot, p.x, p.y, k);
@@ -481,13 +482,14 @@ function startSpecial(p: Player, kind: number): void {
   p.comboWindow = 0;
 }
 
-function startKick(_world: World, p: Player, _slot: number): void {
+function startKick(world: World, p: Player, slot: number): void {
   p.atkKind = AttackKind.KICK;
   p.atkPhase = AtkPhase.ACTIVE;
   p.atkTicks = 0;
   p.atkBuffer = 0;
   p.kicking = true;
   p.hitMask = 0;
+  clearSwingHits(world, slot);
   p.combo = 0;
   p.comboWindow = 0;
 }

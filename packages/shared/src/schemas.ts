@@ -8,14 +8,38 @@ import type { ArenaData } from './arena.ts';
 
 /** Schémas zod : messages de contrôle (JSON) et fichiers d'arènes. Importé côté serveur et tests. */
 
-const cell = z.tuple([z.number().int().min(0).max(GRID_W), z.number().int().min(0).max(GRID_H)]);
-
-const rect = z.tuple([
-  z.number().int().min(0).max(GRID_W),
-  z.number().int().min(0).max(GRID_H),
-  z.number().int().min(1).max(GRID_W),
-  z.number().int().min(1).max(GRID_H),
+// Les cellules et origines vont de 0 à GRID − 1 (GRID est le premier indice hors de la grille).
+const cell = z.tuple([
+  z
+    .number()
+    .int()
+    .min(0)
+    .max(GRID_W - 1),
+  z
+    .number()
+    .int()
+    .min(0)
+    .max(GRID_H - 1),
 ]);
+
+const rect = z
+  .tuple([
+    z
+      .number()
+      .int()
+      .min(0)
+      .max(GRID_W - 1),
+    z
+      .number()
+      .int()
+      .min(0)
+      .max(GRID_H - 1),
+    z.number().int().min(1).max(GRID_W),
+    z.number().int().min(1).max(GRID_H),
+  ])
+  .refine(([x, y, w, h]) => x + w <= GRID_W && y + h <= GRID_H, {
+    message: 'rect must stay inside the grid',
+  });
 
 const GRID_ROW = new RegExp(`^[.#p\\-^lst]{${GRID_W}}$`);
 
@@ -41,7 +65,7 @@ export const arenaSchema = z
               .array(z.tuple([z.number().min(0).max(GRID_W), z.number().min(0).max(GRID_H)]))
               .min(2)
               .max(16),
-            period: z.number().positive().max(120),
+            period: z.number().min(1).max(120),
           })
           .strict()
           .refine((m) => m.path[0][0] === m.rect[0] && m.path[0][1] === m.rect[1], {

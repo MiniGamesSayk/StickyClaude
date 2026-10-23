@@ -107,6 +107,8 @@ export function spawnObj(
   o.team = -1;
   o.life = 0;
   o.timer = 0;
+  o.hitBy = 0;
+  o.hitProj = 0;
   return o;
 }
 

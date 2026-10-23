@@ -286,6 +286,29 @@ export function hashWorld(world: World): number {
   for (let i = 0; i < MAX_PLAYERS; i++) h = mix(h, g.scores[i] & 0xffff);
   for (let i = 0; i < 8; i++) h = mix(h, g.modeData[i] >>> 0);
   h = mixF(h, g.inkY);
+  h = mixF(h, g.tear);
+  h = mix(h, g.roundWinner + 1);
+  h = mix(h, g.matchWinner + 1);
+  h = mix(h, g.suddenStarted ? 1 : 0);
+  h = mix(h, g.commonWeapon);
+  h = mix(h, g.lastArena + 1);
+  h = mix(h, g.nextUid);
+  // règles, vote, équipes et camps : ils changent l'issue des coups et des manches
+  const r = world.rules;
+  h = mix(
+    h,
+    (r.friendlyFire ? 1 : 0) | (r.weapons ? 2 : 0) | (r.ghosts ? 4 : 0) | (r.teamsMode ? 8 : 0),
+  );
+  h = mix(h, r.suddenAfterTicks);
+  h = mix(h, r.roundsToWin | (r.teamCount << 8) | (r.bonusEvery << 16));
+  h = mix(h, (world.votePlanned ? 1 : 0) | (world.voteHold ? 2 : 0) | (world.voteMode << 2));
+  h = mix(h, world.voteCount);
+  h = mix(h, world.voteChoice + 1);
+  for (let i = 0; i < MAX_PLAYERS; i++) {
+    h = mix(h, world.team[i] + 1);
+    h = mix(h, world.side[i] + 1);
+    h = mix(h, world.inMatch[i]);
+  }
   for (let i = 0; i < world.players.length; i++) {
     const p = world.players[i];
     h = mix(h, p.active ? 1 : 0);
@@ -340,6 +363,16 @@ export function hashWorld(world: World): number {
     h = mixF(h, p.ghostY);
     h = mix(h, p.ghostCd);
     h = mix(h, p.respawnTimer);
+    h = mix(h, p.atkBuffer);
+    h = mix(h, p.hitMask);
+    h = mix(h, p.rewind);
+    h = mix(h, p.lastAttacker + 1);
+    h = mix(h, p.lastAttackTick);
+    h = mix(h, p.lastHitTick);
+    h = mix(h, p.combos);
+    h = mix(h, p.hazardCd | (p.tackCd << 8));
+    h = mix(h, p.bombFuse);
+    h = mix(h, p.bombPassCd);
   }
   for (let i = 0; i < world.objects.length; i++) {
     const o = world.objects[i];
@@ -353,6 +386,11 @@ export function hashWorld(world: World): number {
     h = mix(h, (o.a | 0) & 0xffff);
     h = mix(h, (o.b | 0) & 0xffff);
     h = mix(h, o.life);
+    h = mixF(h, o.w);
+    h = mixF(h, o.h);
+    h = mix(h, (o.grounded ? 1 : 0) | ((o.owner + 1) << 1) | ((o.team + 1) << 5));
+    h = mix(h, o.timer);
+    h = mix(h, o.hitBy | (o.hitProj << 8));
   }
   for (let i = 0; i < world.projectiles.length; i++) {
     const p = world.projectiles[i];
@@ -363,7 +401,40 @@ export function hashWorld(world: World): number {
     h = mixF(h, p.vx);
     h = mixF(h, p.vy);
     h = mix(h, p.life);
+    h = mix(h, p.type | ((p.owner + 1) << 8) | (p.weapon << 16));
+    h = mix(h, p.ammo);
+    h = mix(h, p.age);
+    h = mix(h, p.bounces);
+    h = mix(h, p.hitMask);
   }
+  for (let i = 0; i < world.puddles.length; i++) {
+    const q = world.puddles[i];
+    if (!q.active) continue;
+    h = mixF(h, q.x0);
+    h = mixF(h, q.x1);
+    h = mixF(h, q.y);
+    h = mix(h, q.expire);
+  }
+  for (let i = 0; i < world.marks.length; i++) {
+    const m = world.marks[i];
+    if (!m.active) continue;
+    h = mix(h, m.kind | (m.owner << 8));
+    h = mix(h, m.expire);
+    h = mix(h, m.c0 + 1);
+    h = mix(h, m.c1 + 1);
+    h = mix(h, m.c2 + 1);
+  }
+  for (let i = 0; i < world.spawns.length; i++) {
+    const w = world.spawns[i];
+    if (!w.active) continue;
+    h = mix(h, w.uid);
+    h = mixF(h, w.x);
+    h = mixF(h, w.y);
+    h = mix(h, w.weapon);
+    h = mix(h, w.at);
+  }
+  // positions récentes des joueurs (compensation de latence) : elles décident des coups futurs
+  for (let i = 0; i < world.history.length; i++) h = mixF(h, world.history[i]);
   const cells = world.cells;
   for (let i = 0; i < cells.length; i++) h = mix(h, cells[i]);
   return h >>> 0;

@@ -469,6 +469,8 @@ export function stepProjectiles(world: World): void {
       if (o.type !== ObjType.CRATE && o.type !== ObjType.BALLOON && o.type !== ObjType.COVER) {
         continue;
       }
+      // la gomme et le boomerang traversent : un objet n'est touché qu'une fois par projectile
+      if (o.hitProj === p.uid) continue;
       const t = segmentBox(
         p.x,
         p.y,
@@ -499,6 +501,9 @@ export function stepProjectiles(world: World): void {
         endProjectile(world, p, hx, hy);
         continue;
       }
+      o.hitProj = p.uid;
+      // un objet plus proche que le joueur le protège pour ce tick
+      bestPlayer = -1;
     }
 
     if (bestPlayer >= 0 && bestT <= 1) {
