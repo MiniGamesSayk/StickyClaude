@@ -269,3 +269,13 @@ describe('réglages de la manette', () => {
     resetPadBindings();
   });
 });
+
+describe('touche de dash par défaut', () => {
+  it('Maj gauche et A (AZERTY) ; l’ancien réglage par défaut est migré, un choix perso est gardé', () => {
+    expect(DEFAULT_BINDINGS.dash).toEqual(['ShiftLeft', 'KeyQ']);
+    const old = sanitizeOptions({ bindings: { dash: ['ShiftLeft', 'ShiftRight'] } });
+    expect(old.bindings.dash).toEqual(['ShiftLeft', 'KeyQ']);
+    const custom = sanitizeOptions({ bindings: { dash: ['KeyX', ''] } });
+    expect(custom.bindings.dash).toEqual(['KeyX', '']);
+  });
+});

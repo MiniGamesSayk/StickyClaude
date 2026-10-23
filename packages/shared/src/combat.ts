@@ -31,7 +31,7 @@ export const COMBAT = {
   /** Fenêtre pour enchaîner le coup suivant, après la fin des images actives. */
   comboWindowTicks: 18,
   /** Bouton d'attaque tenu aussi longtemps : le coup en cours est suivi d'une charge. */
-  chargeHoldTicks: 16,
+  chargeHoldTicks: 10,
   chargeMaxTicks: 54,
   /** Parade : part des dégâts subis de face, et des projections. */
   blockDamageTaken: 0.3,

@@ -36,7 +36,8 @@ export const DEFAULT_BINDINGS: Readonly<Bindings> = {
   attack: ['KeyJ', ''],
   block: ['KeyE', ''],
   pickup: ['KeyL', ''],
-  dash: ['ShiftLeft', 'ShiftRight'],
+  // Maj seul ouvre le menu du navigateur avec un clic droit sous Firefox : A (AZERTY) en secours.
+  dash: ['ShiftLeft', 'KeyQ'],
 };
 
 /** Actions de manette reconfigurables (les directions restent au stick et à la croix). */
@@ -166,6 +167,10 @@ export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()):
     const pair = Array.isArray(rp[a]) ? (rp[a] as unknown[]) : [];
     const d = base.padBindings[a];
     padBindings[a] = [padButton(pair[0], d[0]), padButton(pair[1], d[1])];
+  }
+  // ancienne seconde touche de dash par défaut (Maj droite) : on passe à la nouvelle
+  if (bindings.dash[0] === 'ShiftLeft' && bindings.dash[1] === 'ShiftRight') {
+    bindings.dash = [...DEFAULT_BINDINGS.dash];
   }
   // ancienne touche de parade par défaut (K) : on passe à la nouvelle (E)
   if (bindings.block[0] === 'KeyK' && bindings.block[1] === '') bindings.block = ['KeyE', ''];
