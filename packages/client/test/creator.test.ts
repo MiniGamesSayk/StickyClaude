@@ -4,13 +4,18 @@ import { describe, expect, it } from 'vitest';
 import {
   addMover,
   checkLevel,
+  clampShift,
+  dropPayload,
   eraseAt,
   fillRect,
   finalizeLevel,
   floodFill,
+  liftSelection,
   mirrorCells,
   mirrorRects,
   newLevel,
+  normSel,
+  payloadSize,
   placeSpawns,
   sameLevel,
   toggleSpawnAt,
@@ -178,5 +183,55 @@ describe('créateur de niveau', () => {
       }
     }
     expect(mirrorRects([5, 10, 8, 12], 'hv')).toHaveLength(4);
+  });
+});
+
+describe('sélection et déplacement', () => {
+  it('emporte cases, marqueurs, zones et plateformes mobiles, puis les redépose décalés', () => {
+    const s = newLevel('t');
+    for (let x = 10; x < 14; x++) s.cells[10 * GRID_W + x] = Cell.SOLID;
+    applyTool(s, Tool.WEAPON, 11, 9);
+    applyTool(s, Tool.CRATE, 12, 9);
+    applyTool(s, Tool.KOTH, 0, 0);
+    s.koth = [10, 5, 4, 3];
+    expect(addMover(s, [10, 7, 2, 1], 13, 7)).toBe(true);
+    const spawnsBefore = s.spawns.length;
+    const ref = structuredClone(s);
+    const sel = normSel(14, 11, 9, 4);
+    const p = liftSelection(s, sel);
+    expect(p.cells).toHaveLength(4);
+    expect(p.weaponSpawns).toEqual([[11, 9]]);
+    expect(p.props).toHaveLength(1);
+    expect(p.koth).toEqual([10, 5, 4, 3]);
+    expect(p.movers).toHaveLength(1);
+    expect(s.cells[10 * GRID_W + 10]).toBe(Cell.EMPTY);
+    expect(s.koth).toBeNull();
+    expect(s.movers).toHaveLength(0);
+    expect(s.spawns).toHaveLength(spawnsBefore); // hors zone : intacts
+    expect(payloadSize(p)).toBe(4 + 1 + 1 + 1 + 1);
+    dropPayload(s, p, 20, 3);
+    expect(s.cells[13 * GRID_W + 30]).toBe(Cell.SOLID);
+    expect(s.weaponSpawns).toContainEqual([31, 12]);
+    expect(s.koth).toEqual([30, 8, 4, 3]);
+    expect(s.movers[0].rect).toEqual([30, 10, 2, 1]);
+    expect(s.movers[0].path).toEqual([
+      [30, 10],
+      [33, 10],
+    ]);
+    // retour au point de départ : le niveau est identique
+    const back = liftSelection(s, normSel(29, 7, 34, 14));
+    dropPayload(s, back, -20, -3);
+    expect(sameLevel(s, ref)).toBe(true);
+  });
+
+  it('une plateforme dont le trajet sort de la zone reste en place ; le décalage reste dans la page', () => {
+    const s = newLevel('t');
+    addMover(s, [10, 7, 2, 1], 20, 7);
+    const p = liftSelection(s, [8, 5, 14, 9]);
+    expect(p.movers).toHaveLength(0);
+    expect(s.movers).toHaveLength(1);
+    expect(clampShift([0, 0, 5, 5], -9, -9)).toEqual([0, 0]);
+    expect(clampShift([GRID_W - 6, GRID_H - 6, GRID_W - 1, GRID_H - 1], 9, 9)).toEqual([0, 0]);
+    expect(clampShift([10, 10, 12, 12], 4, -3)).toEqual([4, -3]);
   });
 });

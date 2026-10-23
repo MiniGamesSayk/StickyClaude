@@ -432,6 +432,12 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - **Personnalisation** : choisir une emote de victoire la joue aussitôt (avant, il fallait presser « Essayer »).
 - **Créateur** : pinceau / rectangle / seau en pictogrammes sur une seule ligne (info-bulle et `aria-label` pour le nom) ; symétries en grille 2 × 2.
 
+### D71. Points d'apparition des armes : chute au sol, un seul objet par point
+
+- À la création du monde, chaque point d'apparition d'arme **descend jusqu'au premier sol** (bloc, papier ou plateforme à sens unique) sous lui (`weaponDropRow`) : le dessin au crayon et l'arme apparaissent déjà à terre, au lieu de tomber de haut. Un point sans sol (vide, ou danger en dessous) est écarté. Aucune arène livrée n'est modifiée.
+- **Pas deux objets au même point** : arme ou cœur non ramassé (ou dessin en cours) bloque le point ; l'apparition choisit le point libre suivant, ou saute son tour si tous sont occupés.
+- Le créateur trace un pointillé du point posé jusqu'au sol où l'arme apparaîtra (rouge s'il n'y a pas de sol).
+
 ### D60. Dash : un bit de plus dans le masque, retard de compensation à 2 bits
 
 - **Contexte.** Le masque d'entrées de 16 bits était plein (boutons 0-7, visée 8-12, retard 13-15, D-visée). Le dash a besoin d'un bouton.
@@ -449,3 +455,8 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - **Page de garde** : le décor « CAHIER DE » est complété (« CAHIER DE CASTAGNE »).
 - **Esquive** : `Dash` sans gauche/droite tenu = esquive sur place (`Player.dodging`, bit `StatusFlag.DODGING` dans `OwnState`, état `PlayerState.DODGE`, événement local `SimEvent.DODGE`, réglages `dodgeTicks` 20 et `dodgeCooldownTicks` 75). Invulnérable (`invuln`) et figée (ni gravité ni vitesse), sans saut, coup ni parade pendant ; interrompue par un étourdissement ou la mort. Rendu : tas d'encre semi-transparent.
 - **Armes dans les murs** : une arme lancée contre un mur ou lâchée dans un angle pouvait rester à moitié dans le décor, hors de portée. `unstick` (objets) la ressort vers la plus proche position libre dans 64 unités, sinon elle disparaît (la boule n'est jamais supprimée).
+
+### D72. Créateur : sélection et déplacement d'une zone
+
+- Outil « Sélectionner / déplacer » : encadrer une zone la sélectionne (si elle contient quelque chose), puis la glisser déplace **tout** : cases, apparitions de joueurs et d'armes, objets, départ de la boule, colline et cages entières, plateformes mobiles dont tout le trajet est dans la zone. Suppr efface le contenu, Échap annule.
+- Modèle pur (`liftSelection` / `dropPayload` / `clampShift`) : le niveau n'est modifié qu'au lâcher (l'aperçu se dessine sur une copie), donc un déplacement est une seule étape d'annulation ; le décalage est borné pour que la zone reste dans la page. À l'arrivée, les cases vides n'effacent rien, les cases pleines remplacent ce qu'elles recouvrent (marqueurs compris).

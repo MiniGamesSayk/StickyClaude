@@ -1,5 +1,6 @@
 import { Cell, CELL, GRID_H, GRID_W, WORLD_H, WORLD_W } from '@stickyclaude/shared';
 import type { ArenaData } from '@stickyclaude/shared';
+import { weaponDropRow } from '@stickyclaude/sim';
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { newLevelId, saveLevels, MAX_LEVELS } from '../app/levels.ts';
@@ -7,6 +8,8 @@ import { actions, levels, mode, overlay, say } from '../app/store.ts';
 import {
   addMover,
   applySpawns,
+  clampShift,
+  dropPayload,
   eraseAt,
   fillRect,
   finalizeLevel,
@@ -15,13 +18,16 @@ import {
   mirrorRects,
   fromArena,
   levelCheck,
+  liftSelection,
   newLevel,
+  normSel,
+  payloadSize,
   sameLevel,
   toggleSpawnAt,
   THEME_IDS,
 } from '../creator/model.ts';
 import { LevelChecker } from '../creator/checker.ts';
-import type { EditorState, LevelCheck, Symmetry } from '../creator/model.ts';
+import type { EditorState, LevelCheck, Sel, Symmetry } from '../creator/model.ts';
 import { applyRect, applyTool, CELL_TOOLS, RECT_TOOLS, Tool, toArena } from '../editor/model.ts';
 import type { Rect, ToolId } from '../editor/model.ts';
 import { pick, t } from '../i18n/index.ts';
@@ -31,7 +37,7 @@ import { renderPage } from '../render/page.ts';
 import { Button, Select } from './components.tsx';
 
 /** Outil du créateur : ceux de l'éditeur, plus la plateforme mobile. */
-type CTool = ToolId | 'mover';
+type CTool = ToolId | 'mover' | 'select';
 /** Manière de poser une case : au pinceau, en rectangle ou au seau. */
 type PoseMode = 'brush' | 'rect' | 'bucket';
 
@@ -117,7 +123,13 @@ const GROUPS: { title: MessageKey; tools: [CTool, MessageKey][] }[] = [
       [Tool.GOAL_B, 'cr.tool_goal_b'],
     ],
   },
-  { title: 'cr.group_edit', tools: [[Tool.ERASE, 'cr.tool_erase']] },
+  {
+    title: 'cr.group_edit',
+    tools: [
+      ['select', 'cr.tool_select'],
+      [Tool.ERASE, 'cr.tool_erase'],
+    ],
+  },
 ];
 
 /** Outils qui posent des cases : ils suivent le mode (pinceau, rectangle, seau). */
@@ -210,6 +222,7 @@ function draw(
   pending: Rect | null,
   sym: Symmetry,
   markerTool: boolean,
+  sel: Sel | null,
 ): void {
   ctx.drawImage(backgroundOf(s.theme), 0, 0, WORLD_W, WORLD_H);
   for (let y = 0; y < GRID_H; y++) {
@@ -283,7 +296,7 @@ function draw(
     }
   }
   for (const p of s.props) drawProp(ctx, p.type, p.at[0], p.at[1]);
-  for (const [x, y] of s.weaponSpawns) drawWeaponSpawn(ctx, x, y);
+  for (const [x, y] of s.weaponSpawns) drawWeaponSpawn(ctx, x, y, weaponDropRow(s.cells, x, y));
   s.spawns.forEach(([x, y], i) => drawPlayerSpawn(ctx, x, y, i + 1));
   dashedRect(ctx, s.koth, '#c9a227', 'colline');
   dashedRect(ctx, s.goalA, '#1f4fd1', 'cage A');
@@ -294,6 +307,25 @@ function draw(
     ctx.strokeStyle = '#1f4fd1';
     ctx.setLineDash([4, 3]);
     ctx.strokeRect(hover.x * CELL, hover.y * CELL, pending[2] * CELL, pending[3] * CELL);
+    ctx.setLineDash([]);
+  }
+  if (sel) {
+    ctx.fillStyle = 'rgba(31,79,209,0.12)';
+    ctx.fillRect(
+      sel[0] * CELL,
+      sel[1] * CELL,
+      (sel[2] - sel[0] + 1) * CELL,
+      (sel[3] - sel[1] + 1) * CELL,
+    );
+    ctx.strokeStyle = '#1f4fd1';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(
+      sel[0] * CELL,
+      sel[1] * CELL,
+      (sel[2] - sel[0] + 1) * CELL,
+      (sel[3] - sel[1] + 1) * CELL,
+    );
     ctx.setLineDash([]);
   }
   ctx.strokeStyle = 'rgba(34,38,46,0.7)';
@@ -353,20 +385,38 @@ export function Creator(): JSX.Element {
   const drag = useRef<{ x: number; y: number; tool: CTool } | null>(null);
   const painting = useRef(false);
   const pending = useRef<Rect | null>(null);
+  /** Zone sélectionnée (outil « sélectionner »), et déplacement en cours (décalage en cases). */
+  const selection = useRef<Sel | null>(null);
+  const moving = useRef<{ x: number; y: number; dx: number; dy: number } | null>(null);
   const timer = useRef(0);
   const checker = useRef<LevelChecker | null>(null);
   const canTest = mode.value === 'menu';
   const cellTool = CELL_TOOL_IDS.has(tool);
   /** Outil et mode lus par les écouteurs (qui ne se réabonnent pas à chaque rendu). */
-  const live = useRef({ undo: (): void => undefined, redo: (): void => undefined });
+  const live = useRef({
+    undo: (): void => undefined,
+    redo: (): void => undefined,
+    removeSelection: (): void => undefined,
+  });
 
   const rectLike = (): boolean =>
-    tool === 'mover' || RECT_TOOLS.has(tool) || (cellTool && poseMode === 'rect');
+    tool === 'mover' ||
+    tool === 'select' ||
+    RECT_TOOLS.has(tool) ||
+    (cellTool && poseMode === 'rect');
   const redraw = (): void => {
     const ctx = canvasRef.current?.getContext('2d');
-    if (ctx && draft) {
-      draw(ctx, draft, hover.current, drag.current, rectLike(), pending.current, sym, !cellTool);
+    if (!ctx || !draft) return;
+    let shown = draft;
+    let sel = selection.current;
+    const mv = moving.current;
+    if (sel && mv && (mv.dx !== 0 || mv.dy !== 0)) {
+      // aperçu du déplacement : le niveau, la zone vidée puis redéposée plus loin
+      shown = snapshot(draft);
+      dropPayload(shown, liftSelection(shown, sel), mv.dx, mv.dy);
+      sel = [sel[0] + mv.dx, sel[1] + mv.dy, sel[2] + mv.dx, sel[3] + mv.dy];
     }
+    draw(ctx, shown, hover.current, drag.current, rectLike(), pending.current, sym, !cellTool, sel);
   };
   /** Analyse du niveau dans un worker (plusieurs secondes sur un terrain très ouvert). */
   const verify = async (): Promise<void> => {
@@ -407,6 +457,7 @@ export function Creator(): JSX.Element {
     redoStack.push(snapshot(draft));
     draft = prev;
     pending.current = null;
+    selection.current = null;
     rev();
     changed();
   };
@@ -416,10 +467,20 @@ export function Creator(): JSX.Element {
     undoStack.push(snapshot(draft));
     draft = next;
     pending.current = null;
+    selection.current = null;
     rev();
     changed();
   };
-  live.current = { undo, redo };
+  /** Supprime tout ce que la zone sélectionnée contient (Suppr). */
+  const removeSelection = (): void => {
+    const sel = selection.current;
+    if (!draft || !sel) return;
+    begin();
+    liftSelection(draft, sel);
+    end();
+    changed();
+  };
+  live.current = { undo, redo, removeSelection };
 
   useEffect(() => {
     redraw();
@@ -441,10 +502,20 @@ export function Creator(): JSX.Element {
           return;
         }
       }
+      if ((e.code === 'Delete' || e.code === 'Backspace') && !typing && selection.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        live.current.removeSelection();
+        return;
+      }
       if (e.code !== 'Escape') return;
       e.stopPropagation();
-      if (pending.current) {
+      if (moving.current) {
+        moving.current = null;
+        redraw();
+      } else if (pending.current || selection.current) {
         pending.current = null;
+        selection.current = null;
         redraw();
       } else overlay.value = null;
     };
@@ -455,7 +526,13 @@ export function Creator(): JSX.Element {
       checker.current?.dispose();
     };
   }, []);
-  useEffect(redraw, [tool, poseMode, sym, state.theme]);
+  useEffect(() => {
+    if (tool !== 'select') {
+      selection.current = null;
+      moving.current = null;
+    }
+    redraw();
+  }, [tool, poseMode, sym, state.theme]);
 
   const cellAt = (e: PointerEvent): { x: number; y: number } => {
     const r = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
@@ -522,6 +599,17 @@ export function Creator(): JSX.Element {
       changed();
       return;
     }
+    if (tl === 'select') {
+      const sel = selection.current;
+      if (sel && c.x >= sel[0] && c.x <= sel[2] && c.y >= sel[1] && c.y <= sel[3]) {
+        moving.current = { x: c.x, y: c.y, dx: 0, dy: 0 };
+      } else {
+        selection.current = null;
+        drag.current = { ...c, tool: tl };
+      }
+      redraw();
+      return;
+    }
     const isCell = CELL_TOOL_IDS.has(tl);
     if (tl === 'mover' || RECT_TOOLS.has(tl) || (isCell && poseMode === 'rect')) {
       drag.current = { ...c, tool: tl };
@@ -544,6 +632,19 @@ export function Creator(): JSX.Element {
   const onMove = (e: PointerEvent): void => {
     const c = cellAt(e);
     hover.current = c;
+    const sel = selection.current;
+    if (tool === 'select' && canvasRef.current) {
+      const over = sel && c.x >= sel[0] && c.x <= sel[2] && c.y >= sel[1] && c.y <= sel[3];
+      canvasRef.current.style.cursor = over ? 'move' : '';
+    }
+    const mv = moving.current;
+    if (mv && sel) {
+      const [dx, dy] = clampShift(sel, c.x - mv.x, c.y - mv.y);
+      mv.dx = dx;
+      mv.dy = dy;
+      redraw();
+      return;
+    }
     if (painting.current && draft) {
       const tl: CTool = e.buttons === 2 ? Tool.ERASE : tool;
       if (CELL_TOOL_IDS.has(tl) && poseMode === 'brush') {
@@ -558,8 +659,30 @@ export function Creator(): JSX.Element {
     const c = cellAt(e);
     const d = drag.current;
     drag.current = null;
-    if (d && draft) {
-      if (d.tool === 'mover') {
+    const mv = moving.current;
+    moving.current = null;
+    if (mv && draft && selection.current) {
+      const sel = selection.current;
+      if (mv.dx !== 0 || mv.dy !== 0) {
+        begin();
+        dropPayload(draft, liftSelection(draft, sel), mv.dx, mv.dy);
+        end();
+        selection.current = [sel[0] + mv.dx, sel[1] + mv.dy, sel[2] + mv.dx, sel[3] + mv.dy];
+        changed();
+      } else redraw();
+    } else if (d && draft) {
+      if (d.tool === 'select') {
+        const r = normSel(d.x, d.y, c.x, c.y);
+        const probe = snapshot(draft);
+        if (payloadSize(liftSelection(probe, r)) > 0) {
+          selection.current = r;
+          say(t('cr.select_hint'));
+        } else {
+          selection.current = null;
+          say(t('cr.select_empty'));
+        }
+        redraw();
+      } else if (d.tool === 'mover') {
         const x = Math.min(d.x, c.x);
         const y = Math.min(d.y, c.y);
         pending.current = [x, y, Math.abs(c.x - d.x) + 1, Math.abs(c.y - d.y) + 1];
@@ -602,6 +725,7 @@ export function Creator(): JSX.Element {
     draft = fromArena(a);
     draftId = a.id;
     pending.current = null;
+    selection.current = null;
     end();
     rev();
     changed();
@@ -611,6 +735,7 @@ export function Creator(): JSX.Element {
     draft = newLevel(t('cr.default_name'));
     draftId = newLevelId();
     pending.current = null;
+    selection.current = null;
     end();
     rev();
     changed();

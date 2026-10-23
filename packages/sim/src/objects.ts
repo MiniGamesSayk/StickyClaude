@@ -407,6 +407,27 @@ function gravityStep(world: World, o: Obj, dt: number): void {
   }
 }
 
+/** Un objet (arme, cœur) ou un dessin en cours occupe-t-il déjà ce point d'apparition ? */
+function spotTaken(world: World, x: number, y: number): boolean {
+  for (const o of world.objects) {
+    if (!o.active || (o.type !== ObjType.WEAPON && o.type !== ObjType.HEART)) continue;
+    if (Math.abs(o.x - x) < CELL && Math.abs(o.y - y) < CELL) return true;
+  }
+  for (const s of world.spawns)
+    if (s.active && Math.abs(s.x - x) < CELL && Math.abs(s.y - y) < CELL) return true;
+  return false;
+}
+
+/** Premier point libre à partir de `from` (circulaire), ou -1 si tous sont occupés. */
+function freeSpot(world: World, from: number): number {
+  const n = world.weaponSpawnCount;
+  for (let k = 0; k < n; k++) {
+    const i = (from + k) % n;
+    if (!spotTaken(world, world.weaponSpawnX[i], world.weaponSpawnY[i])) return i;
+  }
+  return -1;
+}
+
 /** Apparition programmée des armes (autorité) : un dessin au crayon, puis l'objet tombe. */
 export function stepWeaponSpawner(world: World): void {
   for (let i = 0; i < world.spawns.length; i++) {
@@ -431,7 +452,8 @@ export function stepWeaponSpawner(world: World): void {
   const interval = itemInterval(players);
   g.weaponTimer = interval + world.rng.int(Math.round(interval * 0.4));
   if (countGroundWeapons(world) >= maxGroundWeapons(players)) return;
-  const idx = world.rng.int(world.weaponSpawnCount);
+  const idx = freeSpot(world, world.rng.int(world.weaponSpawnCount));
+  if (idx < 0) return; // chaque point porte déjà une arme ou un cœur non ramassé
   const x = world.weaponSpawnX[idx];
   const y = world.weaponSpawnY[idx];
   const weapon = randomWeapon(world);
@@ -459,7 +481,8 @@ function stepHearts(world: World, players: number): void {
   const interval = itemInterval(players);
   g.healTimer = Math.round(interval * 1.5) + world.rng.int(Math.round(interval * 0.6));
   if (countGroundHearts(world) >= maxGroundHearts(players)) return;
-  const idx = world.rng.int(world.weaponSpawnCount);
+  const idx = freeSpot(world, world.rng.int(world.weaponSpawnCount));
+  if (idx < 0) return;
   const o = spawnObj(
     world,
     ObjType.HEART,

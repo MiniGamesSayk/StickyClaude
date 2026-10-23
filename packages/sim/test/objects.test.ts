@@ -221,13 +221,50 @@ describe('apparition des armes', () => {
     expect(appearedAt).toBeGreaterThanOrEqual(WEAPON_DRAW_TICKS - 2);
   });
 
+  it('un point d’apparition posé en hauteur descend jusqu’au sol, un point sans sol est écarté', () => {
+    const a = boxArena();
+    a.spawns.weapons = [
+      [10, 8], // très haut : retombe sur le sol (ligne 32)
+      [20, 32],
+    ];
+    a.grid[34] = a.grid[34].slice(0, 40) + '.'.repeat(4) + a.grid[34].slice(44);
+    a.grid[33] = a.grid[33].slice(0, 40) + '.'.repeat(4) + a.grid[33].slice(44);
+    a.grid[35] = a.grid[35].slice(0, 40) + '.'.repeat(4) + a.grid[35].slice(44);
+    a.spawns.weapons.push([41, 10]); // au-dessus d'un trou : pas de sol
+    const w = fightWorld({ arena: a, weapons: true });
+    expect(w.weaponSpawnCount).toBe(2);
+    expect(w.weaponSpawnY[0]).toBe(33 * CELL);
+    expect(w.weaponSpawnY[1]).toBe(33 * CELL);
+  });
+
+  it('pas deux armes au même point tant que la première n’est pas ramassée', () => {
+    const a = boxArena();
+    a.spawns.weapons = [[30, 32]];
+    const w = fightWorld({ n: 8, arena: a, weapons: true });
+    for (const o of w.objects) o.active = false;
+    for (const s of w.spawns) s.active = false;
+    w.game.weaponTimer = 0;
+    for (let i = 0; i < 60 * 60; i++) {
+      w.game.weaponTimer = Math.min(w.game.weaponTimer, 5);
+      tick(w);
+      const near = w.objects.filter(
+        (o) => o.active && o.type === ObjType.WEAPON && Math.abs(o.x - 30.5 * CELL) < CELL,
+      );
+      expect(near.length).toBeLessThanOrEqual(1);
+    }
+    expect(w.objects.some((o) => o.active && o.type === ObjType.WEAPON)).toBe(true);
+  });
+
   /** Joue `seconds` secondes avec `n` joueurs : maximum d'armes au sol et nombre d'apparitions. */
   function play(n: number, seconds = 90): { max: number; spawns: number } {
     const a = boxArena();
     a.spawns.weapons = [
-      [10, 32],
-      [30, 32],
-      [50, 32],
+      [6, 32],
+      [16, 32],
+      [26, 32],
+      [36, 32],
+      [46, 32],
+      [56, 32],
     ];
     const w = fightWorld({ n, arena: a, weapons: true });
     for (const o of w.objects) o.active = false;
