@@ -1473,3 +1473,10 @@ html[data-motion='reduced'] *::after {
   animation: none !important;
   transition: none !important;
 }
+.weapon-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.1rem 0.5rem;
+  margin: 0.2rem 0 0.4rem;
+  font-size: 0.9rem;
+}

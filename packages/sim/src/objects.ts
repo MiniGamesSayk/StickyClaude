@@ -148,14 +148,23 @@ export function countGroundWeapons(world: World): number {
 
 /** Arme tirée au hasard, selon les poids de `weapons.ts`. */
 export function randomWeapon(world: World): number {
+  const pool = weaponPool(world);
   let total = 0;
-  for (const id of SPAWNABLE_WEAPONS) total += weaponDef(id).weight;
+  for (const id of pool) total += weaponDef(id).weight;
   let r = world.rng.float() * total;
-  for (const id of SPAWNABLE_WEAPONS) {
+  for (const id of pool) {
     r -= weaponDef(id).weight;
     if (r < 0) return id;
   }
-  return SPAWNABLE_WEAPONS[0];
+  return pool[0];
+}
+
+/** Armes qui peuvent apparaître : celles que l'arène autorise, ou toutes. */
+function weaponPool(world: World): readonly number[] {
+  const only = world.arena.weapons;
+  if (!only || only.length === 0) return SPAWNABLE_WEAPONS;
+  const pool = SPAWNABLE_WEAPONS.filter((id) => only.includes(id));
+  return pool.length > 0 ? pool : SPAWNABLE_WEAPONS;
 }
 
 /** L'arme tenue tombe quand son porteur meurt. */

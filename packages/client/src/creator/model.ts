@@ -207,6 +207,7 @@ export function sameLevel(a: EditorState, b: EditorState): boolean {
       s.goalA,
       s.goalB,
       s.ballSpawn,
+      s.weapons,
     ]);
   return rest(a) === rest(b);
 }

@@ -63,6 +63,8 @@ export interface EditorState {
   goalA: Rect | null;
   goalB: Rect | null;
   ballSpawn: CellXY | null;
+  /** Armes autorisées (`WeaponId`) ; null : toutes. */
+  weapons: number[] | null;
 }
 
 export function emptyState(): EditorState {
@@ -94,6 +96,7 @@ export function emptyState(): EditorState {
     goalA: [2, 29, 3, 6],
     goalB: [59, 29, 3, 6],
     ballSpawn: null,
+    weapons: null,
   };
 }
 
@@ -115,6 +118,7 @@ export function fromArena(a: ArenaData): EditorState {
     goalA: ball ? [...ball.goals[0]] : null,
     goalB: ball ? [...ball.goals[1]] : null,
     ballSpawn: ball?.spawn ? [ball.spawn[0], ball.spawn[1]] : null,
+    weapons: a.weapons && a.weapons.length > 0 ? [...a.weapons] : null,
   };
 }
 
@@ -141,6 +145,7 @@ export function toArena(s: EditorState): ArenaData {
     suddenDeath: s.suddenDeath,
   };
   if (Object.keys(modes).length > 0) arena.modes = modes;
+  if (s.weapons && s.weapons.length > 0) arena.weapons = [...s.weapons];
   return arena;
 }
 

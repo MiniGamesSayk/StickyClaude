@@ -9,6 +9,7 @@ import {
   eraseAt,
   fillRect,
   finalizeLevel,
+  fromArena,
   floodFill,
   liftSelection,
   mirrorCells,
@@ -20,7 +21,7 @@ import {
   sameLevel,
   toggleSpawnAt,
 } from '../src/creator/model.ts';
-import { applyTool, Tool } from '../src/editor/model.ts';
+import { applyTool, Tool, toArena } from '../src/editor/model.ts';
 
 describe('créateur de niveau', () => {
   it('un niveau neuf est valide : accepté par le schéma du serveur et par l’analyse', () => {
@@ -233,5 +234,23 @@ describe('sélection et déplacement', () => {
     expect(clampShift([0, 0, 5, 5], -9, -9)).toEqual([0, 0]);
     expect(clampShift([GRID_W - 6, GRID_H - 6, GRID_W - 1, GRID_H - 1], 9, 9)).toEqual([0, 0]);
     expect(clampShift([10, 10, 12, 12], 4, -3)).toEqual([4, -3]);
+  });
+});
+
+describe('armes autorisées', () => {
+  it('toutes par défaut ; une liste passe dans l’arène et le schéma', () => {
+    const s = newLevel('t');
+    expect(toArena(s).weapons).toBeUndefined();
+    s.weapons = [4, 1];
+    const a = finalizeLevel(s, 'niveau-x');
+    expect(a.weapons).toEqual([4, 1]);
+    expect(arenaSchema.safeParse(a).success).toBe(true);
+    expect(fromArena(a).weapons).toEqual([4, 1]);
+    expect(arenaSchema.safeParse({ ...a, weapons: [0] }).success).toBe(false);
+    expect(arenaSchema.safeParse({ ...a, weapons: [4, 4] }).success).toBe(false);
+    expect(arenaSchema.safeParse({ ...a, weapons: [] }).success).toBe(false);
+    const other = structuredClone(s);
+    other.weapons = null;
+    expect(sameLevel(s, other)).toBe(false);
   });
 });

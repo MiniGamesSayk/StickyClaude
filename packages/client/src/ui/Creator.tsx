@@ -1,4 +1,13 @@
-import { Cell, CELL, GRID_H, GRID_W, WORLD_H, WORLD_W } from '@stickyclaude/shared';
+import {
+  Cell,
+  CELL,
+  GRID_H,
+  GRID_W,
+  SPAWNABLE_WEAPONS,
+  weaponDef,
+  WORLD_H,
+  WORLD_W,
+} from '@stickyclaude/shared';
 import type { ArenaData } from '@stickyclaude/shared';
 import { weaponDropRow } from '@stickyclaude/sim';
 import type { JSX } from 'preact';
@@ -34,7 +43,7 @@ import { pick, t } from '../i18n/index.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import { drawHazard, drawPlayerSpawn, drawProp, drawWeaponSpawn } from '../creator/draw2d.ts';
 import { renderPage } from '../render/page.ts';
-import { Button, Select } from './components.tsx';
+import { Button, Check, Select } from './components.tsx';
 
 /** Outil du créateur : ceux de l'éditeur, plus la plateforme mobile. */
 type CTool = ToolId | 'mover' | 'select';
@@ -925,6 +934,44 @@ export function Creator(): JSX.Element {
             }}
           />
           <p class="hint">{t('cr.death_hint')}</p>
+          <h2>{t('cr.weapons')}</h2>
+          <Check
+            label={t('cr.weapons_all')}
+            checked={state.weapons === null}
+            onChange={(all) => {
+              begin();
+              state.weapons = all ? null : [...SPAWNABLE_WEAPONS];
+              end();
+              rev();
+              changed();
+            }}
+          />
+          {state.weapons !== null && (
+            <div class="weapon-list">
+              {SPAWNABLE_WEAPONS.map((id) => (
+                <Check
+                  key={id}
+                  label={pick(weaponDef(id).name)}
+                  checked={state.weapons?.includes(id) ?? true}
+                  onChange={(on) => {
+                    const cur = state.weapons ?? [];
+                    const next = on ? [...cur, id] : cur.filter((w) => w !== id);
+                    if (next.length === 0) {
+                      say(t('cr.weapons_last'));
+                      rev();
+                      return;
+                    }
+                    begin();
+                    state.weapons = SPAWNABLE_WEAPONS.filter((w) => next.includes(w));
+                    if (state.weapons.length === SPAWNABLE_WEAPONS.length) state.weapons = null;
+                    end();
+                    rev();
+                    changed();
+                  }}
+                />
+              ))}
+            </div>
+          )}
           <div class="row">
             <span>{t('cr.spawns', { n: validCount })}</span>
             <Button

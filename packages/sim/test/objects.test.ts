@@ -255,6 +255,20 @@ describe('apparition des armes', () => {
     expect(w.objects.some((o) => o.active && o.type === ObjType.WEAPON)).toBe(true);
   });
 
+  it('l’arène peut limiter les armes qui apparaissent', () => {
+    const a = boxArena();
+    a.weapons = [WeaponId.PISTOL, WeaponId.RULER];
+    const w = fightWorld({ arena: a, weapons: true });
+    const seen = new Set<number>();
+    for (let i = 0; i < 200; i++) seen.add(randomWeapon(w));
+    expect([...seen].sort()).toEqual([WeaponId.RULER, WeaponId.PISTOL]);
+    delete a.weapons;
+    const all = fightWorld({ arena: a, weapons: true });
+    const many = new Set<number>();
+    for (let i = 0; i < 400; i++) many.add(randomWeapon(all));
+    expect(many.size).toBeGreaterThan(4);
+  });
+
   /** Joue `seconds` secondes avec `n` joueurs : maximum d'armes au sol et nombre d'apparitions. */
   function play(n: number, seconds = 90): { max: number; spawns: number } {
     const a = boxArena();

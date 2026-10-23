@@ -3,6 +3,7 @@ import { GRID_H, GRID_W, MAX_PLAYERS, VOTE_OPTIONS } from './constants.ts';
 import { EMOTE_COUNT } from './emotes.ts';
 import { SUDDEN_MAX_SEC, SUDDEN_MIN_SEC } from './settings.ts';
 import { isMovementKey } from './movement.ts';
+import { SPAWNABLE_WEAPONS } from './weapons.ts';
 import type { ArenaData } from './arena.ts';
 
 /** Schémas zod : messages de contrôle (JSON) et fichiers d'arènes. Importé côté serveur et tests. */
@@ -69,6 +70,17 @@ export const arenaSchema = z
       )
       .max(128),
     suddenDeath: z.enum(['ink-rise', 'tear-edges']),
+    weapons: z
+      .array(
+        z
+          .number()
+          .int()
+          .refine((id) => SPAWNABLE_WEAPONS.includes(id)),
+      )
+      .min(1)
+      .max(SPAWNABLE_WEAPONS.length)
+      .refine((l) => new Set(l).size === l.length)
+      .optional(),
   })
   .strict();
 

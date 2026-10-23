@@ -465,3 +465,8 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 
 - En entraînement (`Scene.damageNumbers`, activé par `SoloSource`), chaque coup qui touche fait monter le chiffre des dégâts à côté de la cible (du côté opposé à l'attaquant), en rouge sombre, plus gros pour un coup lourd ou mortel. Pas d'affichage en ligne.
 - Au salon (entraînement, en ligne comme en solo) la simulation ne retire aucun PV, mais l'événement `HIT` annonce désormais les dégâts qu'aurait infligés le coup (`shown`), au lieu de 0 ; les statistiques (`dealt`) ne changent pas. Conséquence : les coups du salon déclenchent les mêmes effets (arrêt sur image, secousse) que ceux d'un combat.
+
+### D74. Armes autorisées par arène
+
+- Champ facultatif `weapons` (liste de `WeaponId` parmi les 12 armes qui apparaissent, sans doublon, au moins une) dans `ArenaData` et son schéma. Absent : toutes. `randomWeapon` tire dans cette liste (apparitions programmées, caisses brisées, mode « même arme pour tous »), sans changer les poids relatifs.
+- Créateur : case « Toutes les armes » ; décochée, une liste de cases permet de garder seulement certaines armes (cocher toutes les armes revient à « toutes » ; on ne peut pas tout décocher).

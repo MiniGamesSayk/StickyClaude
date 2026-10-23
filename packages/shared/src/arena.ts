@@ -56,6 +56,8 @@ export interface ArenaData {
   };
   decor: DecorData[];
   suddenDeath: 'ink-rise' | 'tear-edges';
+  /** Armes qui peuvent apparaître (`WeaponId`) ; absent : toutes. */
+  weapons?: number[];
 }
 
 /** Convertit les lignes de caractères en tableau d'octets (GRID_W × GRID_H). */
