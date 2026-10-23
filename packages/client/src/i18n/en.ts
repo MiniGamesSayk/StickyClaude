@@ -128,6 +128,8 @@ export const en: Record<MessageKey, string> = {
   'cr.test_menu_only': 'Testing starts from the home screen (outside a room).',
   'cr.save': 'Save',
   'cr.saved': 'Level saved.',
+  'cr.save_as': 'Save as',
+  'cr.copy_suffix': '(copy)',
   'cr.full': 'You already have the maximum number of levels: delete one.',
   'cr.close': 'Close',
   'cr.tools': 'Tools',

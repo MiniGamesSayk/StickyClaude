@@ -720,6 +720,24 @@ export function Creator(): JSX.Element {
     saveLevels(levels.value);
     say(t('cr.saved'));
   };
+  /** Enregistrer sous : une copie du niveau (nouvel identifiant, nom « … (copie) ») qu'on continue d'éditer. */
+  const saveAs = (): void => {
+    if (!draft) return;
+    const suffix = ` ${t('cr.copy_suffix')}`;
+    const name = `${state.nameFr.trim().slice(0, 40 - suffix.length)}${suffix}`;
+    if (saved.length >= MAX_LEVELS) {
+      say(t('cr.full'));
+      return;
+    }
+    begin();
+    draft.nameFr = name;
+    draft.nameEn = name;
+    draftId = newLevelId();
+    end();
+    save();
+    rev();
+    changed();
+  };
   const load = (a: ArenaData): void => {
     begin();
     draft = fromArena(a);
@@ -794,6 +812,9 @@ export function Creator(): JSX.Element {
         </Button>
         <Button small onClick={save} disabled={!check?.ok}>
           {t('cr.save')}
+        </Button>
+        <Button small secondary onClick={saveAs} disabled={!check?.ok}>
+          {t('cr.save_as')}
         </Button>
         <Button small secondary onClick={() => (overlay.value = null)}>
           {t('cr.close')}
