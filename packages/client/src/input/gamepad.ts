@@ -9,6 +9,8 @@ const PAD_BIT: Record<PadAction, number> = {
   block: Input.BLOCK,
   pickup: Input.PICKUP,
   dash: Input.DASH,
+  // « smash bas » : attaque + parade, une seule fois à l'appui (voir `SPIKE_BITS`)
+  spike: Input.ATTACK | Input.BLOCK,
 };
 const ACTIONS = Input.JUMP | Input.ATTACK | Input.BLOCK | Input.PICKUP | Input.DASH;
 /** Inclinaison minimale du stick pour viser dans sa direction. */
@@ -45,6 +47,8 @@ export class GamepadInput {
   private lastNav = 0;
   private navHeld = false;
   private prevButtons = 0;
+  /** Le bouton « smash bas » était déjà enfoncé à l'échantillon précédent. */
+  private spikeHeld = false;
   /**
    * Boutons d'action « armés » : vus relâchés depuis la dernière remise à zéro. Un bouton resté
    * enfoncé depuis les menus (A, B) ou qui ment (gâchette qui lit « pressée » au repos) est ignoré
@@ -106,6 +110,7 @@ export class GamepadInput {
     const pads = this.pads();
     this.connected = pads.length > 0;
     this.aimAngle = null;
+    let spikeNow = false;
     for (const pad of pads) {
       const ax = pad.axes[0] ?? 0;
       const ay = pad.axes[1] ?? 0;
@@ -123,9 +128,14 @@ export class GamepadInput {
       if (ay > DEADZONE || b(13)) m |= Input.DOWN;
       for (const a of PAD_ACTIONS) {
         const [x, y] = this.bindings[a];
-        if ((x >= 0 && down(x)) || (y >= 0 && down(y))) m |= PAD_BIT[a];
+        if ((x >= 0 && down(x)) || (y >= 0 && down(y))) {
+          if (a === 'spike') spikeNow = true;
+          else m |= PAD_BIT[a];
+        }
       }
     }
+    if (spikeNow && !this.spikeHeld) m |= PAD_BIT.spike;
+    this.spikeHeld = spikeNow;
     if (pads.length === 0) this.armed = 0;
     this.armed |= ~m & ACTIONS;
     return (m & ~ACTIONS) | (m & this.armed);

@@ -308,7 +308,7 @@ export const fr = {
   'train.punch': 'Frappe un mannequin',
   'train.combo': 'Enchaîne 3 coups',
   'train.charged': 'Frappe avec un coup chargé (maintiens l’attaque)',
-  'train.kick': 'Coup de pied plongeant (en l’air, ↓ + attaque)',
+  'train.kick': 'Coup de pied plongeant (en l’air : smash bas, clic droit ou K)',
   'train.lowpunch': 'Coup accroupi, longue portée (↓ au sol + attaque)',
   'train.upper': 'Coup vers le haut (↑ + attaque)',
   'train.block': 'Pare un coup',
@@ -409,7 +409,7 @@ export const fr = {
   'opt.pad_rumble': 'Vibration de la manette',
   'opt.fullscreen': 'Plein écran au lancement (mobile)',
   'opt.gamepad':
-    'Par défaut : A saute, X ou RT attaque, B ou LT pare, Y ou RB ramasse, LB dash, croix ou stick pour bouger. Dash sans direction : esquive.',
+    'Par défaut : A saute, X ou RT attaque, B ou LT pare, Y ou RB ramasse (maintenu : lancer chargé), LB dash, clic du stick droit smash bas, croix ou stick pour bouger. Dash sans direction : esquive.',
   'opt.reset_all': 'Réinitialiser les options',
   'act.left': 'Gauche',
   'act.right': 'Droite',
@@ -420,6 +420,25 @@ export const fr = {
   'act.block': 'Parer',
   'act.pickup': 'Ramasser / lancer',
   'act.dash': 'Dash',
+  'act.spike': 'Smash bas (en l’air)',
+  'opt.mouse_hint':
+    'La souris se règle comme les touches : clique sur une case, puis clique avec le bouton voulu. Rien n’est sous-entendu.',
+  'opt.warn_title': 'Attention aux combinaisons',
+  'opt.warn.shift_rightclick':
+    'Maj + clic droit : Firefox affiche toujours son menu, même quand le jeu le bloque. Prends une autre touche de dash (par exemple A).',
+  'opt.warn.ctrl_click': 'Sur Mac, Ctrl + clic est un clic droit.',
+  'opt.warn.ctrl_tab':
+    'Ctrl avec W, T, N, Q ou Tab ferme ou ouvre des onglets : le navigateur garde ces raccourcis.',
+  'opt.warn.alt_arrows': 'Alt + flèche gauche ou droite fait « précédent / suivant ».',
+  'opt.warn.alt_alone': 'Alt seul peut activer la barre de menus et voler le focus du jeu.',
+  'opt.warn.meta':
+    'Les touches Windows / Commande ouvrent des menus du système et peuvent sortir du jeu.',
+  'opt.warn.function_key':
+    'F1 à F12 ont un rôle dans le navigateur (F5 recharge, F11 plein écran, F12 outils).',
+  'opt.warn.mouse_side':
+    'Les boutons latéraux de la souris servent souvent à « précédent / suivant ».',
+  'opt.warn.mouse_middle': 'Le clic molette peut lancer le défilement automatique.',
+  'opt.warn.duplicate': 'Une même touche sert à plusieurs actions.',
 
   // Aide et crédits
   'help.title': 'Comment jouer',

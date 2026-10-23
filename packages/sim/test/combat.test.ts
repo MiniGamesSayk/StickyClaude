@@ -182,14 +182,14 @@ describe('coup chargé', () => {
 });
 
 describe('coup de pied sauté vers le bas', () => {
-  it('bas + attaque en l air plonge et touche en dessous, puis rebondit', () => {
+  it('« smash bas » en l air plonge et touche en dessous, puis rebondit', () => {
     const w = fightWorld();
     const p = pl(w, 0);
     const q = pl(w, 1);
     p.y = FLOOR - 120;
     p.grounded = false;
     q.x = p.x + 4;
-    tick(w, DOWN | ATTACK);
+    tick(w, ATTACK | BLOCK);
     expect(p.kicking).toBe(true);
     let hit = false;
     for (let i = 0; i < 40 && !hit; i++) {
@@ -220,6 +220,7 @@ describe('coup accroupi et coup vers le haut', () => {
     const w2 = fightWorld();
     pl(w2, 1).x = 300 + 6.4 + FIST[0].reach + 6.4 + 8;
     tick(w2, DOWN | ATTACK);
+    tick(w2, DOWN);
     expect(pl(w2, 0).atkKind).toBe(AttackKind.CROUCH);
     expect(pl(w2, 0).crouching).toBe(true);
     let sawUp = false;
@@ -239,6 +240,7 @@ describe('coup accroupi et coup vers le haut', () => {
     q.y = FLOOR - 30; // en l'air, juste au-dessus de l'attaquant
     q.grounded = false;
     tick(w, UP | ATTACK);
+    tick(w, UP);
     expect(pl(w, 0).atkKind).toBe(AttackKind.UPPER);
     let minVy = 0;
     for (let i = 0; i < 12; i++) {
@@ -353,7 +355,8 @@ describe('parade', () => {
     a.y = FLOOR - 70;
     a.grounded = false;
     a.vy = 0;
-    ticks(w, 40, DOWN | ATTACK, BLOCK);
+    tick(w, ATTACK | BLOCK, BLOCK);
+    ticks(w, 40, DOWN, BLOCK);
     expect(q.hp).toBeGreaterThan(100 - 10);
     expect(a.stun + a.stunImmune).toBeGreaterThan(0);
   });

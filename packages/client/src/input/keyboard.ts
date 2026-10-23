@@ -1,6 +1,12 @@
 import { Input } from '@stickyclaude/shared';
 import type { Action, Bindings } from '../app/options.ts';
-import { ACTIONS, DEFAULT_BINDINGS } from '../app/options.ts';
+import { ACTIONS, DEFAULT_BINDINGS, mouseButtonOf, mouseCode } from '../app/options.ts';
+
+/**
+ * « Smash bas » : attaque et parade envoyées ensemble, une seule fois à l'appui (la simulation y
+ * reconnaît le coup de pied plongeant en l'air ; au sol c'est une simple attaque).
+ */
+export const SPIKE_BITS = Input.ATTACK | Input.BLOCK;
 
 const BIT: Record<Action, number> = {
   left: Input.LEFT,
@@ -12,6 +18,7 @@ const BIT: Record<Action, number> = {
   block: Input.BLOCK,
   pickup: Input.PICKUP,
   dash: Input.DASH,
+  spike: SPIKE_BITS,
 };
 
 /** Table `event.code` → bit d'entrée, construite à partir des touches choisies. */
@@ -25,8 +32,8 @@ export function buildKeymap(b: Readonly<Bindings>): Map<string, number> {
 
 /**
  * Clavier par position physique (`event.code`) : WASD sur QWERTY et ZQSD sur AZERTY donnent les
- * mêmes codes. Les touches sont reconfigurables (`setBindings`) ; la souris sert aussi :
- * clic gauche = attaquer, clic droit = parer (sur le canvas seulement).
+ * mêmes codes. Les touches sont reconfigurables (`setBindings`), boutons de la souris compris
+ * (codes `Mouse0` à `Mouse4`, sur le canvas seulement) : rien n'est sous-entendu.
  */
 export class KeyboardInput {
   private held = 0;
@@ -40,6 +47,9 @@ export class KeyboardInput {
   private mouseX = 0;
   private mouseY = 0;
   private mouseSeen = false;
+  /** Le menu contextuel reste masqué jusqu'à cet instant (clic droit choisi pendant la saisie). */
+  private ctxBlockUntil = 0;
+  private captureMouse: ((code: string) => void) | null = null;
 
   constructor(target: Window) {
     target.addEventListener('keydown', (e) => this.onKey(e, true));
@@ -50,6 +60,18 @@ export class KeyboardInput {
     });
     target.addEventListener('pointerdown', (e) => this.onPointer(e, true));
     target.addEventListener('pointerup', (e) => this.onPointer(e, false));
+    // Un bouton lié à une action ne doit rien faire d'autre dans la page (défilement automatique
+    // de la molette, précédent/suivant des boutons latéraux, sélection de texte).
+    target.addEventListener('mousedown', (e) => {
+      if (this.keymap.has(mouseCode(e.button)) && e.target instanceof HTMLCanvasElement) {
+        e.preventDefault();
+      }
+    });
+    target.addEventListener('auxclick', (e) => {
+      if (this.keymap.has(mouseCode(e.button)) && e.target instanceof HTMLCanvasElement) {
+        e.preventDefault();
+      }
+    });
     target.addEventListener('pointercancel', () => (this.mouse = 0));
     target.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'touch') return;
@@ -58,11 +80,16 @@ export class KeyboardInput {
       this.mouseSeen = true;
     });
     document.documentElement.addEventListener('pointerleave', () => (this.mouseSeen = false));
-    // Le clic droit pare : pas de menu du navigateur en jeu, même au-dessus du HUD (pas seulement
-    // sur le canvas) ni quand une touche comme Maj (dash) est tenue.
+    // Quand le clic droit est lié à une action : pas de menu du navigateur en jeu, même au-dessus
+    // du HUD (pas seulement sur le canvas). S'il ne sert à rien, le menu reste disponible.
     target.addEventListener('contextmenu', (e) => {
       const t = e.target;
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+      if (performance.now() < this.ctxBlockUntil) {
+        e.preventDefault();
+        return;
+      }
+      if (!this.keymap.has(mouseCode(2))) return;
       if (t instanceof HTMLCanvasElement || this.enabled) e.preventDefault();
     });
   }
@@ -75,6 +102,7 @@ export class KeyboardInput {
   /** La prochaine touche pressée est transmise à `cb` au lieu d'agir (reconfiguration). */
   capture(cb: ((code: string) => void) | null): void {
     this.captureCb = cb;
+    this.captureMouse = cb;
   }
 
   /**
@@ -97,12 +125,25 @@ export class KeyboardInput {
 
   private onPointer(e: PointerEvent, down: boolean): void {
     if (e.pointerType === 'touch') return;
-    const bit = e.button === 0 ? Input.ATTACK : e.button === 2 ? Input.BLOCK : 0;
-    if (bit === 0) return;
+    // Saisie d'une nouvelle touche : le prochain bouton de la souris (hors la touche de saisie
+    // elle-même, qui sert à annuler) est transmis au lieu d'agir.
+    if (down && this.captureMouse) {
+      const t = e.target;
+      if (t instanceof Element && t.closest('.keycap')) return;
+      const cb = this.captureMouse;
+      this.captureMouse = null;
+      this.captureCb = null;
+      e.preventDefault();
+      if (e.button === 2) this.ctxBlockUntil = performance.now() + 500;
+      cb(mouseCode(e.button));
+      return;
+    }
+    const bit = this.keymap.get(mouseCode(e.button)) ?? 0;
+    if (bit === 0 || mouseButtonOf(mouseCode(e.button)) < 0) return;
     // Un relâchement compte partout : si l'écran de fin ou un menu recouvre le canvas pendant que
     // le bouton est tenu, la parade ne doit pas rester collée.
     if (!down) {
-      this.mouse &= ~bit;
+      if (bit !== SPIKE_BITS) this.mouse &= ~bit;
       return;
     }
     if (!(e.target instanceof HTMLCanvasElement)) return;
@@ -110,7 +151,8 @@ export class KeyboardInput {
     this.mouseY = e.clientY;
     this.mouseSeen = true;
     if (this.enabled) {
-      this.mouse |= bit;
+      // « smash bas » : un seul appui par clic, jamais maintenu
+      if (bit !== SPIKE_BITS) this.mouse |= bit;
       this.edges |= bit;
     }
   }
@@ -128,6 +170,7 @@ export class KeyboardInput {
       e.preventDefault();
       const cb = this.captureCb;
       this.captureCb = null;
+      this.captureMouse = null;
       cb(e.code);
       return;
     }
@@ -136,11 +179,15 @@ export class KeyboardInput {
     if (bit === undefined) return;
     e.preventDefault();
     if (down) {
-      this.held |= bit;
-      this.edges |= bit;
+      if (bit === SPIKE_BITS) {
+        if (!e.repeat) this.edges |= bit;
+      } else {
+        this.held |= bit;
+        this.edges |= bit;
+      }
     } else {
       // une touche partagée par deux actions (rare) : on ne relâche que son bit propre
-      this.held &= ~bit;
+      if (bit !== SPIKE_BITS) this.held &= ~bit;
     }
   }
 

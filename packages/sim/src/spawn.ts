@@ -33,6 +33,9 @@ export function resetCombatState(p: Player): void {
   p.pickupCd = 0;
   p.dashTicks = 0;
   p.dashCd = 0;
+  p.glueTicks = 0;
+  p.dashX = 0;
+  p.dashY = 0;
   p.dodging = false;
   p.grappleTicks = 0;
   p.kicking = false;
@@ -48,6 +51,7 @@ export function resetCombatState(p: Player): void {
   p.wantDrop = false;
   p.throwW = 0;
   p.throwA = 0;
+  p.throwLevel = 0;
   p.lastAttacker = -1;
   p.lastAttackTick = -1000;
   p.lastHitTick = -1000;

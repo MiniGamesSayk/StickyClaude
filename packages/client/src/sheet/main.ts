@@ -321,11 +321,11 @@ async function main(): Promise<void> {
 
     // 4. Armes et objets
     label('Armes (tenues) et objets', 24, 568, 14);
-    for (let i = 1; i <= 13; i++) {
+    for (let i = 1; i < WEAPONS.length; i++) {
       const s = WEAPON_SHAPES[i];
       if (!s) continue;
-      const x = 40 + ((i - 1) % 7) * 100;
-      const y = 622 + Math.floor((i - 1) / 7) * 54;
+      const x = 36 + ((i - 1) % 12) * 58;
+      const y = 622 + Math.floor((i - 1) / 12) * 54;
       drawShape(
         pen,
         s,
@@ -342,7 +342,7 @@ async function main(): Promise<void> {
         PenStyle.BALLPOINT,
         boil,
       );
-      label(WEAPONS[i].name.fr.slice(0, 18), x - 28, y + 14, 9);
+      label(WEAPONS[i].name.fr.slice(0, 9), x - 26, y + 16, 8);
     }
     const objs = [
       ObjType.CRATE,
@@ -351,9 +351,11 @@ async function main(): Promise<void> {
       ObjType.MINE,
       ObjType.BALL,
       ObjType.HEART,
+      ObjType.TAPE,
+      ObjType.COVER,
     ];
     objs.forEach((t, i) => {
-      const x = 760 + i * 52;
+      const x = 712 + i * 40;
       const shape = OBJECT_SHAPES[t];
       if (!shape) return;
       drawShape(
@@ -373,15 +375,27 @@ async function main(): Promise<void> {
         boil,
       );
     });
-    label('caisse · ballon · punaise · mine · boule · cœur', 700, 702, 9);
-    [ProjType.PELLET, ProjType.PLANE, ProjType.ROCKET, ProjType.ERASER].forEach((t, i) => {
+    label('caisse · ballon · punaise · mine · boule · cœur · scotch · paravent', 700, 702, 9);
+    [
+      ProjType.PELLET,
+      ProjType.PLANE,
+      ProjType.ROCKET,
+      ProjType.ERASER,
+      ProjType.SHRAPNEL,
+      ProjType.STAPLE,
+      ProjType.GLUE,
+      ProjType.ARROW,
+      ProjType.GRENADE,
+      ProjType.BOOMERANG,
+      ProjType.HOOK,
+    ].forEach((t, i) => {
       const s = PROJECTILE_SHAPES[t];
       if (s)
         drawShape(
           pen,
           s,
-          770 + i * 50,
-          640,
+          740 + (i % 6) * 46,
+          596 + Math.floor(i / 6) * 40,
           1,
           0,
           0,
@@ -394,7 +408,7 @@ async function main(): Promise<void> {
           boil,
         );
     });
-    label('boulette · avion · roquette · gomme', 700, 654, 9);
+    label('projectiles', 700, 660, 9);
 
     // 5. Motifs seuls (agrandis)
     PATTERN_SHAPES.forEach((s, i) => {

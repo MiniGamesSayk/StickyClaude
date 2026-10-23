@@ -112,6 +112,24 @@ const defaultDeps = (): AudioDeps => ({
 /** Pas de course : un « pas » toutes les 30 unités parcourues. */
 const STEP_DISTANCE = 30;
 
+/** Son du départ de chaque arme (les nouvelles armes empruntent les sons existants). */
+const SHOT_SOUND: Readonly<Record<number, { name: SfxName; vol: number }>> = {
+  [WeaponId.PISTOL]: { name: 'shot_pistol', vol: 1 },
+  [WeaponId.SHOTGUN]: { name: 'shot_shotgun', vol: 1 },
+  [WeaponId.BLOWGUN]: { name: 'shot_blow', vol: 1 },
+  [WeaponId.PLANE_LAUNCHER]: { name: 'shot_plane', vol: 1 },
+  [WeaponId.BAZOOKA]: { name: 'shot_bazooka', vol: 1 },
+  [WeaponId.GRAPPLE]: { name: 'throw', vol: 0.8 },
+  [WeaponId.BOW]: { name: 'shot_blow', vol: 0.9 },
+  [WeaponId.STAPLER]: { name: 'shot_pistol', vol: 0.6 },
+  [WeaponId.GLUE_GUN]: { name: 'shot_blow', vol: 0.7 },
+  [WeaponId.INK_GRENADE]: { name: 'throw', vol: 0.9 },
+  [WeaponId.BOOMERANG]: { name: 'throw', vol: 0.8 },
+  [WeaponId.HIGHLIGHTER]: { name: 'shot_blow', vol: 0.45 },
+  [WeaponId.TAPE]: { name: 'throw', vol: 0.6 },
+  [WeaponId.COVER]: { name: 'crate', vol: 0.55 },
+};
+
 export class AudioEngine implements AudioSink {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -325,17 +343,8 @@ export class AudioEngine implements AudioSink {
         break;
       case SimEvent.SHOT: {
         const w = a[4] ?? 0;
-        const name: SfxName =
-          w === WeaponId.SHOTGUN
-            ? 'shot_shotgun'
-            : w === WeaponId.BLOWGUN
-              ? 'shot_blow'
-              : w === WeaponId.PLANE_LAUNCHER
-                ? 'shot_plane'
-                : w === WeaponId.BAZOOKA
-                  ? 'shot_bazooka'
-                  : 'shot_pistol';
-        this.play(name, { x: a[0] });
+        const s = SHOT_SOUND[w] ?? SHOT_SOUND[WeaponId.PISTOL];
+        this.play(s.name, { x: a[0], vol: s.vol });
         break;
       }
       case SimEvent.EXPLOSION:

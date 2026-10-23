@@ -398,7 +398,7 @@ describe('apparition des armes', () => {
     const w = weaponWorld();
     const seen = new Set<number>();
     for (let i = 0; i < 4000; i++) seen.add(randomWeapon(w));
-    expect(seen.size).toBe(12);
+    expect(seen.size).toBe(22);
     expect(seen.has(WeaponId.NONE)).toBe(false);
     expect(seen.has(WeaponId.CRATE)).toBe(false);
   });

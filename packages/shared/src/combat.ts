@@ -100,7 +100,22 @@ export const COMBAT = {
     reach: 28,
     lunge: 90,
   },
-  /** Jet d'une arme ou d'une caisse. */
+  /** Coup vers le bas en l'air (attaque + bas) : rapide, le frappeur rebondit s'il touche. */
+  airDown: {
+    startup: 3,
+    active: 3,
+    recovery: 9,
+    damage: 7,
+    kbx: 70,
+    kby: 150,
+    stun: 0,
+    reach: 16,
+    bounce: 210,
+  },
+  /** Lancer chargé : durée de charge maximale et seuil sous lequel un appui reste un simple geste. */
+  throwChargeMax: 36,
+  throwHoldTicks: 8,
+  /** Jet d'une arme ou d'une caisse (charge pleine : vitesse ×2,1, dégâts ×2,5, projection ×2). */
   throwSpeed: 330,
   throwUp: 120,
   throwDamage: 8,
@@ -112,6 +127,8 @@ export const COMBAT = {
   healAmount: 35,
   heartLifeTicks: 25 * 60,
   pickupCooldownTicks: 18,
+  /** Colle : multiplicateur de vitesse de déplacement tant qu'on est englué. */
+  glueSpeedMul: 0.45,
 } as const;
 
 /**

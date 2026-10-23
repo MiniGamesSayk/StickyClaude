@@ -466,7 +466,20 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - En entraînement (`Scene.damageNumbers`, activé par `SoloSource`), chaque coup qui touche fait monter le chiffre des dégâts à côté de la cible (du côté opposé à l'attaquant), en rouge sombre, plus gros pour un coup lourd ou mortel. Pas d'affichage en ligne.
 - Au salon (entraînement, en ligne comme en solo) la simulation ne retire aucun PV, mais l'événement `HIT` annonce désormais les dégâts qu'aurait infligés le coup (`shown`), au lieu de 0 ; les statistiques (`dealt`) ne changent pas. Conséquence : les coups du salon déclenchent les mêmes effets (arrêt sur image, secousse) que ceux d'un combat.
 
-### D74. Armes autorisées par arène
+### D74. Arsenal élargi, grappin, charges, smash bas
 
-- Champ facultatif `weapons` (liste de `WeaponId` parmi les 12 armes qui apparaissent, sans doublon, au moins une) dans `ArenaData` et son schéma. Absent : toutes. `randomWeapon` tire dans cette liste (apparitions programmées, caisses brisées, mode « même arme pour tous »), sans changer les poids relatifs.
+- **Bout du canon.** Chaque arme a une longueur `tip` ; le tir part de l'épaule + bras tendu + `tip` le long de la visée (comme le dessin), et d'un mur si un mur s'interpose. Un adversaire collé à soi est touché quand même (le tir part juste devant lui).
+- **Fusil à pompe** : 9 vrais projectiles (`ProjType.SHRAPNEL`), vitesses légèrement variées, dégâts qui décroissent avec la distance (`falloff`). Les éclats qui touchent la même cible dans le même tick forment un seul coup (projection selon leur nombre) : une parade en annule la salve.
+- **Grappin** : un crochet (`ProjType.HOOK`, 1100 u/s, portée infinie), une corde tracée du tireur au crochet. Il s'accroche au décor (plateformes à sens unique et mobiles comprises), tire un joueur vers soi, ramène caisse/arme/cœur/boule. Sauter lâche la corde (`SimEvent.GRAPPLE` avec 254) ; ciseaux = libération ; l'arme disparaît après la dernière charge.
+- **Nouvelles armes** (ids 14 à 23, données dans `shared/weapons.ts`) : arc (charge), lance-pierre (3 agrafes), colle (`glueTicks`, dans `OwnState`), grenade, boomerang (revient, rend la munition), ciseaux, surligneur (`HitFlag.LIGHT` : ni projection ni interruption), scotch et paravent (`ObjType.TAPE`, `ObjType.COVER`), trousse de soin (geste long interrompu par un coup).
+- **Charges.** Armes de mêlée et arc : l'attaque tenue prolonge le départ du coup (`chargeMax`, `chargeBonus`) ; le niveau voyage dans `chargeTicks`. Coup chargé à mains nues : toutes directions (visée `aim`). Lancer chargé : « ramasser » tenu avec une arme (l'appui bref se résout au relâchement, comme le jab) ou attaque tenue pour une caisse/arme vide ; la charge est stockée dans `Proj.bounces` (inutile pour une arme lancée). Indice de trajectoire : quelques points, pour le joueur local seulement.
+- **Dash 8 directions** : `dashX`/`dashY` dans `OwnState` ; bas seul au sol reste une esquive.
+- **Smash bas sans nouveau bit** : le masque d'entrées est plein (D60). « Smash bas » = ATTACK et BLOCK pressés ensemble au même tick (un seul appui côté client) ; en l'air c'est le coup de pied plongeant, au sol une simple attaque. Annulable par dash, saut ou parade. `↓ + attaquer` en l'air devient un petit coup (`AttackKind.AIR_DOWN`).
+- **Souris paramétrable** : `Mouse0` à `Mouse4` sont des codes comme les touches ; plus rien n'est sous-entendu (le clic droit ne pare plus par défaut : parade sur E). Anciens réglages migrés (clic gauche attaque, clic droit smash bas). Avertissements dans Options (`input/warnings.ts`) pour les combinaisons risquées avec le navigateur.
+- **Caisses** : une arme une fois sur deux, sans plafond d'armes au sol.
+- **Compromis assumés.** Le pistolet et le surligneur restent des tirs instantanés compensés en latence (balle dessinée par le client) ; la touche tactile « smash bas » n'existe pas encore.
+
+### D75. Armes autorisées par arène
+
+- Champ facultatif `weapons` (liste de `WeaponId` parmi les armes qui apparaissent, sans doublon, au moins une) dans `ArenaData` et son schéma. Absent : toutes. `randomWeapon` tire dans cette liste (apparitions programmées, caisses brisées, mode « même arme pour tous »), sans changer les poids relatifs.
 - Créateur : case « Toutes les armes » ; décochée, une liste de cases permet de garder seulement certaines armes (cocher toutes les armes revient à « toutes » ; on ne peut pas tout décocher).

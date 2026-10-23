@@ -162,6 +162,14 @@ export function attackPhaseTicks(
     }
     case AttackKind.KICK:
       return phase === AtkPhase.RECOVERY ? COMBAT.kick.recovery : 0;
+    case AttackKind.AIR_DOWN: {
+      const a = COMBAT.airDown;
+      return phase === AtkPhase.STARTUP
+        ? a.startup
+        : phase === AtkPhase.ACTIVE
+          ? a.active
+          : a.recovery;
+    }
     case AttackKind.THROW:
       return phase === AtkPhase.STARTUP ? 3 : phase === AtkPhase.ACTIVE ? 1 : 8;
     default:
@@ -354,12 +362,19 @@ export class Rig {
     const gun =
       p.weaponKind === WeaponKind.HITSCAN ||
       p.weaponKind === WeaponKind.PROJECTILE ||
+      p.weaponKind === WeaponKind.BOW ||
       p.weaponKind === WeaponKind.GRAPPLE;
     const melee = p.weaponKind === WeaponKind.MELEE || p.weaponKind === WeaponKind.SHIELD;
     let hold = 0; // 1 : une main tient l'arme, 2 : les deux mains
     let weaponAng = 0;
     if (armed) {
-      hold = p.weaponKind === WeaponKind.CRATE || p.weaponKind === WeaponKind.MINE ? 3 : 2;
+      hold =
+        p.weaponKind === WeaponKind.CRATE ||
+        p.weaponKind === WeaponKind.MINE ||
+        p.weaponKind === WeaponKind.TRAP ||
+        p.weaponKind === WeaponKind.HEAL
+          ? 3
+          : 2;
       weaponAng = gun ? Math.atan2(p.aimY, p.aimX) : melee ? WEAPON_REST_MELEE : 0.3;
       if (p.weaponKind === WeaponKind.SHIELD) weaponAng = 0;
     }
@@ -436,6 +451,11 @@ export class Rig {
         break;
       case PlayerState.CHARGE: {
         const k = clamp01(p.variant / COMBAT.chargeMaxTicks);
+        // un lancer chargé : l'objet est levé derrière la tête
+        if (armed) {
+          if (hold === 3) hold = 2;
+          weaponAng = -2.35;
+        }
         raw[T_LEAN] = 0.2 + 0.1 * k;
         set(raw, T_PEL, -1.0, -8.8);
         set(raw, T_FTL, -4.5, 0);
@@ -556,6 +576,22 @@ export class Rig {
           o[T_LEAN] = -0.18;
           set(o, T_FTL, -4.5, 0);
           set(o, T_FTR, 4.5, 0);
+        } else if (phase === AtkPhase.ACTIVE && big) {
+          // le coup chargé part dans la direction visée (haut, bas, côté, diagonales)
+          const e = ease(t);
+          const an = Math.hypot(p.aimX, p.aimY) || 1;
+          const lx = Math.abs(p.aimX / an);
+          const ly = p.aimY / an;
+          const side = lx > 0.4;
+          const dirx = side ? lx : 0.15;
+          const diry = side && Math.abs(ly) < 0.4 ? 0 : ly;
+          const len = 8 + COMBAT.charged.reach * 0.7;
+          set(o, T_PEL, 1.0, -10.6);
+          set(o, T_HNR, lerp(-2, 1.6 + dirx * len, e), lerp(-10, -17.8 + diry * len, e));
+          set(o, T_HNL, 0.5, -14.5);
+          o[T_LEAN] = side ? 0.55 : 0.1;
+          set(o, T_FTL, -5.5, -1.5);
+          set(o, T_FTR, 5.0, 0);
         } else if (phase === AtkPhase.ACTIVE) {
           const e = ease(t);
           set(o, T_PEL, 1.0, -10.6);
@@ -607,6 +643,17 @@ export class Rig {
         set(o, T_FTL, -4.4, 0);
         set(o, T_FTR, 4.6, 0);
         o[T_LEAN] = -0.1 - 0.12 * k;
+        break;
+      }
+      case AttackKind.AIR_DOWN: {
+        // jambes repliées puis un pied qui pique vers le bas
+        const stab = phase === AtkPhase.STARTUP ? 0 : 1;
+        set(o, T_PEL, 0, -12.4);
+        set(o, T_FTL, -3.2, -6.5);
+        set(o, T_FTR, 1.8, stab > 0 ? 7.5 : -8.5);
+        set(o, T_HNR, -4.0, -20.5);
+        set(o, T_HNL, -5.5, -17.5);
+        o[T_LEAN] = 0.12;
         break;
       }
       case AttackKind.KICK:

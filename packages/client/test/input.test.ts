@@ -16,7 +16,8 @@ import type { Bindings } from '../src/app/options.ts';
 import { detectLayout, keyLabel } from '../src/input/bindings.ts';
 import { DEFAULT_PAD_BINDINGS } from '../src/app/options.ts';
 import { GamepadInput } from '../src/input/gamepad.ts';
-import { buildKeymap } from '../src/input/keyboard.ts';
+import { buildKeymap, SPIKE_BITS } from '../src/input/keyboard.ts';
+import { bindingWarnings } from '../src/input/warnings.ts';
 import {
   resetTouch,
   setButton,
@@ -111,8 +112,8 @@ describe('touches du clavier', () => {
     expect(options.value.bindings.attack[0]).toBe('KeyF');
     rebind('block', 0, 'KeyF');
     expect(options.value.bindings.block[0]).toBe('KeyF');
-    // « attack » a perdu sa touche principale : sa secondaire (vide) ne la remplace pas
-    expect(options.value.bindings.attack).toEqual(['', '']);
+    // « attack » a perdu sa touche principale : sa secondaire (le clic gauche) la remplace
+    expect(options.value.bindings.attack).toEqual(['Mouse0', '']);
     rebind('jump', 0, 'ArrowLeft');
     expect(options.value.bindings.left).toEqual(['KeyA', '']);
     for (const a of ACTIONS) expect(typeof options.value.bindings[a][0]).toBe('string');
@@ -277,5 +278,112 @@ describe('touche de dash par défaut', () => {
     expect(old.bindings.dash).toEqual(['ShiftLeft', 'KeyQ']);
     const custom = sanitizeOptions({ bindings: { dash: ['KeyX', ''] } });
     expect(custom.bindings.dash).toEqual(['KeyX', '']);
+  });
+});
+
+describe('souris paramétrable : plus rien de sous-entendu', () => {
+  it('par défaut : clic gauche attaque, clic droit smash bas, aucune parade à la souris', () => {
+    const m = buildKeymap(DEFAULT_BINDINGS);
+    expect(m.get('Mouse0')).toBe(Input.ATTACK);
+    expect(m.get('Mouse2')).toBe(SPIKE_BITS);
+    expect(SPIKE_BITS).toBe(Input.ATTACK | Input.BLOCK);
+    expect(m.get('KeyE')).toBe(Input.BLOCK);
+    expect(m.get('Mouse1')).toBeUndefined();
+  });
+
+  it('on peut lier la parade au clic droit, et le libellé suit la langue', () => {
+    resetBindings();
+    rebind('block', 1, 'Mouse2');
+    expect(options.value.bindings.block).toEqual(['KeyE', 'Mouse2']);
+    // le clic droit n'appartient plus au smash bas
+    expect(options.value.bindings.spike).toEqual(['KeyK', '']);
+    expect(buildKeymap(options.value.bindings).get('Mouse2')).toBe(Input.BLOCK);
+    expect(keyLabel('Mouse2', 'qwerty', 'Space', 'fr')).toBe('Clic D');
+    expect(keyLabel('Mouse2', 'qwerty', 'Space', 'en')).toBe('Right click');
+    resetBindings();
+  });
+
+  it('d’anciens réglages gardent le clic gauche pour attaquer et reçoivent le smash bas', () => {
+    const o = sanitizeOptions({ bindings: { attack: ['KeyJ', ''], block: ['KeyE', ''] } });
+    expect(o.bindings.attack).toEqual(['KeyJ', 'Mouse0']);
+    expect(o.bindings.spike).toEqual(['KeyK', 'Mouse2']);
+    // une touche déjà prise n'est pas dupliquée
+    const o2 = sanitizeOptions({ bindings: { pickup: ['KeyK', 'Mouse2'] } });
+    expect(o2.bindings.pickup).toEqual(['KeyK', 'Mouse2']);
+    expect(o2.bindings.spike).toEqual(['', '']);
+    // des réglages déjà à jour ne sont pas retouchés
+    const o3 = sanitizeOptions({
+      bindings: { attack: ['KeyJ', ''], spike: ['KeyH', ''] },
+    });
+    expect(o3.bindings.attack).toEqual(['KeyJ', '']);
+    expect(o3.bindings.spike).toEqual(['KeyH', '']);
+  });
+});
+
+describe('avertissements de combinaisons', () => {
+  const ff = { firefox: true, mac: false };
+  const other = { firefox: false, mac: false };
+  const base = (): Bindings => structuredClone(DEFAULT_BINDINGS);
+
+  it('Maj + clic droit sous Firefox', () => {
+    const b = base();
+    expect(bindingWarnings(b, ff).map((w) => w.id)).toContain('shift_rightclick');
+    expect(bindingWarnings(b, other).map((w) => w.id)).not.toContain('shift_rightclick');
+    b.spike[1] = '';
+    expect(bindingWarnings(b, ff).map((w) => w.id)).not.toContain('shift_rightclick');
+  });
+
+  it('Ctrl avec W, T, N… ; Alt avec les flèches ; touches de fonction ; boutons latéraux', () => {
+    const b = base();
+    b.dash = ['ControlLeft', ''];
+    expect(bindingWarnings(b, other).map((w) => w.id)).toContain('ctrl_tab');
+    b.dash = ['AltLeft', ''];
+    const ids = bindingWarnings(b, other).map((w) => w.id);
+    expect(ids).toContain('alt_arrows');
+    expect(ids).toContain('alt_alone');
+    b.dash = ['F5', ''];
+    expect(bindingWarnings(b, other).map((w) => w.id)).toContain('function_key');
+    b.dash = ['Mouse3', ''];
+    expect(bindingWarnings(b, other).map((w) => w.id)).toContain('mouse_side');
+    b.dash = ['Mouse1', ''];
+    expect(bindingWarnings(b, other).map((w) => w.id)).toContain('mouse_middle');
+  });
+
+  it('une même touche pour deux actions', () => {
+    const b = base();
+    b.pickup = ['KeyE', ''];
+    expect(bindingWarnings(b, other).find((w) => w.id === 'duplicate')?.keys).toEqual(['KeyE']);
+  });
+
+  it('les réglages par défaut ne dérangent personne hors Firefox', () => {
+    expect(bindingWarnings(base(), other)).toEqual([]);
+  });
+});
+
+describe('manette : smash bas', () => {
+  const pad = (pressed: number[]): unknown => ({
+    connected: true,
+    axes: [0, 0],
+    buttons: Array.from({ length: 17 }, (_, i) => ({
+      pressed: pressed.includes(i),
+      value: pressed.includes(i) ? 1 : 0,
+    })),
+  });
+  const plug = (p: unknown): void => {
+    vi.stubGlobal('navigator', { getGamepads: () => [p] });
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('envoie attaque + parade une seule fois à l’appui', () => {
+    const g = new GamepadInput();
+    plug(pad([]));
+    g.sample();
+    plug(pad([11]));
+    expect(g.sample() & SPIKE_BITS).toBe(SPIKE_BITS);
+    expect(g.sample() & SPIKE_BITS).toBe(0);
+    plug(pad([]));
+    g.sample();
+    plug(pad([11]));
+    expect(g.sample() & SPIKE_BITS).toBe(SPIKE_BITS);
   });
 });

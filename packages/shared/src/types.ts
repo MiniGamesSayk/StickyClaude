@@ -64,6 +64,8 @@ export const AttackKind = {
   UPPER: 10,
   /** Coup accroupi : allonge longue, projette vers le haut. */
   CROUCH: 11,
+  /** Petit coup vers le bas, en l'air (attaque + bas) : touche sous les pieds, rebond du frappeur. */
+  AIR_DOWN: 12,
 } as const;
 export type AttackKindId = (typeof AttackKind)[keyof typeof AttackKind];
 
@@ -112,6 +114,10 @@ export const ObjType = {
   BALL: 6,
   /** Cœur : rend des points de vie à qui le touche. */
   HEART: 7,
+  /** Bande de scotch posée au sol : colle (ralentit) qui marche dessus. */
+  TAPE: 8,
+  /** Couverture : feuille de papier dressée, arrête les tirs. */
+  COVER: 9,
 } as const;
 export type ObjTypeId = (typeof ObjType)[keyof typeof ObjType];
 
@@ -123,6 +129,20 @@ export const ProjType = {
   ERASER: 4,
   /** Arme ou caisse lancée. */
   THROWN: 5,
+  /** Éclat de mine de crayon (fusil à pompe). */
+  SHRAPNEL: 6,
+  /** Agrafe (lance-pierre). */
+  STAPLE: 7,
+  /** Goutte de colle. */
+  GLUE: 8,
+  /** Flèche en trombone (arc). */
+  ARROW: 9,
+  /** Bombe d'encre lancée : explose après un délai. */
+  GRENADE: 10,
+  /** Règle-boomerang. */
+  BOOMERANG: 11,
+  /** Crochet du grappin (la corde est tracée du tireur au crochet). */
+  HOOK: 12,
 } as const;
 export type ProjTypeId = (typeof ProjType)[keyof typeof ProjType];
 

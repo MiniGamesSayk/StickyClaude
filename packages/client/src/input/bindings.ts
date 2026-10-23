@@ -58,10 +58,21 @@ const NAMED: Record<string, string> = {
   Escape: 'Échap',
 };
 
+const MOUSE_LABELS: Record<'fr' | 'en', readonly string[]> = {
+  fr: ['Clic G', 'Molette', 'Clic D', 'Souris 4', 'Souris 5'],
+  en: ['Left click', 'Wheel', 'Right click', 'Mouse 4', 'Mouse 5'],
+};
+
 /** Libellé court d'un code de touche, `space` : texte traduit de la barre d'espace. */
-export function keyLabel(code: string, option: KeyboardLayout, space = 'Espace'): string {
+export function keyLabel(
+  code: string,
+  option: KeyboardLayout,
+  space = 'Espace',
+  lang: 'fr' | 'en' = 'fr',
+): string {
   if (code === '') return '—';
   if (code === 'Space') return space;
+  if (/^Mouse[0-4]$/.test(code)) return MOUSE_LABELS[lang][Number(code.slice(5))];
   if (NAMED[code]) return NAMED[code];
   if (layoutMap && option === 'auto') {
     const v = layoutMap.get(code);

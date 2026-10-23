@@ -124,7 +124,7 @@ Modes bonus v1 :
 | Sauter | Espace | A / Croix | Bouton |
 | Dash | Maj (gauche ou droite) | LB / RB | Bouton |
 | Attaquer / tirer | J (ou clic gauche) | X / Carré, gâchette droite | Bouton |
-| Parer | E (ou clic droit) | B / Rond, gâchette gauche | Bouton |
+| Parer | E | B / Rond, gâchette gauche | Bouton |
 | Ramasser / lancer | L | Y / Triangle | Bouton |
 | Emote | 1 à 6 | Croix directionnelle | Roue d'emotes |
 | Fantôme : poser | Attaquer / parer | Idem | Glisser + bouton |

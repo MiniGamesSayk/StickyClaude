@@ -69,6 +69,9 @@ export function exportOwn(world: World, slot: number, out: OwnState): void {
   out.stunImmune = p.stunImmune;
   out.dashTicks = p.dashTicks;
   out.dashCd = p.dashCd;
+  out.glueTicks = p.glueTicks;
+  out.dashX = p.dashX;
+  out.dashY = p.dashY;
   out.prevInput = p.prevInput;
   out.respawns = p.respawns;
   out.respawnTimer = p.respawnTimer > 65535 ? 65535 : p.respawnTimer;
@@ -126,6 +129,9 @@ export function importOwn(world: World, slot: number, o: OwnState): void {
   p.stunImmune = o.stunImmune;
   p.dashTicks = o.dashTicks;
   p.dashCd = o.dashCd;
+  p.glueTicks = o.glueTicks;
+  p.dashX = o.dashX;
+  p.dashY = o.dashY;
   p.prevInput = o.prevInput;
   p.respawns = o.respawns;
   p.respawnTimer = o.respawnTimer;
@@ -325,6 +331,8 @@ export function hashWorld(world: World): number {
     h = mix(h, p.blockTicks | (p.blockCd << 8));
     h = mix(h, p.pickupCd | (p.aim << 8));
     h = mix(h, p.dashTicks | (p.dashCd << 8));
+    h = mix(h, p.glueTicks);
+    h = mix(h, p.dashX + 1 + ((p.dashY + 1) << 2));
     h = mix(h, p.grappleTicks);
     h = mixF(h, p.grappleX);
     h = mixF(h, p.grappleY);

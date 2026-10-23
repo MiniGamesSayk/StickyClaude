@@ -1,6 +1,6 @@
 /** Constantes globales du jeu. Les constantes de mouvement sont dans `movement.ts`. */
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Simulation à pas de temps fixe. */
 export const TICK_HZ = 60;

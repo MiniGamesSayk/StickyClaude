@@ -1,4 +1,4 @@
-import { CELL, SimEvent, WORLD_H } from '@stickyclaude/shared';
+import { CELL, ProjType, SimEvent, WORLD_H, WeaponId } from '@stickyclaude/shared';
 import type { Container } from 'pixi.js';
 import { Sprite, Texture } from 'pixi.js';
 import { canvas2d } from './art.ts';
@@ -140,6 +140,8 @@ export class FxSystem {
   private readonly lmax = new Float32Array(MAX_LINES);
   private readonly lcolor = new Uint32Array(MAX_LINES);
   private readonly lwidth = new Float32Array(MAX_LINES);
+  /** 0 trait qui s'estompe, 1 balle qui file le long du trait, 2 rayon laser. */
+  private readonly lkind = new Uint8Array(MAX_LINES);
   private lnext = 0;
   // onomatopées
   private readonly onoSprites: Sprite[] = [];
@@ -178,6 +180,8 @@ export class FxSystem {
   private readonly cax = new Float32Array(MAX_ROPES);
   private readonly cay = new Float32Array(MAX_ROPES);
   private readonly clife = new Float32Array(MAX_ROPES);
+  /** Joueur au bout de la corde (attiré par le grappin), -1 : point d'ancrage fixe. */
+  private readonly ctarget = new Int8Array(MAX_ROPES).fill(-1);
   private readonly flashes = new FlashLimiter();
   private readonly tx: PenTextures;
   private readonly scratch = new Float32Array(160);
@@ -218,6 +222,7 @@ export class FxSystem {
     this.dactive.fill(0);
     this.clife.fill(0);
     this.cslot.fill(-1);
+    this.lkind.fill(0);
     for (const s of this.blotSprites) s.visible = false;
     for (const s of this.onoSprites) s.visible = false;
     this.blotCount = 0;
@@ -326,9 +331,11 @@ export class FxSystem {
     w: number,
     life: number,
     color: number,
+    kind = 0,
   ): void {
     const i = this.lnext;
     this.lnext = (this.lnext + 1) % MAX_LINES;
+    this.lkind[i] = kind;
     this.lx1[i] = x1;
     this.ly1[i] = y1;
     this.lx2[i] = x2;
@@ -533,20 +540,9 @@ export class FxSystem {
         }
         break;
       }
-      case SimEvent.SHOT: {
-        const wid = a[4] ?? 0;
-        const x1 = a[0];
-        const y1 = a[1];
-        const x2 = a[2];
-        const y2 = a[3];
-        if (Math.hypot(x2 - x1, y2 - y1) > 12) {
-          this.line(x1, y1, x2, y2, wid === 5 ? 1.2 : 1.8, wid === 5 ? 0.09 : 0.13, INK.black);
-        }
-        this.spray(PK.SPARK, 4, x1, y1, 150, 5, 0.13, 0xe8801a, env, x2 - x1, y2 - y1, 0.7);
-        this.spray(PK.DOT, 2, x1, y1, 30, 3, 0.4, 0x9ca3af, env, x2 - x1, y2 - y1, 1.6);
-        if (wid === 5) this.hooks.shake(1.4);
+      case SimEvent.SHOT:
+        this.shotFx(a[4] ?? 0, a[0], a[1], a[2], a[3], env);
         break;
-      }
       case SimEvent.EXPLOSION: {
         const x = a[0];
         const y = a[1];
@@ -643,13 +639,23 @@ export class FxSystem {
         break;
       }
       case SimEvent.GRAPPLE: {
+        const target = a[2] ?? 255;
+        // 254 : corde lâchée ou coupée ; 253 : un objet est ramené (le crochet se voit tout seul)
+        this.cutRope(e.slot);
+        if (target === 254 || target === 253) {
+          if (target === 254) this.spray(PK.SPARK, 3, a[0], a[1], 80, 3, 0.2, 0x1f9d55, env);
+          break;
+        }
         const i = this.cslot.indexOf(-1);
         const k = i < 0 ? 0 : i;
         this.cslot[k] = e.slot;
         this.cax[k] = a[0];
         this.cay[k] = a[1];
-        this.clife[k] = 0.4;
+        this.ctarget[k] = target < 16 ? target : -1;
+        this.clife[k] = target < 16 ? 1.3 : 2.6;
         this.ono(Ono.ZIP, a[0], a[1] - 12, 0.7, env);
+        this.ring(a[0], a[1], 2, 11, 0.2, 0x1f9d55, false);
+        this.spray(PK.SPARK, 4, a[0], a[1], 90, 3, 0.2, 0x1f9d55, env);
         break;
       }
       case SimEvent.CRATE_BREAK: {
@@ -672,6 +678,188 @@ export class FxSystem {
         this.hooks.shake(3);
         break;
       default:
+        break;
+    }
+  }
+
+  /** Efface la corde d'un joueur. */
+  private cutRope(slot: number): void {
+    for (let i = 0; i < MAX_ROPES; i++) if (this.cslot[i] === slot) this.cslot[i] = -1;
+  }
+
+  /** Corde tendue (légèrement ondulée) de (x1, y1) à (x2, y2). */
+  rope(
+    pen: Pen,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    alpha: number,
+    nowMs: number,
+  ): void {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len < 2) return;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const segs = Math.max(2, Math.min(14, Math.round(len / 18)));
+    let px = x1;
+    let py = y1;
+    for (let k = 1; k <= segs; k++) {
+      const t = k / segs;
+      const wob = Math.sin(t * Math.PI) * Math.sin(nowMs / 90 + t * 9) * Math.min(2.2, len * 0.012);
+      const qx = x1 + dx * t + nx * wob;
+      const qy = y1 + dy * t + ny * wob;
+      pen.seg(px, py, qx, qy, 1.7, 0x4b5563, alpha, PenStyle.BALLPOINT, false);
+      px = qx;
+      py = qy;
+    }
+  }
+
+  /** Un projectile vient de disparaître en (x, y) : petit effet d'impact selon sa nature. */
+  projectileImpact(type: number, x: number, y: number, vx: number, vy: number, env: FxEnv): void {
+    const sp = Math.hypot(vx, vy) || 1;
+    const bx = -vx / sp;
+    const by = -vy / sp;
+    switch (type) {
+      case ProjType.SHRAPNEL:
+        this.spray(PK.SPARK, 2, x, y, 90, 3, 0.14, 0x4b5563, env, bx, by, 1.4);
+        break;
+      case ProjType.STAPLE:
+        this.spray(PK.SPARK, 2, x, y, 110, 3, 0.14, 0xaeb7c2, env, bx, by, 1.2);
+        break;
+      case ProjType.ARROW:
+        this.spray(PK.DOT, 3, x, y, 50, 3, 0.35, 0x9ca3af, env, bx, by, 1.4);
+        this.ring(x, y, 2, 9, 0.15, 0x8a5a2b, false);
+        break;
+      case ProjType.GLUE:
+        this.spray(PK.DROP, 5, x, y, 70, 2.6, 0.45, 0xf3efe0, env, bx, by, 1.6);
+        this.ring(x, y, 2, 12, 0.2, 0xe8801a, false);
+        break;
+      case ProjType.PELLET:
+      case ProjType.PLANE:
+        this.spray(
+          PK.SCRAP,
+          3,
+          x,
+          y,
+          70,
+          3,
+          0.5,
+          type === ProjType.PLANE ? 0xa9dcf2 : 0xe7d6a4,
+          env,
+        );
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** Effets de départ d'un coup de feu ou d'un geste d'arme. (x1, y1) bouche, (x2, y2) fin du tir. */
+  private shotFx(wid: number, x1: number, y1: number, x2: number, y2: number, env: FxEnv): void {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const n = Math.hypot(dx, dy) || 1;
+    const ux = dx / n;
+    const uy = dy / n;
+    const flash = (r: number, color: number, life = 0.08): void =>
+      this.ring(x1, y1, 1.5, r, life, color, true);
+    switch (wid) {
+      case WeaponId.PISTOL: {
+        flash(10, 0xffe28a);
+        this.spray(PK.SPARK, 4, x1, y1, 170, 5, 0.12, 0xe8801a, env, dx, dy, 0.6);
+        this.particle(
+          PK.SCRAP,
+          x1 - ux * 12,
+          y1 - 2,
+          -ux * 30 + uy * 20,
+          -110,
+          1.5,
+          0.55,
+          0xc9a227,
+        );
+        if (n > 12)
+          this.line(x1, y1, x2, y2, 2, Math.min(0.2, Math.max(0.05, n / 2600)), INK.black, 1);
+        this.spray(PK.SPARK, 2, x2, y2, 80, 3, 0.12, 0xe8801a, env, -dx, -dy, 1.6);
+        break;
+      }
+      case WeaponId.SHOTGUN:
+        flash(22, 0xffd36b, 0.11);
+        this.spray(PK.SPARK, 9, x1, y1, 240, 5, 0.14, 0xe8801a, env, dx, dy, 1.0);
+        this.spray(PK.DOT, 6, x1, y1, 50, 4, 0.5, 0x9ca3af, env, dx, dy, 1.2);
+        this.particle(PK.SCRAP, x1 - ux * 16, y1 - 3, -ux * 40 + uy * 30, -130, 2, 0.7, 0xd6322e);
+        this.hooks.shake(1.6);
+        break;
+      case WeaponId.BLOWGUN:
+        this.spray(PK.DOT, 5, x1, y1, 60, 2.6, 0.35, 0xf3efe0, env, dx, dy, 0.7);
+        break;
+      case WeaponId.PLANE_LAUNCHER:
+        flash(9, 0xa9dcf2, 0.1);
+        this.spray(PK.SCRAP, 5, x1, y1, 120, 3, 0.55, 0xffffff, env, dx, dy, 1.0);
+        break;
+      case WeaponId.BAZOOKA:
+        flash(26, 0xe8801a, 0.13);
+        this.spray(
+          PK.DOT,
+          10,
+          x1 - ux * 20,
+          y1 - uy * 20,
+          150,
+          4.5,
+          0.55,
+          0x9ca3af,
+          env,
+          -dx,
+          -dy,
+          1.0,
+        );
+        this.spray(PK.SPARK, 6, x1, y1, 200, 5, 0.14, 0xf2994a, env, dx, dy, 0.8);
+        this.hooks.shake(2.4);
+        break;
+      case WeaponId.STAPLER:
+        flash(7, 0xdfe5ea);
+        this.spray(PK.SPARK, 4, x1, y1, 150, 3.5, 0.12, 0xaeb7c2, env, dx, dy, 0.9);
+        break;
+      case WeaponId.GLUE_GUN:
+        this.spray(PK.DROP, 3, x1, y1, 70, 2.4, 0.4, 0xf3efe0, env, dx, dy, 1.0);
+        flash(6, 0xe8801a, 0.07);
+        break;
+      case WeaponId.BOW:
+        this.ring(x1, y1, 2, 12, 0.14, 0x8a5a2b, false);
+        this.spray(PK.SPARK, 2, x1, y1, 90, 3, 0.12, 0xd6b98a, env, dx, dy, 0.5);
+        break;
+      case WeaponId.INK_GRENADE:
+        this.spray(PK.DROP, 4, x1, y1, 90, 2.4, 0.4, 0x1b2a5e, env, dx, dy, 1.0);
+        break;
+      case WeaponId.BOOMERANG:
+        this.ring(x1, y1, 2, 13, 0.16, 0x1f4fd1, false);
+        break;
+      case WeaponId.GRAPPLE:
+        flash(8, 0x9be7b6, 0.1);
+        this.spray(PK.SPARK, 4, x1, y1, 140, 3.5, 0.14, 0x1f9d55, env, dx, dy, 0.7);
+        break;
+      case WeaponId.HIGHLIGHTER:
+        this.line(x1, y1, x2, y2, 1.5, 0.09, 0xf5d90a, 2);
+        this.spray(PK.SPARK, 2, x2, y2, 70, 3, 0.1, 0xf5d90a, env, -dx, -dy, 1.4);
+        break;
+      case WeaponId.TAPE:
+      case WeaponId.COVER:
+        this.spray(
+          PK.SCRAP,
+          5,
+          x2,
+          y2 - 4,
+          60,
+          3,
+          0.5,
+          wid === WeaponId.TAPE ? 0xdadada : 0x93c5fd,
+          env,
+        );
+        this.ring(x2, y2, 2, 16, 0.18, 0x9ca3af, false);
+        break;
+      default:
+        this.spray(PK.SPARK, 3, x1, y1, 140, 4, 0.12, 0xe8801a, env, dx, dy, 0.8);
         break;
     }
   }
@@ -750,6 +938,65 @@ export class FxSystem {
       this.llife[i] -= dtS;
       if (this.llife[i] <= 0) continue;
       const k = this.llife[i] / this.lmax[i];
+      const kind = this.lkind[i];
+      if (kind === 1) {
+        // balle : un trait court qui file le long de la trajectoire
+        const dx = this.lx2[i] - this.lx1[i];
+        const dy = this.ly2[i] - this.ly1[i];
+        const len = Math.hypot(dx, dy) || 1;
+        const head = Math.min(1, 1 - k + 0.15);
+        const tail = Math.max(0, head - 26 / len);
+        pen.seg(
+          this.lx1[i] + dx * tail,
+          this.ly1[i] + dy * tail,
+          this.lx1[i] + dx * head,
+          this.ly1[i] + dy * head,
+          this.lwidth[i] * 1.2,
+          this.lcolor[i],
+          1,
+          PenStyle.BALLPOINT,
+          false,
+        );
+        pen.seg(
+          this.lx1[i],
+          this.ly1[i],
+          this.lx1[i] + dx * head,
+          this.ly1[i] + dy * head,
+          this.lwidth[i] * 0.5,
+          this.lcolor[i],
+          0.25 * k,
+          PenStyle.BALLPOINT,
+          false,
+        );
+        continue;
+      }
+      if (kind === 2) {
+        // rayon laser : un cœur clair dans une lueur
+        pen.seg(
+          this.lx1[i],
+          this.ly1[i],
+          this.lx2[i],
+          this.ly2[i],
+          this.lwidth[i] * 3,
+          this.lcolor[i],
+          0.28 * k,
+          PenStyle.BALLPOINT,
+          false,
+        );
+        pen.seg(
+          this.lx1[i],
+          this.ly1[i],
+          this.lx2[i],
+          this.ly2[i],
+          this.lwidth[i],
+          0xfff7b0,
+          k,
+          PenStyle.BALLPOINT,
+          false,
+        );
+        pen.glow(this.lx2[i], this.ly2[i], 7, this.lcolor[i], 0.5 * k);
+        continue;
+      }
       pen.seg(
         this.lx1[i],
         this.ly1[i],
@@ -782,17 +1029,24 @@ export class FxSystem {
         continue;
       }
       const p = env.playerPos(this.cslot[i]);
-      if (p)
-        pen.seg(
-          p.x,
-          p.y - 16,
-          this.cax[i],
-          this.cay[i],
-          1.6,
-          INK.graphite,
-          Math.min(1, this.clife[i] * 4),
-          PenStyle.PENCIL,
-        );
+      if (!p) {
+        this.cslot[i] = -1;
+        continue;
+      }
+      let ex = this.cax[i];
+      let ey = this.cay[i];
+      const tgt = this.ctarget[i];
+      if (tgt >= 0) {
+        const q = env.playerPos(tgt);
+        if (q) {
+          ex = q.x;
+          ey = q.y - 14;
+        }
+      } else if (Math.hypot(p.x - ex, p.y - 14 - ey) < 12 && this.clife[i] > 0.12) {
+        // arrivé : la corde se détend
+        this.clife[i] = 0.12;
+      }
+      this.rope(pen, p.x, p.y - 17.8, ex, ey, Math.min(1, this.clife[i] * 4), env.nowMs);
     }
     // armes dessinées en direct : un crayon trace la forme en 0,8 s
     for (let i = 0; i < MAX_DRAWINS; i++) {

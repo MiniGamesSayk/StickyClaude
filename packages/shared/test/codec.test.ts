@@ -279,8 +279,8 @@ describe('snapshot', () => {
     expect(Array.from(ev.a.subarray(0, ev.n))).toEqual([100.5, 200.25]);
   });
 
-  it('le bloc own fait 71 octets et couvre tous les champs d état exact', () => {
-    expect(OWN_BYTES).toBe(71);
+  it('le bloc own fait 74 octets et couvre tous les champs d état exact', () => {
+    expect(OWN_BYTES).toBe(74);
     expect(OWN_FIELDS.map((f) => f.key)).toContain('atkBuffer');
     expect(new Set(OWN_FIELDS.map((f) => f.key)).size).toBe(OWN_FIELDS.length);
   });

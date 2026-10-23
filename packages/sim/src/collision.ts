@@ -279,7 +279,7 @@ export interface RayHit {
 
 /**
  * Lancer de rayon contre les cellules pleines (parcours de grille). `(dx, dy)` doit être unitaire.
- * Les plateformes à sens unique et les dangers sont traversés. Hors de la grille, les côtés sont
+ * Les plateformes à sens unique et les dangers sont traversés (sauf avec `oneway`, pour le crochet). Hors de la grille, les côtés sont
  * pleins ; le haut et le bas sont vides. Retourne faux si rien n'est touché avant `maxDist`.
  */
 export function raycastGrid(
@@ -290,6 +290,7 @@ export function raycastGrid(
   dy: number,
   maxDist: number,
   hit: RayHit,
+  oneway = false,
 ): boolean {
   let cx = Math.floor(x0 / CELL);
   let cy = Math.floor(y0 / CELL);
@@ -317,7 +318,8 @@ export function raycastGrid(
       tMaxY += tDeltaY;
     }
     if (t > maxDist) return false;
-    if (isBlocking(cellAt(world, cx, cy))) {
+    const c = cellAt(world, cx, cy);
+    if (isBlocking(c) || (oneway && c === Cell.ONEWAY)) {
       hit.dist = t;
       hit.cx = cx;
       hit.cy = cy;
