@@ -20,6 +20,7 @@ export const en: Record<MessageKey, string> = {
   'home.create': 'Create a room',
   'home.public': 'public',
   'home.join': 'Join',
+  'home.watch': 'Watch',
   'home.join_label': 'Or join a room with its code',
   'home.code': 'CODE',
   'home.code_missing': 'Enter the room code.',

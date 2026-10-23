@@ -22,6 +22,7 @@ export const fr = {
   'home.create': 'Créer un salon',
   'home.public': 'public',
   'home.join': 'Rejoindre',
+  'home.watch': 'Regarder',
   'home.join_label': 'Ou rejoins un salon avec son code',
   'home.code': 'CODE',
   'home.code_missing': 'Entre le code du salon.',
