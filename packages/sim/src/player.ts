@@ -88,6 +88,26 @@ export function phaseTicks(p: Player, phase: number): number {
   }
 }
 
+/**
+ * La récupération d'un jab ou d'un crochet peut être coupée par une parade ou un dash : sans
+ * cela, enchaîner les coups sans pause empêche toute autre action.
+ */
+function cancelableRecovery(p: Player): boolean {
+  return (
+    p.atkPhase === AtkPhase.RECOVERY &&
+    !p.kicking &&
+    (p.atkKind === AttackKind.FIST1 || p.atkKind === AttackKind.FIST2)
+  );
+}
+
+function endAttack(p: Player): void {
+  p.atkPhase = AtkPhase.NONE;
+  p.atkKind = AttackKind.NONE;
+  p.atkTicks = 0;
+  p.combo = 0;
+  p.comboWindow = 0;
+}
+
 /** Annule toute action en cours (touché, étourdi, mort). */
 export function cancelActions(p: Player): void {
   p.atkPhase = AtkPhase.NONE;
@@ -217,10 +237,11 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
     if (
       (pressed & Input.BLOCK) !== 0 &&
       p.blockCd === 0 &&
-      p.atkPhase === AtkPhase.NONE &&
+      (p.atkPhase === AtkPhase.NONE || cancelableRecovery(p)) &&
       p.chargeTicks === 0 &&
       !p.kicking
     ) {
+      if (p.atkPhase !== AtkPhase.NONE) endAttack(p);
       p.blockTicks = 1;
       p.atkBuffer = 0;
     }
@@ -429,13 +450,14 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     p.ctrlLocked ||
     p.blockTicks > 0 ||
     p.chargeTicks > 0 ||
-    p.atkPhase !== AtkPhase.NONE ||
+    (p.atkPhase !== AtkPhase.NONE && !cancelableRecovery(p)) ||
     p.kicking ||
     p.grappleTicks > 0;
   if (busy) {
     p.dashTicks = 0;
     p.dodging = false;
   } else if ((pressed & Input.DASH) !== 0 && p.dashCd === 0 && p.dashTicks === 0) {
+    if (p.atkPhase !== AtkPhase.NONE) endAttack(p);
     p.jumping = false;
     p.wallLock = 0;
     if (dir !== 0) {
@@ -583,7 +605,9 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     }
     if (slippery) accel *= PUDDLE_GRIP;
     p.vx = approach(p.vx, target, accel * DT);
-    if (dir !== 0 && p.atkPhase === AtkPhase.NONE) p.facing = dir;
+    // On se retourne tant que le coup n'est pas parti (départ et récupération) : enchaîner les
+    // attaques ne fige plus la direction.
+    if (dir !== 0 && p.atkPhase !== AtkPhase.ACTIVE && !p.kicking) p.facing = dir;
   }
 
   // --- Vertical -------------------------------------------------------------------------------

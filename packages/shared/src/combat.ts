@@ -44,8 +44,8 @@ export const COMBAT = {
   perfectParryTicks: 6,
   parryStunTicks: 24,
   parryCooldownTicks: 30,
-  /** Recharge après avoir relâché la parade sans avoir été touché. */
-  blockCooldownTicks: 30,
+  /** Recharge après avoir relâché la parade sans avoir été touché : aucune, seule une parade qui encaisse un coup recharge. */
+  blockCooldownTicks: 0,
   /** Vitesse de déplacement pendant les actions (multiplicateur de la vitesse de course). */
   blockSpeedMul: 0.45,
   attackSpeedMul: 0.7,

@@ -259,6 +259,7 @@ export async function startApp(): Promise<void> {
     resume: () => undefined,
     cancelReconnect: () => online.cancelResume(),
     captureKey: (cb: ((code: string) => void) | null) => input.keyboard.capture(cb),
+    capturePad: (cb: ((button: number) => void) | null) => input.gamepad.capture(cb),
   });
 
   // --- Options appliquées en continu ----------------------------------------------------------------

@@ -5,6 +5,7 @@ import {
   CROUCH_PUNCH,
   FIST,
   GamePhase,
+  Input,
   PlayerState,
   SimEvent,
   UPPER,
@@ -95,6 +96,25 @@ describe('mains nues : enchaînement de 3 coups', () => {
       if (pl(w, 0).atkKind === AttackKind.FIST2) second = true;
     }
     expect(second).toBe(true);
+  });
+});
+
+describe('direction pendant les coups', () => {
+  it('on peut se retourner avant que le coup parte (départ et récupération), pas pendant', () => {
+    const w = fightWorld();
+    const a = pl(w, 0);
+    tick(w, ATTACK);
+    tick(w, LEFT); // départ du coup : on se retourne
+    expect(a.atkPhase).toBe(AtkPhase.STARTUP);
+    expect(a.facing).toBe(-1);
+    ticks(w, FIST[0].startup, LEFT);
+    expect(a.atkPhase).toBe(AtkPhase.ACTIVE);
+    tick(w, RIGHT); // coup en cours : la direction est figée
+    expect(a.facing).toBe(-1);
+    ticks(w, FIST[0].active, RIGHT);
+    expect(a.atkPhase).toBe(AtkPhase.RECOVERY);
+    tick(w, RIGHT);
+    expect(a.facing).toBe(1);
   });
 });
 
@@ -329,17 +349,34 @@ describe('parade', () => {
     expect(a.stun + a.stunImmune).toBeGreaterThan(0);
   });
 
-  it('recharge de 0,5 s : pas de parade parfaite en rafale', () => {
+  it('relâcher la parade sans avoir encaissé de coup ne recharge pas : on reprend aussitôt', () => {
     const w = fightWorld();
     const q = pl(w, 1);
     ticks(w, 3, 0, BLOCK);
     tick(w, 0, 0); // relâche
-    expect(q.blockCd).toBe(COMBAT.blockCooldownTicks);
-    tick(w, 0, BLOCK);
-    expect(q.blockTicks).toBe(0);
-    ticks(w, COMBAT.blockCooldownTicks, 0, 0);
+    expect(q.blockCd).toBe(0);
     tick(w, 0, BLOCK);
     expect(q.blockTicks).toBe(1);
+  });
+
+  it('la parade coupe la récupération d un jab : enchaîner les coups ne bloque plus les autres actions', () => {
+    const w = fightWorld();
+    const a = pl(w, 0);
+    tap(w, 8, ATTACK);
+    expect(a.atkPhase).toBe(AtkPhase.RECOVERY);
+    tick(w, BLOCK);
+    expect(a.blockTicks).toBe(1);
+    expect(a.atkKind).toBe(AttackKind.NONE);
+  });
+
+  it('le dash coupe aussi la récupération d un jab', () => {
+    const w = fightWorld();
+    const a = pl(w, 0);
+    tap(w, 8, ATTACK);
+    expect(a.atkPhase).toBe(AtkPhase.RECOVERY);
+    tick(w, RIGHT | Input.DASH);
+    expect(a.dashTicks).toBeGreaterThan(0);
+    expect(a.atkKind).toBe(AttackKind.NONE);
   });
 
   it('on ne peut pas sauter en parant', () => {

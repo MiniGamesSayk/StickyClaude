@@ -1,6 +1,15 @@
 import { Input } from '@stickyclaude/shared';
+import { DEFAULT_PAD_BINDINGS, PAD_ACTIONS, padButtonReserved } from '../app/options.ts';
+import type { PadAction, PadBindings } from '../app/options.ts';
 
 const DEADZONE = 0.35;
+const PAD_BIT: Record<PadAction, number> = {
+  jump: Input.JUMP,
+  attack: Input.ATTACK,
+  block: Input.BLOCK,
+  pickup: Input.PICKUP,
+  dash: Input.DASH,
+};
 const ACTIONS = Input.JUMP | Input.ATTACK | Input.BLOCK | Input.PICKUP | Input.DASH;
 /** Inclinaison minimale du stick pour viser dans sa direction. */
 const AIM_DEADZONE = 0.4;
@@ -42,6 +51,11 @@ export class GamepadInput {
    * tant qu'il n'a pas été relâché, au lieu de laisser le personnage en parade.
    */
   private armed = 0;
+  /** Boutons choisis pour chaque action (options). */
+  bindings: Readonly<PadBindings> = DEFAULT_PAD_BINDINGS;
+  private captureCb: ((button: number) => void) | null = null;
+  /** Boutons déjà enfoncés au début de la capture : ignorés jusqu'à leur relâchement. */
+  private captureHeld = new Set<number>();
   private readonly nav: PadNav = { dx: 0, dy: 0, confirm: false, back: false, menu: false };
 
   private pads(): Gamepad[] {
@@ -49,6 +63,37 @@ export class GamepadInput {
     const out: Gamepad[] = [];
     for (const p of navigator.getGamepads()) if (p?.connected) out.push(p);
     return out;
+  }
+
+  /** Le prochain bouton pressé (hors Start et croix) est transmis à `cb` au lieu d'agir. */
+  capture(cb: ((button: number) => void) | null): void {
+    this.captureCb = cb;
+    this.captureHeld.clear();
+    if (cb === null) return;
+    for (const pad of this.pads()) {
+      pad.buttons.forEach((btn, i) => {
+        if (btn.pressed) this.captureHeld.add(i);
+      });
+    }
+  }
+
+  private pollCapture(pads: Gamepad[]): void {
+    const nowHeld = new Set<number>();
+    let found = -1;
+    for (const pad of pads) {
+      pad.buttons.forEach((btn, i) => {
+        if (!btn.pressed) return;
+        nowHeld.add(i);
+        if (found < 0 && !this.captureHeld.has(i) && !padButtonReserved(i)) found = i;
+      });
+    }
+    // un bouton relâché peut de nouveau être choisi
+    for (const i of this.captureHeld) if (!nowHeld.has(i)) this.captureHeld.delete(i);
+    if (found >= 0) {
+      const cb = this.captureCb;
+      this.captureCb = null;
+      cb?.(found);
+    }
   }
 
   /** Les boutons d'action actuellement tenus ne comptent plus tant qu'ils ne sont pas relâchés. */
@@ -67,19 +112,19 @@ export class GamepadInput {
       if (Math.hypot(ax, ay) > AIM_DEADZONE) this.aimAngle = Math.atan2(ay, ax);
       const b = (i: number): boolean => pad.buttons[i]?.pressed === true;
       // Gâchettes (analogiques) : un appui net, pas un simple frémissement.
-      const trig = (i: number): boolean => {
+      const down = (i: number): boolean => {
         const btn = pad.buttons[i];
-        return btn !== undefined && btn.pressed && btn.value > 0.5;
+        if (btn === undefined || !btn.pressed) return false;
+        return i === 6 || i === 7 ? btn.value > 0.5 : true;
       };
       if (ax < -DEADZONE || b(14)) m |= Input.LEFT;
       if (ax > DEADZONE || b(15)) m |= Input.RIGHT;
       if (ay < -DEADZONE || b(12)) m |= Input.UP;
       if (ay > DEADZONE || b(13)) m |= Input.DOWN;
-      if (b(0)) m |= Input.JUMP;
-      if (b(2) || trig(7)) m |= Input.ATTACK;
-      if (b(1) || trig(6)) m |= Input.BLOCK;
-      if (b(3) || b(5)) m |= Input.PICKUP;
-      if (b(4)) m |= Input.DASH;
+      for (const a of PAD_ACTIONS) {
+        const [x, y] = this.bindings[a];
+        if ((x >= 0 && down(x)) || (y >= 0 && down(y))) m |= PAD_BIT[a];
+      }
     }
     if (pads.length === 0) this.armed = 0;
     this.armed |= ~m & ACTIONS;
@@ -115,6 +160,10 @@ export class GamepadInput {
     n.back = (buttons & 2) !== 0 && (this.prevButtons & 2) === 0;
     n.menu = (buttons & 4) !== 0 && (this.prevButtons & 4) === 0;
     this.prevButtons = buttons;
+    if (this.captureCb) {
+      this.pollCapture(pads);
+      return null;
+    }
     if (dx !== 0 || dy !== 0) {
       const wait = this.navHeld ? 140 : 350;
       if (nowMs - this.lastNav >= wait) {

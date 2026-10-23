@@ -169,6 +169,8 @@ export interface Actions {
   cancelReconnect(): void;
   /** La prochaine touche pressée est transmise à `cb` (reconfiguration des touches). */
   captureKey(cb: ((code: string) => void) | null): void;
+  /** Le prochain bouton de manette pressé est transmis à `cb` (reconfiguration de la manette). */
+  capturePad(cb: ((button: number) => void) | null): void;
 }
 
 const noop = (): void => undefined;
@@ -196,6 +198,7 @@ export const actions: Actions = {
   quitSolo: noop,
   cancelReconnect: noop,
   captureKey: noop,
+  capturePad: noop,
 };
 
 let toastId = 0;

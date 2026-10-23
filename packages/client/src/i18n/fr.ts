@@ -382,6 +382,10 @@ export const fr = {
   'opt.key_secondary': 'Secondaire',
   'opt.key_press': 'Appuie sur une touche… (Échap pour annuler)',
   'opt.key_reset': 'Touches par défaut',
+  'opt.pad': 'Manette',
+  'opt.pad_press':
+    'Clique sur un bouton, puis appuie sur celui de la manette (clique à nouveau pour annuler).',
+  'opt.pad_reset': 'Manette par défaut',
   'opt.keys_emotes': 'Emotes : touches 1 à 9 (non modifiables).',
   'opt.touch': 'Contrôles tactiles',
   'opt.touch_auto': 'Sur écran tactile',
@@ -396,7 +400,8 @@ export const fr = {
   'opt.vibration': 'Vibration du téléphone',
   'opt.pad_rumble': 'Vibration de la manette',
   'opt.fullscreen': 'Plein écran au lancement (mobile)',
-  'opt.gamepad': 'Manette : A saute, X attaque, B pare, Y ramasse, croix ou stick pour bouger.',
+  'opt.gamepad':
+    'Par défaut : A saute, X ou RT attaque, B ou LT pare, Y ou RB ramasse, LB dash, croix ou stick pour bouger. Dash sans direction : esquive.',
   'opt.reset_all': 'Réinitialiser les options',
   'act.left': 'Gauche',
   'act.right': 'Droite',

@@ -370,6 +370,10 @@ export const en: Record<MessageKey, string> = {
   'opt.key_secondary': 'Secondary',
   'opt.key_press': 'Press a key… (Esc to cancel)',
   'opt.key_reset': 'Default keys',
+  'opt.pad': 'Gamepad',
+  'opt.pad_press':
+    'Click a button, then press the gamepad button you want (click again to cancel).',
+  'opt.pad_reset': 'Default gamepad',
   'opt.keys_emotes': 'Emotes: keys 1 to 9 (not editable).',
   'opt.touch': 'Touch controls',
   'opt.touch_auto': 'On touch screens',
@@ -384,7 +388,8 @@ export const en: Record<MessageKey, string> = {
   'opt.vibration': 'Phone vibration',
   'opt.pad_rumble': 'Gamepad vibration',
   'opt.fullscreen': 'Fullscreen when a game starts (mobile)',
-  'opt.gamepad': 'Gamepad: A jumps, X attacks, B blocks, Y picks up, d-pad or stick to move.',
+  'opt.gamepad':
+    'Default: A jumps, X or RT attacks, B or LT blocks, Y or RB picks up, LB dashes, d-pad or stick to move. Dash with no direction: dodge.',
   'opt.reset_all': 'Reset options',
   'act.left': 'Left',
   'act.right': 'Right',

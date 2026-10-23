@@ -39,6 +39,26 @@ export const DEFAULT_BINDINGS: Readonly<Bindings> = {
   dash: ['ShiftLeft', 'ShiftRight'],
 };
 
+/** Actions de manette reconfigurables (les directions restent au stick et à la croix). */
+export type PadAction = 'jump' | 'attack' | 'block' | 'pickup' | 'dash';
+export const PAD_ACTIONS: readonly PadAction[] = ['jump', 'attack', 'block', 'pickup', 'dash'];
+
+/** Deux boutons par action (indice du bouton standard, -1 : aucun). */
+export type PadBindings = Record<PadAction, [number, number]>;
+
+export const DEFAULT_PAD_BINDINGS: Readonly<PadBindings> = {
+  jump: [0, -1], // A
+  attack: [2, 7], // X, gâchette droite
+  block: [1, 6], // B, gâchette gauche
+  pickup: [3, 5], // Y, RB
+  dash: [4, -1], // LB
+};
+
+/** Boutons réservés : Start ouvre la pause, la croix déplace. */
+export function padButtonReserved(i: number): boolean {
+  return i === 9 || (i >= 12 && i <= 15);
+}
+
 export type TouchMode = 'auto' | 'on' | 'off';
 export type MotionSetting = 'auto' | 'on' | 'off';
 export type FpsCap = 0 | 30 | 60;
@@ -58,6 +78,7 @@ export interface Options {
   showStats: boolean;
   layout: KeyboardLayout;
   bindings: Bindings;
+  padBindings: PadBindings;
   touch: TouchMode;
   /** Taille des boutons tactiles et du joystick (0,6 à 1,8), joystick à droite ou à gauche. */
   touchSize: number;
@@ -89,6 +110,7 @@ export function defaultOptions(navLang?: string): Options {
     showStats: false,
     layout: 'auto',
     bindings: structuredClone(DEFAULT_BINDINGS),
+    padBindings: structuredClone(DEFAULT_PAD_BINDINGS),
     touch: 'auto',
     touchSize: 1,
     stickSize: 1,
@@ -117,6 +139,12 @@ function code(v: unknown, def: string): string {
   return typeof v === 'string' && /^[A-Za-z0-9]{0,24}$/.test(v) ? v : def;
 }
 
+function padButton(v: unknown, def: number): number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= -1 && v < 32 && !padButtonReserved(v)
+    ? v
+    : def;
+}
+
 /** Ramène un objet quelconque (JSON lu en local) à des options valides. */
 export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()): Options {
   const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
@@ -129,6 +157,15 @@ export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()):
   for (const a of ACTIONS) {
     const pair = Array.isArray(rb[a]) ? (rb[a] as unknown[]) : [];
     bindings[a] = [code(pair[0], b[a][0]), code(pair[1], b[a][1])];
+  }
+  const rp = (
+    typeof r.padBindings === 'object' && r.padBindings !== null ? r.padBindings : {}
+  ) as Record<string, unknown>;
+  const padBindings = {} as PadBindings;
+  for (const a of PAD_ACTIONS) {
+    const pair = Array.isArray(rp[a]) ? (rp[a] as unknown[]) : [];
+    const d = base.padBindings[a];
+    padBindings[a] = [padButton(pair[0], d[0]), padButton(pair[1], d[1])];
   }
   // ancienne touche de parade par défaut (K) : on passe à la nouvelle (E)
   if (bindings.block[0] === 'KeyK' && bindings.block[1] === '') bindings.block = ['KeyE', ''];
@@ -144,6 +181,7 @@ export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()):
     showStats: bool(r.showStats, base.showStats),
     layout: pick(r.layout, ['auto', 'azerty', 'qwerty'] as const, base.layout),
     bindings,
+    padBindings,
     touch: pick(r.touch, ['auto', 'on', 'off'] as const, base.touch),
     touchSize: num(r.touchSize, 0.6, 1.8, base.touchSize),
     // à défaut, le joystick garde l'ancienne taille unique
@@ -209,6 +247,26 @@ export function rebind(action: Action, slot: 0 | 1, keyCode: string): void {
     next[action] = [next[action][1], ''];
   }
   setOptions({ bindings: next });
+}
+
+export function resetPadBindings(): void {
+  setOptions({ padBindings: structuredClone(DEFAULT_PAD_BINDINGS) });
+}
+
+/** Rattache le bouton `button` à l'action : une autre action qui l'utilisait le perd. */
+export function rebindPad(action: PadAction, slot: 0 | 1, button: number): void {
+  const next: PadBindings = structuredClone(options.value.padBindings);
+  for (const a of PAD_ACTIONS) {
+    for (const s of [0, 1] as const) {
+      if (next[a][s] === button) next[a][s] = -1;
+    }
+  }
+  next[action][slot] = button;
+  // aucune action ne garde un premier bouton vide devant un second
+  for (const a of PAD_ACTIONS) {
+    if (next[a][0] === -1 && next[a][1] !== -1) next[a] = [next[a][1], -1];
+  }
+  setOptions({ padBindings: next });
 }
 
 // --- Profil -------------------------------------------------------------------------------------

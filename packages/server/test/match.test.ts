@@ -151,8 +151,9 @@ describe('parties complètes : du salon au podium', { timeout: 300_000 }, () => 
   for (const [label, mode] of BONUS) {
     for (const n of SIZES) {
       it(`mode bonus « ${label} » à ${n} joueurs`, () => {
-        // Un match de boulette-ball peut aller jusqu'au plafond de manches (matchs nuls à 150 s).
-        const maxTicks = mode === ModeId.BALL ? 260_000 : MAX_TICKS;
+        // Un match de boulette-ball ou de roi de la colline peut aller jusqu'au plafond de manches
+        // (matchs nuls à 150 s, joueurs automatiques qui se disputent la zone).
+        const maxTicks = mode === ModeId.BALL || mode === ModeId.KOTH ? 260_000 : MAX_TICKS;
         const p = playMatch(
           n,
           { bonusEvery: 1, bonusModes: [mode], mode: 'ffa' },
