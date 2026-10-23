@@ -38,6 +38,9 @@ const ATK_BUFFER_TICKS = 6;
 const KICK_MAX_TICKS = 150;
 /** Durée du geste d'un lancer à l'attaque (avant que la charge ne s'ajoute). */
 const THROW_STARTUP = 3;
+/** Ticks pendant lesquels une direction tardive transforme l esquive en dash, ou précise un dash. */
+const DODGE_UPGRADE_TICKS = 6;
+const DASH_REFINE_TICKS = 3;
 
 function approach(v: number, target: number, maxDelta: number): number {
   if (v < target) {
@@ -627,6 +630,33 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
       p.dashCd = P.dodgeCooldownTicks;
       if (p.invuln < P.dodgeTicks) p.invuln = P.dodgeTicks;
       emit(world, SimEvent.DODGE, slot, p.x, p.y, p.facing);
+    }
+  }
+  // Tolérance de timing : la direction n'arrive pas toujours au même tick que le dash. Pendant les
+  // premiers ticks d'une esquive, une direction tenue la transforme en dash ; pendant ceux d'un dash,
+  // elle se précise (diagonale tapée un tick plus tard).
+  if (!busy && p.dashTicks > 0 && (pressed & Input.DASH) === 0 && p.glueTicks === 0) {
+    let dy = ((input & Input.DOWN) !== 0 ? 1 : 0) - ((input & Input.UP) !== 0 ? 1 : 0);
+    if (dy > 0 && p.grounded) dy = 0;
+    if (dir !== 0 || dy !== 0) {
+      if (p.dodging) {
+        const elapsed = P.dodgeTicks - p.dashTicks;
+        if (elapsed <= DODGE_UPGRADE_TICKS) {
+          p.dodging = false;
+          p.dashX = dir;
+          p.dashY = dy;
+          p.dashTicks = P.dashTicks;
+          p.dashCd = Math.max(0, P.dashCooldownTicks - elapsed);
+          // l'invulnérabilité de l'esquive ne reste pas acquise à un dash
+          p.invuln = Math.max(0, p.invuln - (P.dodgeTicks - elapsed));
+          if (dir !== 0) p.facing = dir;
+          emit(world, SimEvent.DASH, slot, p.x, p.y, p.facing);
+        }
+      } else if (P.dashTicks - p.dashTicks < DASH_REFINE_TICKS) {
+        p.dashX = dir;
+        p.dashY = dy;
+        if (dir !== 0) p.facing = dir;
+      }
     }
   }
 

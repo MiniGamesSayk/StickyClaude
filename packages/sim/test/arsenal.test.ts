@@ -432,6 +432,38 @@ describe('dash dans toutes les directions', () => {
     expect(pl(w, 0).dodging).toBe(true);
   });
 
+  it('une direction tapée quelques ticks après le dash le transforme : plus d’esquive par erreur', () => {
+    const w = fightWorld();
+    const y0 = pl(w, 0).y;
+    tick(w, DASH);
+    expect(pl(w, 0).dodging).toBe(true);
+    ticks(w, 2, 0);
+    tick(w, UP);
+    expect(pl(w, 0).dodging).toBe(false);
+    ticks(w, 8, UP);
+    expect(y0 - pl(w, 0).y).toBeGreaterThan(40);
+    // l'invulnérabilité de l'esquive n'est pas gardée
+    expect(pl(w, 0).invuln).toBe(0);
+  });
+
+  it('trop tard, l’esquive suit son cours', () => {
+    const w = fightWorld();
+    tick(w, DASH);
+    ticks(w, 9, 0);
+    tick(w, UP);
+    expect(pl(w, 0).dodging).toBe(true);
+  });
+
+  it('une diagonale tapée un tick après le dash est prise', () => {
+    const w = fightWorld();
+    const x0 = pl(w, 0).x;
+    const y0 = pl(w, 0).y;
+    tick(w, DASH | RIGHT);
+    ticks(w, 8, UP | RIGHT);
+    expect(pl(w, 0).x - x0).toBeGreaterThan(30);
+    expect(y0 - pl(w, 0).y).toBeGreaterThan(25);
+  });
+
   it('le dash horizontal reste inchangé', () => {
     const w = fightWorld();
     const x0 = pl(w, 0).x;
