@@ -431,3 +431,9 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - **Pastilles d'encre** : uniquement la couleur, sans motif (le motif de poitrine du joueur avait déjà disparu du dessin).
 - **Personnalisation** : choisir une emote de victoire la joue aussitôt (avant, il fallait presser « Essayer »).
 - **Créateur** : pinceau / rectangle / seau en pictogrammes sur une seule ligne (info-bulle et `aria-label` pour le nom) ; symétries en grille 2 × 2.
+
+### D71. Points d'apparition des armes : chute au sol, un seul objet par point
+
+- À la création du monde, chaque point d'apparition d'arme **descend jusqu'au premier sol** (bloc, papier ou plateforme à sens unique) sous lui (`weaponDropRow`) : le dessin au crayon et l'arme apparaissent déjà à terre, au lieu de tomber de haut. Un point sans sol (vide, ou danger en dessous) est écarté. Aucune arène livrée n'est modifiée.
+- **Pas deux objets au même point** : arme ou cœur non ramassé (ou dessin en cours) bloque le point ; l'apparition choisit le point libre suivant, ou saute son tour si tous sont occupés.
+- Le créateur trace un pointillé du point posé jusqu'au sol où l'arme apparaîtra (rouge s'il n'y a pas de sol).

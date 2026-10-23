@@ -1,5 +1,6 @@
 import { Cell, CELL, GRID_H, GRID_W, WORLD_H, WORLD_W } from '@stickyclaude/shared';
 import type { ArenaData } from '@stickyclaude/shared';
+import { weaponDropRow } from '@stickyclaude/sim';
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { newLevelId, saveLevels, MAX_LEVELS } from '../app/levels.ts';
@@ -283,7 +284,7 @@ function draw(
     }
   }
   for (const p of s.props) drawProp(ctx, p.type, p.at[0], p.at[1]);
-  for (const [x, y] of s.weaponSpawns) drawWeaponSpawn(ctx, x, y);
+  for (const [x, y] of s.weaponSpawns) drawWeaponSpawn(ctx, x, y, weaponDropRow(s.cells, x, y));
   s.spawns.forEach(([x, y], i) => drawPlayerSpawn(ctx, x, y, i + 1));
   dashedRect(ctx, s.koth, '#c9a227', 'colline');
   dashedRect(ctx, s.goalA, '#1f4fd1', 'cage A');

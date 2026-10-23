@@ -1,4 +1,5 @@
 import {
+  Cell,
   CELL,
   cloneMovement,
   COMBAT,
@@ -529,6 +530,22 @@ export function setTick(world: World, tick: number): void {
   syncMovers(world);
 }
 
+/**
+ * Ligne où un objet posé dans la cellule (cx, cy) vient reposer en tombant : la dernière case libre
+ * au-dessus d'un bloc ou d'une plateforme. -1 s'il n'y a pas de sol (vide, danger sous la chute).
+ */
+export function weaponDropRow(cells: ArrayLike<number>, cx: number, cy: number): number {
+  if (cx < 0 || cx >= GRID_W || cy < 0 || cy >= GRID_H) return -1;
+  const at = (r: number): number => cells[r * GRID_W + cx];
+  if (at(cy) === Cell.SOLID || at(cy) === Cell.PAPER) return cy;
+  for (let r = cy; r < GRID_H - 1; r++) {
+    const below = at(r + 1);
+    if (below === Cell.SOLID || below === Cell.PAPER || below === Cell.ONEWAY) return r;
+    if (below === Cell.HAZARD) return -1;
+  }
+  return -1;
+}
+
 /** Charge une arène dans un monde existant : terrain, plateformes, points d'apparition. */
 export function loadArena(world: World, arena: ArenaData): void {
   world.arena = arena;
@@ -560,14 +577,20 @@ export function loadArena(world: World, arena: ArenaData): void {
   }
   world.spawnCount = spawnCount;
 
-  const wc = arena.spawns.weapons.length;
-  world.weaponSpawnX = new Float64Array(wc);
-  world.weaponSpawnY = new Float64Array(wc);
-  for (let i = 0; i < wc; i++) {
-    const s = arena.spawns.weapons[i];
-    world.weaponSpawnX[i] = (s[0] + 0.5) * CELL;
-    world.weaponSpawnY[i] = (s[1] + 1) * CELL;
+  // Points d'apparition des armes : posés trop haut, ils descendent jusqu'au sol (le dessin au
+  // crayon et l'objet apparaissent déjà à terre) ; sans sol dessous (vide), ils sont écartés.
+  const wx = new Float64Array(arena.spawns.weapons.length);
+  const wy = new Float64Array(arena.spawns.weapons.length);
+  let wc = 0;
+  for (const s of arena.spawns.weapons) {
+    const row = weaponDropRow(world.cells, s[0], s[1]);
+    if (row < 0) continue;
+    wx[wc] = (s[0] + 0.5) * CELL;
+    wy[wc] = (row + 1) * CELL;
+    wc++;
   }
+  world.weaponSpawnX = wx.slice(0, wc);
+  world.weaponSpawnY = wy.slice(0, wc);
   world.weaponSpawnCount = wc;
 
   for (const o of world.objects) o.active = false;

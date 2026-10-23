@@ -69,7 +69,27 @@ export function drawProp(
 }
 
 /** Point d'apparition d'une arme : le pistolet du jeu, sur une pastille orange. */
-export function drawWeaponSpawn(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+export function drawWeaponSpawn(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  landRow = cy,
+): void {
+  // posé trop haut : l'arme apparaîtra au sol (trait pointillé), ou nulle part s'il n'y en a pas
+  if (landRow !== cy) {
+    const x0 = (cx + 0.5) * CELL;
+    ctx.save();
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = landRow < 0 ? 'rgba(214,50,46,0.8)' : 'rgba(232,128,26,0.75)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x0, (cy + 1) * CELL - 6);
+    ctx.lineTo(x0, (landRow < 0 ? cy + 2 : landRow + 1) * CELL - 6);
+    ctx.stroke();
+    ctx.restore();
+    if (landRow < 0) return;
+    cy = landRow;
+  }
   const shape = WEAPON_SHAPES[WeaponId.PISTOL];
   const x = (cx + 0.5) * CELL;
   const y = (cy + 1) * CELL;
