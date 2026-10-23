@@ -340,6 +340,8 @@ export const fr = {
   'msg.server_restarted':
     "Le serveur vient d'être mis à jour : ta partie s'est arrêtée. Crée un salon ou rejoins-en un.",
   'msg.connection_lost': 'Connexion perdue.',
+  'msg.new_version': 'Nouvelle version du jeu : recharge la page.',
+  'msg.replaced': 'Ta place a été reprise depuis un autre onglet.',
   'msg.resume_failed': 'Impossible de reprendre ta place : le délai est dépassé.',
   'err.version': 'Version du jeu incompatible : recharge la page.',
   'err.bad_request': 'Requête invalide.',

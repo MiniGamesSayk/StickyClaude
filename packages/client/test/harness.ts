@@ -3,7 +3,7 @@ import type { ErrorCode, RoundInfo, ServerMessage } from '@stickyclaude/shared';
 import { GameServer, loadConfig } from '../../server/src/index.ts';
 import type { Connection } from '../../server/src/index.ts';
 import { GameClient } from '../src/net/client.ts';
-import type { GameEvent, ResultsMessage, ScoresMessage } from '../src/net/client.ts';
+import type { GameEvent, JoinedMessage, ResultsMessage, ScoresMessage } from '../src/net/client.ts';
 import { LagTransport } from '../src/net/transport.ts';
 import type { LagOptions, Scheduler, Transport } from '../src/net/transport.ts';
 
@@ -125,6 +125,8 @@ export class InputBot {
 
 export interface Probe {
   client: GameClient;
+  /** Lien du client (pour couper ou fausser ce qu'il reçoit). */
+  transport: Transport;
   bot: InputBot;
   name: string;
   /** Plus grand déplacement affiché entre deux images pour soi et pour les autres. */
@@ -144,6 +146,10 @@ export interface Probe {
   errors: ErrorCode[];
   left: string[];
   closes: number;
+  /** Dernier `joined` reçu, et nombres d'appels aux crochets de désynchro et de version. */
+  joined: JoinedMessage | null;
+  desyncs: number;
+  versions: number;
 }
 
 export interface NetOptions extends LagOptions {
@@ -189,6 +195,7 @@ export class TestWorld {
       : direct;
     const probe: Probe = {
       client: undefined as unknown as GameClient,
+      transport,
       bot: new InputBot(new Rng(500 + id)),
       name,
       maxOwnStep: 0,
@@ -206,6 +213,9 @@ export class TestWorld {
       errors: [],
       left: [],
       closes: 0,
+      joined: null,
+      desyncs: 0,
+      versions: 0,
     };
     const off = opts.clockOffset ?? 0;
     const drift = opts.clockDrift ?? 0;
@@ -219,6 +229,9 @@ export class TestWorld {
         onError: (code) => probe.errors.push(code),
         onLeft: (reason) => probe.left.push(reason),
         onClosed: () => probe.closes++,
+        onJoined: (m) => (probe.joined = m),
+        onDesync: () => probe.desyncs++,
+        onVersion: () => probe.versions++,
       },
       () => this.net.nowMs * (1 + drift) + off,
     );

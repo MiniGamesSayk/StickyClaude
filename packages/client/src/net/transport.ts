@@ -1,6 +1,7 @@
 /** Canal de messages client ↔ serveur (WebSocket réel, ou simulé en test). */
 export interface Transport {
   readonly bufferedAmount: number;
+  /** Les octets sont consommés (ou copiés) avant le retour : l'appelant réutilise ses tampons. */
   send(data: Uint8Array | string): void;
   close(): void;
   onOpen: (() => void) | null;

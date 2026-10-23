@@ -32,6 +32,7 @@ import {
   OWN_BYTES,
   OWN_FIELDS,
   ownEquals,
+  peekSnapshotTick,
   PLAYER_BYTES,
   PROJ_BYTES,
   ProjType,
@@ -303,6 +304,28 @@ describe('snapshot', () => {
     const n = encodeSnapshot(buf, s);
     expect(n).toBe(SNAPSHOT_MAX_BYTES);
     decodeSnapshot(buf.subarray(0, n), createSnapshot());
+  });
+
+  it('un nombre non fini du bloc own est écrit 0 : le client peut toujours lire le snapshot', () => {
+    const s = sampleSnapshot();
+    s.own.x = Number.NaN;
+    s.own.vy = Number.POSITIVE_INFINITY;
+    const buf = new Uint8Array(SNAPSHOT_MAX_BYTES);
+    const n = encodeSnapshot(buf, s);
+    const d = createSnapshot();
+    decodeSnapshot(buf.subarray(0, n), d);
+    expect(d.own.x).toBe(0);
+    expect(d.own.vy).toBe(0);
+    expect(d.own.y).toBe(s.own.y);
+  });
+
+  it("le tick se lit dans l'en-tête sans décoder, et une entrée trop courte est refusée", () => {
+    const s = sampleSnapshot();
+    const buf = new Uint8Array(SNAPSHOT_MAX_BYTES);
+    const n = encodeSnapshot(buf, s);
+    expect(peekSnapshotTick(buf.subarray(0, n))).toBe(s.tick);
+    expectDecodeError(() => peekSnapshotTick(buf.subarray(0, 3)));
+    expectDecodeError(() => peekSnapshotTick(new Uint8Array([BinType.PONG, 0, 0, 0, 0])));
   });
 
   it('un snapshot sans bloc own est plus court', () => {

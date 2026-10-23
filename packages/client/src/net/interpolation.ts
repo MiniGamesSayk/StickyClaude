@@ -95,7 +95,15 @@ export class SnapshotBuffer {
     for (let i = 0; i < RING; i++) this.ring.push(createSnapshot());
   }
 
-  /** Snapshot libre dans lequel décoder le prochain message. */
+  /** Vrai si un snapshot de ce tick serait accepté (plus récent que le dernier). */
+  accepts(tick: number): boolean {
+    return this.count === 0 || tick > this.newest().tick;
+  }
+
+  /**
+   * Snapshot libre dans lequel décoder le prochain message. L'anneau plein, c'est le plus ancien
+   * qui est écrasé : l'appelant vérifie `accepts(tick)` avant de réserver.
+   */
   next(): Snapshot {
     return this.ring[this.head];
   }

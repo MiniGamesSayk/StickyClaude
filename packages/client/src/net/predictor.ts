@@ -43,13 +43,13 @@ const SMOOTH_TAU_PER_UNIT_MS = 2;
 const VISIBLE_ERROR = 0.5;
 
 export const ReconcileResult = {
-  /** Snapshot trop ancien, ou pas d'entrée d'historique correspondante. */
+  /** Pas d'entrée d'historique correspondante, ou un trou dans les entrées à rejouer. */
   Skipped: 0,
   /** La prédiction concorde avec le serveur. */
   Match: 1,
   /** Divergence : état restauré depuis le serveur et entrées rejouées. */
   Corrected: 2,
-  /** Le serveur est en avance sur le client : état restauré tel quel. */
+  /** Le serveur est en avance sur le client, ou plus vieux que l'historique : état restauré tel quel. */
   Resynced: 3,
 } as const;
 export type ReconcileResultId = (typeof ReconcileResult)[keyof typeof ReconcileResult];
@@ -217,28 +217,27 @@ export class Predictor {
   /** Compare le snapshot (état du tick `tick`) à l'historique et corrige si besoin. */
   reconcile(tick: number, own: OwnState, game: GameSnap): ReconcileResultId {
     if (!this.started) return ReconcileResult.Skipped;
-    if (tick > this.tick) {
-      // Le serveur a déjà simulé plus loin que nous : on repart de son état.
-      const p = this.player;
-      const bx = p.x;
-      const by = p.y;
-      this.start(tick, own, game);
-      this.addSmooth(bx - p.x, by - p.y);
-      this.resyncs++;
-      return ReconcileResult.Resynced;
+    // Le serveur a déjà simulé plus loin que nous, ou son état est plus vieux que notre
+    // historique (latence de plusieurs secondes) : on repart de son état, le client rattrape.
+    if (tick > this.tick || tick <= this.tick - PREDICTION_HISTORY + 1) {
+      return this.resyncFrom(tick, own, game);
     }
-    if (tick <= this.tick - PREDICTION_HISTORY + 1) return ReconcileResult.Skipped;
     const h = this.hist[tick & (PREDICTION_HISTORY - 1)];
     if (h.tick !== tick) return ReconcileResult.Skipped;
     if (sameOwn(h.own, own) && h.phase === game.phase && h.phaseTick === game.phaseTick) {
       return ReconcileResult.Match;
     }
 
+    // Les entrées à rejouer doivent toutes être dans l'historique : un trou (saut, redémarrage)
+    // ferait rejouer des masques périmés.
+    const last = this.tick;
+    for (let t = tick + 1; t <= last; t++) {
+      if (this.hist[t & (PREDICTION_HISTORY - 1)].tick !== t) return ReconcileResult.Skipped;
+    }
     const p = this.player;
     const bx = p.x;
     const by = p.y;
     this.lastError = Math.hypot(h.own.x - own.x, h.own.y - own.y);
-    const last = this.tick;
     setTick(this.world, tick);
     importOwn(this.world, this.slot, own);
     this.applyGame(game);
@@ -257,6 +256,17 @@ export class Predictor {
     this.corrections++;
     if (Math.hypot(bx - p.x, by - p.y) > VISIBLE_ERROR) this.visibleCorrections++;
     return ReconcileResult.Corrected;
+  }
+
+  /** Repart de l'état du serveur au tick `tick` ; l'écart avec l'état affiché est lissé. */
+  private resyncFrom(tick: number, own: OwnState, game: GameSnap): ReconcileResultId {
+    const p = this.player;
+    const bx = p.x;
+    const by = p.y;
+    this.start(tick, own, game);
+    this.addSmooth(bx - p.x, by - p.y);
+    this.resyncs++;
+    return ReconcileResult.Resynced;
   }
 
   private addSmooth(dx: number, dy: number): void {

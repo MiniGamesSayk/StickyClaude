@@ -42,6 +42,8 @@ import type { HudData } from './store.ts';
 const SESSION_KEY = 'stickyclaude.session';
 /** Code de fermeture WebSocket « Service Restart » : le serveur redémarre (mise à jour). */
 export const CLOSE_SERVICE_RESTART = 1012;
+/** Fermeture envoyée par le serveur à l'ancienne socket quand le même jeton reprend ailleurs. */
+export const CLOSE_REPLACED = 4000;
 /** Durée de reconnexion tolérée pendant une mise à jour du serveur (ms). */
 const MAINTENANCE_GRACE_MS = 90_000;
 
@@ -217,6 +219,8 @@ export class Online {
     if (this.lag) transport = new LagTransport(transport, this.lag);
     net.value = { status: this.reconnect ? net.value.status : 'connecting', error: null };
     let wasJoined = false;
+    // socket écartée par nos soins pendant une reprise : sa fermeture ne relance rien
+    let retired = false;
     const c: GameClient = new GameClient(transport, {
       onJoined: (m) => {
         if (this.client !== c) return;
@@ -325,6 +329,12 @@ export class Online {
         if (this.reconnect && code === 'bad_token') {
           // Après une mise à jour du serveur, les salons n'existent plus : pas un délai dépassé.
           this.backToMenu(this.reconnect.maintenance ? 'msg.server_restarted' : key);
+        } else if (this.reconnect) {
+          // Autre refus pendant la reprise (limite de débit…) : on ferme cette socket et on
+          // réessaie plus tard, tant que la grâce n'est pas écoulée.
+          retired = true;
+          c.close();
+          this.scheduleResume();
         } else if (c.state === 'joined') {
           say(t(key) + (msg ? ` (${msg})` : ''));
         } else if (!this.reconnect) {
@@ -347,10 +357,21 @@ export class Online {
         if (this.client !== c) return;
         say(t('msg.shutdown', { s: Math.max(1, Math.round(inMs / 1000)) }));
       },
-      onClosed: (code) => {
+      onDesync: () => {
         if (this.client !== c) return;
+        this.backToMenu('err.version');
+      },
+      onVersion: () => {
+        if (this.client !== c) return;
+        this.backToMenu('msg.new_version');
+      },
+      onClosed: (code) => {
+        if (this.client !== c || retired) return;
         const restart = code === CLOSE_SERVICE_RESTART;
-        if (this.reconnect) {
+        if (code === CLOSE_REPLACED) {
+          // Ce jeton a repris ailleurs (autre onglet) : se reconnecter lui reprendrait la place.
+          this.backToMenu('msg.replaced');
+        } else if (this.reconnect) {
           if (restart) this.reconnect.maintenance = true;
           this.scheduleResume();
         } else if (wasJoined && !this.leaving) {
@@ -382,7 +403,8 @@ export class Online {
       maintenance,
     };
     net.value = { status: maintenance ? 'maintenance' : 'reconnecting', error: null };
-    this.tryResume();
+    // Pas tout de suite : le réseau qui vient de tomber a besoin d'un instant pour revenir.
+    this.scheduleResume();
   }
 
   private scheduleResume(): void {
@@ -410,7 +432,10 @@ export class Online {
     this.leaving = false;
     saveSession(null);
     this.source = null;
+    // Détachée avant la fermeture : les callbacks de cette socket sont gardés par `this.client !== c`.
+    const old = this.client;
     this.client = null;
+    old?.close();
     lobby.value = null;
     selfSlot.value = -1;
     round.value = null;

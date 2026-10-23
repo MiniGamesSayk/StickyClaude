@@ -1,6 +1,8 @@
 import {
   BinType,
+  copyOwnState,
   createDecodedEvent,
+  createOwnState,
   DecodeError,
   decodeEventPayload,
   decodePong,
@@ -21,6 +23,7 @@ import {
   MAX_PLAYERS,
   MAX_PROJECTILES,
   parseGrid,
+  peekSnapshotTick,
   PlayerFlag,
   PlayerState,
   PROTOCOL_VERSION,
@@ -82,6 +85,17 @@ const LEAD_MAX = 30;
 const REMOTE_DEAD_UNITS = 4;
 const REMOTE_TAU_MS = 40;
 const REMOTE_SNAP_UNITS = 96;
+/**
+ * Sans pong depuis ce délai (3 pings manqués), la socket est tenue pour morte (bascule Wi-Fi/4G :
+ * le navigateur peut mettre des minutes à signaler la coupure) et on la ferme pour reprendre.
+ */
+const STALE_MS = 6000;
+/** Code transmis à `onClosed` quand c'est le client qui abandonne une socket muette. */
+export const CLOSE_STALE = 4408;
+/** Un écart entre deux images plus long que cela est une reprise après onglet masqué. */
+const RESUME_GAP_MS = 1000;
+/** Snapshots illisibles de suite avant de conclure à un protocole incompatible. */
+const MAX_DECODE_FAILURES = 30;
 /** Un spectateur n'envoie pas d'entrées : il accuse les événements fiables à ce rythme. */
 const SPECTATOR_ACK_MS = 100;
 /** Événements d'effets en attente d'affichage (au plus). */
@@ -204,6 +218,10 @@ export interface GameClientHooks {
   onLocalEvent?: (e: LocalEvent) => void;
   /** Le terrain a changé (destruction, trait de fantôme). */
   onTerrain?: () => void;
+  /** Les snapshots reçus sont illisibles de façon durable : la page est sans doute périmée. */
+  onDesync?: () => void;
+  /** Le serveur parle une autre version du protocole : il faut recharger la page. */
+  onVersion?: () => void;
 }
 
 /** Drapeaux `PlayerFlag` d'un joueur du monde de prédiction. */
@@ -314,6 +332,12 @@ export class GameClient {
   private lastUpdate = Number.NaN;
   private lastDesired = 0;
   private lastSpectatorAck = Number.NEGATIVE_INFINITY;
+  private lastPongAt = 0;
+  private abandoned = false;
+  private decodeFailures = 0;
+  /** Dernier état propre reçu : la prédiction repart de là après une longue interruption. */
+  private readonly lastOwn = createOwnState();
+  private lastOwnTick = -1;
   private readonly sendBuf = new Uint8Array(64);
   private readonly pingBuf = new Uint8Array(8);
   private readonly masks = new Uint16Array(INPUT_REDUNDANCY);
@@ -329,6 +353,7 @@ export class GameClient {
   private frameLead = 0;
   /** Latence aller utilisée pour viser le tick d'entrée : l'estimation brute, mais lissée. */
   private owdUsed = 0;
+  private owdSeeded = false;
   private caughtUp = false;
   private readonly queued: string[] = [];
 
@@ -345,6 +370,8 @@ export class GameClient {
     };
     transport.onMessage = (data): void => this.onMessage(data);
     transport.onClose = (code): void => {
+      // socket déjà abandonnée (muette) : `onClosed` a été appelé à ce moment-là
+      if (this.abandoned) return;
       this.state = 'closed';
       this.hooks.onClosed?.(code);
     };
@@ -454,12 +481,19 @@ export class GameClient {
       else if (data[0] === BinType.PONG) this.onPong(data);
     } catch (e) {
       if (!(e instanceof DecodeError)) throw e;
+      // Un snapshot isolé qui ne se lit pas est ignoré ; une série ininterrompue signale un
+      // protocole incompatible (le jeu resterait figé sans rien dire).
+      if (++this.decodeFailures === MAX_DECODE_FAILURES) this.hooks.onDesync?.();
     }
   }
 
   private onControl(m: ServerMessage): void {
     switch (m.t) {
       case 'joined': {
+        if (m.v !== PROTOCOL_VERSION) {
+          this.hooks.onVersion?.();
+          return;
+        }
         if (!this.applyRound(m.round, true)) {
           this.hooks.onError?.('bad_request', `arène inconnue : ${m.round.arena}`);
           return;
@@ -478,7 +512,11 @@ export class GameClient {
         this.keptValid.fill(0);
         this.lastSnapTick = -1;
         this.nextPing = this.now();
+        this.lastPongAt = this.nextPing;
         this.pingsSent = 0;
+        this.owdSeeded = false;
+        this.decodeFailures = 0;
+        this.lastOwnTick = -1;
         const w = this.world!;
         this.predictor = m.slot >= 0 ? new Predictor(w, m.slot) : null;
         this.view.own.visible = false;
@@ -586,6 +624,7 @@ export class GameClient {
   private onPong(data: Uint8Array): void {
     decodePong(data, this.pong);
     const now = this.now();
+    this.lastPongAt = now;
     const rtt = ((Math.floor(now) >>> 0) - this.pong.clientTime) >>> 0;
     this.clock.onPong(now, rtt, this.pong.tick + this.pong.frac);
     this.stats.rttMs = this.clock.rttMs;
@@ -594,12 +633,16 @@ export class GameClient {
 
   private onSnapshot(data: Uint8Array): void {
     const now = this.now();
-    const snap = this.buffer.next();
-    decodeSnapshot(data, snap);
-    if (!this.buffer.commit()) {
+    // Un snapshot en retard est écarté avant de réserver un emplacement : décodé dans l'anneau,
+    // il aurait écrasé le plus ancien snapshot valide.
+    if (!this.buffer.accepts(peekSnapshotTick(data))) {
       this.stats.lateSnapshots++;
       return;
     }
+    const snap = this.buffer.next();
+    decodeSnapshot(data, snap);
+    this.buffer.commit();
+    this.decodeFailures = 0;
     this.stats.snapshots++;
 
     // Gigue d'arrivée : écart à l'intervalle attendu entre deux snapshots.
@@ -648,6 +691,8 @@ export class GameClient {
     // Réconciliation de son propre joueur.
     const pred = this.predictor;
     if (pred && snap.hasOwn) {
+      copyOwnState(this.lastOwn, snap.own);
+      this.lastOwnTick = snap.tick;
       if (!pred.started || !this.caughtUp) {
         // Avant la synchronisation d'horloge on ne simule pas encore : on suit le serveur.
         pred.start(snap.tick, snap.own, snap.game);
@@ -715,14 +760,22 @@ export class GameClient {
    */
   update(input: number): void {
     const now = this.now();
-    const dtMs = Number.isNaN(this.lastUpdate) ? 0 : Math.min(100, now - this.lastUpdate);
+    const gapMs = Number.isNaN(this.lastUpdate) ? 0 : now - this.lastUpdate;
+    const dtMs = Math.min(100, gapMs);
     if (!Number.isNaN(this.lastUpdate)) {
-      this.frameMs += (Math.min(250, now - this.lastUpdate) - this.frameMs) * 0.1;
+      this.frameMs += (Math.min(250, gapMs) - this.frameMs) * 0.1;
     }
     this.lastUpdate = now;
     if (this.state !== 'joined') return;
 
+    // Onglet resté masqué : aucun ping n'est parti, le silence ne prouve rien.
+    if (gapMs >= RESUME_GAP_MS) this.lastPongAt = now;
+    else if (now - this.lastPongAt > STALE_MS) {
+      this.abandon();
+      return;
+    }
     this.pingIfDue(now);
+    if (this.clock.synced) this.trackOwd(dtMs);
     const pred = this.predictor;
     this.frameLead = Math.min(MAX_FRAME_LEAD_TICKS, Math.max(0, this.frameMs / TICK_MS - 1));
     this.stats.rewindMs = Math.min(
@@ -736,20 +789,19 @@ export class GameClient {
       // La latence estimée peut bouger d'un coup (pong retardé par un blocage TCP) : on la suit
       // lentement pour que l'horloge de prédiction n'accélère pas brutalement. Si elle est trop
       // basse, la marge renvoyée par le serveur augmente l'avance plus vite que cela.
-      const owd = this.clock.owdMs;
-      if (!this.caughtUp) this.owdUsed = owd;
-      else
-        this.owdUsed += Math.max(-OWD_SLEW * dtMs, Math.min(OWD_SLEW * dtMs, owd - this.owdUsed));
       const desired =
         this.clock.serverTick(now) + this.owdUsed / TICK_MS + this.leadTicks + this.frameLead;
       this.lastDesired = desired;
-      let target = Math.floor(desired);
+      const target = Math.floor(desired);
       // Premier rattrapage : on simule tout l'écart. Ensuite, après une longue interruption
       // (onglet masqué), on saute au lieu de rejouer des secondes d'entrées.
       const maxCatchup = this.caughtUp ? MAX_CATCHUP_TICKS : MAX_INITIAL_CATCHUP_TICKS;
       if (target - pred.tick > maxCatchup) {
-        pred.jumpTo(target - 1);
-        target = target - 1 + 1;
+        // Repart de l'état exact du dernier snapshot et rejoue l'écart (borné) : avancer l'horloge
+        // sans simuler laissait le joueur figé jusqu'à une grosse correction.
+        const from = Math.max(this.lastOwnTick, target - MAX_INITIAL_CATCHUP_TICKS);
+        if (this.lastOwnTick >= 0) pred.start(from, this.lastOwn, this.game);
+        else pred.jumpTo(target - 1);
       }
       let stepped = 0;
       while (pred.tick < target) {
@@ -774,11 +826,33 @@ export class GameClient {
     this.computeView(now);
   }
 
+  /**
+   * Latence aller utilisée pour viser le tick d'entrée et dessiner les autres joueurs : la mesure
+   * brute, mais lissée (un pong retardé ne doit faire sauter ni l'horloge ni l'affichage).
+   */
+  private trackOwd(dtMs: number): void {
+    const owd = this.clock.owdMs;
+    if (!this.owdSeeded || (this.predictor !== null && !this.caughtUp)) {
+      this.owdUsed = owd;
+      this.owdSeeded = true;
+    } else {
+      this.owdUsed += Math.max(-OWD_SLEW * dtMs, Math.min(OWD_SLEW * dtMs, owd - this.owdUsed));
+    }
+  }
+
+  /** Socket muette : on la ferme et on prévient tout de suite, sans attendre le navigateur. */
+  private abandon(): void {
+    this.abandoned = true;
+    this.state = 'closed';
+    this.transport.close();
+    this.hooks.onClosed?.(CLOSE_STALE);
+  }
+
   private pingIfDue(now: number): void {
     if (now < this.nextPing) return;
     const n = encodePing(this.pingBuf, Math.floor(now) >>> 0);
     this.stats.bytesOut += n;
-    this.transport.send(this.pingBuf.slice(0, n));
+    this.transport.send(this.pingBuf.subarray(0, n));
     this.pingsSent++;
     this.nextPing = now + (this.pingsSent < PING_FAST_COUNT ? PING_FAST_MS : PING_SLOW_MS);
   }
@@ -795,7 +869,7 @@ export class GameClient {
       1,
     );
     this.stats.bytesOut += n;
-    this.transport.send(this.sendBuf.slice(0, n));
+    this.transport.send(this.sendBuf.subarray(0, n));
   }
 
   /**
@@ -818,7 +892,7 @@ export class GameClient {
       if (count === 0) return;
       const n = encodeInput(this.sendBuf, newest, this.lastEventId, rewind, this.masks, count);
       this.stats.bytesOut += n;
-      this.transport.send(this.sendBuf.slice(0, n));
+      this.transport.send(this.sendBuf.subarray(0, n));
       newest -= INPUT_REDUNDANCY;
       if (newest < oldest) return;
     }
@@ -868,8 +942,9 @@ export class GameClient {
     const viewDt = Number.isNaN(this.lastViewAt) ? 0 : Math.min(100, now - this.lastViewAt);
     this.lastViewAt = now;
     let n = 0;
+    let seen = 0;
     if (this.clock.synced && this.buffer.size > 0) {
-      const renderTick = this.clock.serverTick(now) - (this.clock.owdMs + this.interpMs) / TICK_MS;
+      const renderTick = this.clock.serverTick(now) - (this.owdUsed + this.interpMs) / TICK_MS;
       v.remoteTick = renderTick;
       const count = this.buffer.presentSlots(this.presence);
       for (let i = 0; i < count; i++) {
@@ -878,6 +953,7 @@ export class GameClient {
         const r = v.remotes[n];
         if (this.buffer.sample(renderTick, slot, r)) {
           this.smoothRemote(r, viewDt);
+          seen |= 1 << slot;
           n++;
         }
       }
@@ -890,6 +966,8 @@ export class GameClient {
       if (this.pendingFx.length > 0 && !this.clock.synced) this.releaseFx(Infinity);
     }
     v.remoteCount = n;
+    // Un joueur qui disparaît oublie sa position lissée : à son retour il apparaît où il est.
+    for (let s = 0; s < MAX_PLAYERS; s++) if ((seen & (1 << s)) === 0) this.keptValid[s] = 0;
   }
 
   /** Joue les événements dont l'instant est venu (le monde, lui, les a appliqués dès réception). */

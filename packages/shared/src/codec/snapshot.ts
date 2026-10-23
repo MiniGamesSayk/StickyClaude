@@ -394,7 +394,8 @@ export function encodeSnapshot(out: Uint8Array, s: Snapshot): number {
       const v = o[f.key];
       switch (f.t) {
         case 'f32':
-          w.f32(v);
+          // Un NaN ou un infini ferait rejeter tous les snapshots par le client (décodage) : 0 vaut mieux.
+          w.f32(Number.isFinite(v) ? v : 0);
           break;
         case 'u8':
           w.u8(v);
@@ -416,6 +417,13 @@ export function encodeSnapshot(out: Uint8Array, s: Snapshot): number {
     for (let j = 0; j < e.len; j++) w.u8(e.data[j]);
   }
   return w.pos;
+}
+
+/** Tick d'un snapshot lu dans son en-tête, sans le décoder. Lève `DecodeError` si trop court. */
+export function peekSnapshotTick(buf: Uint8Array): number {
+  const r = new Reader(buf);
+  if (r.u8() !== BinType.SNAPSHOT) throw new DecodeError('not a snapshot');
+  return r.u32();
 }
 
 /** Décode dans `out` (réutilisable, sans allocation). Lève `DecodeError` si invalide. */
