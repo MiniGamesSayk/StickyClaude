@@ -3,6 +3,8 @@
  * `weapons.ts`. Unités : unités de monde, ticks (1 tick = 1/60 s), unités/s pour les vitesses.
  */
 
+import { AtkPhase, AttackKind } from './types.ts';
+
 export interface MeleeAttack {
   startup: number;
   active: number;
@@ -30,12 +32,16 @@ export const COMBAT = {
   stunMaxTicks: 36,
   /** Fenêtre pour enchaîner le coup suivant, après la fin des images actives. */
   comboWindowTicks: 18,
-  /** Bouton d'attaque tenu aussi longtemps : le coup en cours est suivi d'une charge. */
-  chargeHoldTicks: 10,
+  /** Charge de l'attaque spéciale (clic droit tenu) : durée de la charge pleine. */
   chargeMaxTicks: 54,
-  /** Parade : part des dégâts subis de face, et des projections. */
+  /** Parade : part des dégâts subis du côté gardé, et des projections. */
   blockDamageTaken: 0.3,
   blockKnockbackMul: 0.4,
+  /**
+   * Parade orientée : un coup est paré s'il vient du côté de la garde (la visée), à moins de
+   * ≈ 72° de sa direction : produit scalaire minimal entre la garde et la direction du coup.
+   */
+  guardMinDot: 0.31,
   /**
    * Parade : elle n'encaisse qu'un seul coup (puis elle retombe), l'attaquant dont le coup de
    * mêlée est paré est étourdi 0,4 s, et il faut attendre 0,5 s avant de parer de nouveau.
@@ -83,23 +89,15 @@ export const COMBAT = {
   /** Sortie de la page : mort quand le joueur dépasse ces marges. */
   outTop: 4 * 16,
   outSides: 2 * 16,
-  /** Coup de pied sauté (vers le bas). */
-  kick: {
-    damage: 10,
-    kbx: 90,
-    kby: 380,
-    diveSpeed: 430,
-    bounce: 260,
-    reachX: 11,
-    reachDown: 14,
-    stun: 0,
-    recovery: 10,
-  },
-  /** Coup chargé : les valeurs vont du minimum (charge courte) au maximum (charge pleine). */
+  /**
+   * Attaque spéciale au sol, côté ou haut (clic droit, chargeable) : les valeurs vont du minimum
+   * (appui bref) au maximum (charge pleine). Le poing s'allonge de `extend` pendant les images
+   * actives, puis une longue récupération (non annulable) suit.
+   */
   charged: {
-    startup: 4,
+    startup: 5,
     active: 4,
-    recovery: 20,
+    recovery: 24,
     damageMin: 14,
     damageMax: 32,
     kbxMin: 260,
@@ -108,20 +106,78 @@ export const COMBAT = {
     kbyMax: -340,
     stunFrom: 0.5,
     stun: 24,
-    reach: 28,
+    reach: 26,
+    extend: 14,
     lunge: 90,
   },
-  /** Coup vers le bas en l'air (attaque + bas) : rapide, le frappeur rebondit s'il touche. */
+  /** Attaque spéciale accroupie : frappe de chaque côté. */
+  specialDown: {
+    startup: 4,
+    active: 4,
+    recovery: 20,
+    damageMin: 10,
+    damageMax: 22,
+    kbxMin: 200,
+    kbxMax: 400,
+    kbyMin: -140,
+    kbyMax: -220,
+    stunFrom: 0.6,
+    stun: 18,
+    reach: 26,
+  },
+  /** Coup vers le bas en l'air : le frappeur rebondit s'il touche, et projette fort vers le bas. */
   airDown: {
     startup: 3,
     active: 3,
-    recovery: 9,
-    damage: 7,
-    kbx: 70,
-    kby: 150,
+    recovery: 11,
+    damage: 9,
+    kbx: 40,
+    kby: 420,
     stun: 0,
-    reach: 16,
+    reach: 18,
     bounce: 210,
+  },
+  /** Coup en l'air sans direction : autour du personnage, faible portée. */
+  airNeutral: {
+    startup: 2,
+    active: 4,
+    recovery: 10,
+    damage: 5,
+    kbx: 120,
+    kby: -110,
+    stun: 0,
+    reach: 12,
+  },
+  /** Coup de côté en l'air : balayage large devant soi. */
+  airSide: {
+    startup: 3,
+    active: 4,
+    recovery: 12,
+    damage: 8,
+    kbx: 210,
+    kby: -120,
+    stun: 0,
+    reach: 24,
+  },
+  /** Petit balayage vers le haut en l'air. */
+  airUp: {
+    startup: 3,
+    active: 4,
+    recovery: 11,
+    damage: 7,
+    kbx: 40,
+    kby: -290,
+    stun: 0,
+    reach: 22,
+  },
+  /**
+   * Attaque spéciale en l'air (clic droit) : sans direction, l'esquive sur place ; avec une
+   * direction, une ruée plus longue que le dash, invulnérable sauf pendant ses derniers ticks.
+   */
+  airSpecial: {
+    extraTicks: 3,
+    vulnerableTicks: 4,
+    extraCooldownTicks: 20,
   },
   /** Lancer chargé : durée de charge maximale et seuil sous lequel un appui reste un simple geste. */
   throwChargeMax: 36,
@@ -144,7 +200,7 @@ export const COMBAT = {
 
 /**
  * Coup vers le haut (haut + attaquer) : `reach` est l'allonge au-dessus de la tête. Il projette
- * presque à la verticale.
+ * vers le haut, sans lancer l'adversaire.
  */
 export const UPPER: MeleeAttack = {
   startup: 4,
@@ -152,26 +208,26 @@ export const UPPER: MeleeAttack = {
   recovery: 13,
   damage: 8,
   kbx: 50,
-  kby: -330,
+  kby: -270,
   stun: 0,
-  reach: 18,
+  reach: 22,
   lunge: 0,
 };
 
 /**
- * Coup accroupi (bas + attaquer au sol) : plus long que les poings debout (20 à 26) et il projette
- * vers le haut.
+ * Balayage accroupi (bas + attaquer au sol) : sur place, un peu plus long que les poings debout
+ * (20 à 26) ; l'adversaire est repoussé légèrement et tombe (étourdissement).
  */
-export const CROUCH_PUNCH: MeleeAttack = {
+export const CROUCH_SWEEP: MeleeAttack = {
   startup: 4,
   active: 3,
-  recovery: 14,
-  damage: 8,
+  recovery: 12,
+  damage: 6,
   kbx: 70,
-  kby: -320,
-  stun: 0,
-  reach: 36,
-  lunge: 30,
+  kby: -90,
+  stun: 20,
+  reach: 28,
+  lunge: 0,
 };
 
 /** Coups à mains nues : jab, crochet, final (projette). */
@@ -210,3 +266,36 @@ export const FIST: readonly MeleeAttack[] = [
     lunge: 70,
   },
 ];
+
+/**
+ * Durée (ticks) d'une phase d'un coup à mains nues (la simulation et le dessin lisent la même
+ * table) ; -1 si `kind` n'en est pas un (arme, lancer : durées propres).
+ */
+export function fistPhaseTicks(kind: number, phase: number): number {
+  const pick = (a: { startup: number; active: number; recovery: number }): number =>
+    phase === AtkPhase.STARTUP ? a.startup : phase === AtkPhase.ACTIVE ? a.active : a.recovery;
+  switch (kind) {
+    case AttackKind.FIST1:
+    case AttackKind.FIST2:
+    case AttackKind.FIST3:
+      return pick(FIST[kind - AttackKind.FIST1]);
+    case AttackKind.CHARGED:
+      return pick(COMBAT.charged);
+    case AttackKind.SPECIAL_DOWN:
+      return pick(COMBAT.specialDown);
+    case AttackKind.UPPER:
+      return pick(UPPER);
+    case AttackKind.CROUCH:
+      return pick(CROUCH_SWEEP);
+    case AttackKind.AIR_NEUTRAL:
+      return pick(COMBAT.airNeutral);
+    case AttackKind.AIR_SIDE:
+      return pick(COMBAT.airSide);
+    case AttackKind.AIR_UP:
+      return pick(COMBAT.airUp);
+    case AttackKind.AIR_DOWN:
+      return pick(COMBAT.airDown);
+    default:
+      return -1;
+  }
+}

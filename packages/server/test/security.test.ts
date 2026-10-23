@@ -1,5 +1,11 @@
 import * as fc from 'fast-check';
-import { GamePhase, Input, MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION } from '@stickyclaude/shared';
+import {
+  GamePhase,
+  INPUT_MASK_USED,
+  Input,
+  MAX_CLIENT_MESSAGE_BYTES,
+  PROTOCOL_VERSION,
+} from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import { Bot, harness } from './helpers.ts';
 import type { FakeConn, Harness } from './helpers.ts';
@@ -135,7 +141,9 @@ describe('tentatives de triche : aucun message ne fixe un état', () => {
       h.advance(1);
     }
     const p = room.world.players[slot];
-    expect(p.prevInput & 0xc000).toBe(0);
+    // le bit 14 (spécial) est un vrai bouton ; le bit 15 réservé et la compensation (bits 16-17) non
+    expect(p.prevInput & ~INPUT_MASK_USED).toBe(0);
+    expect(p.prevInput & 0x8000).toBe(0);
   });
 
   it('une compensation de latence énorme ne sert qu à rattraper 250 ms au plus', () => {

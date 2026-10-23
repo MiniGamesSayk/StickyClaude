@@ -11,7 +11,7 @@ import type { QualitySetting } from '../render/quality.ts';
  */
 
 export type Action =
-  'left' | 'right' | 'up' | 'down' | 'jump' | 'attack' | 'block' | 'pickup' | 'dash' | 'spike';
+  'left' | 'right' | 'up' | 'down' | 'jump' | 'attack' | 'block' | 'pickup' | 'dash' | 'special';
 export const ACTIONS: readonly Action[] = [
   'left',
   'right',
@@ -22,7 +22,7 @@ export const ACTIONS: readonly Action[] = [
   'block',
   'pickup',
   'dash',
-  'spike',
+  'special',
 ];
 
 /**
@@ -47,24 +47,25 @@ export const DEFAULT_BINDINGS: Readonly<Bindings> = {
   jump: ['Space', ''],
   // Plus aucune touche « sous-entendue » : la souris se règle ici comme le reste.
   attack: ['KeyJ', 'Mouse0'],
-  block: ['KeyE', ''],
+  // Mode défense : cette touche (ou le clic molette) le bascule ; la garde suit la visée.
+  block: ['KeyE', 'Mouse1'],
   pickup: ['KeyL', ''],
   // Maj + clic droit ouvre le menu du navigateur sous Firefox (voir `bindingWarnings`) : A (AZERTY)
   // sert de secours.
   dash: ['ShiftLeft', 'KeyQ'],
-  // Smash bas : coup de pied plongeant en l'air (annulable par un dash, un saut ou la parade).
-  spike: ['KeyK', 'Mouse2'],
+  // Attaque spéciale (clic droit) : chargeable au sol, ruée invulnérable en l'air.
+  special: ['KeyK', 'Mouse2'],
 };
 
 /** Actions de manette reconfigurables (les directions restent au stick et à la croix). */
-export type PadAction = 'jump' | 'attack' | 'block' | 'pickup' | 'dash' | 'spike';
+export type PadAction = 'jump' | 'attack' | 'block' | 'pickup' | 'dash' | 'special';
 export const PAD_ACTIONS: readonly PadAction[] = [
   'jump',
   'attack',
   'block',
   'pickup',
   'dash',
-  'spike',
+  'special',
 ];
 
 /** Deux boutons par action (indice du bouton standard, -1 : aucun). */
@@ -76,7 +77,7 @@ export const DEFAULT_PAD_BINDINGS: Readonly<PadBindings> = {
   block: [1, 6], // B, gâchette gauche
   pickup: [3, 5], // Y, RB
   dash: [4, -1], // LB
-  spike: [11, -1], // clic du stick droit
+  special: [11, -1], // clic du stick droit
 };
 
 /** Boutons réservés : Start ouvre la pause, la croix déplace. */
@@ -180,7 +181,9 @@ export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()):
   >;
   const bindings = {} as Bindings;
   for (const a of ACTIONS) {
-    const pair = Array.isArray(rb[a]) ? (rb[a] as unknown[]) : [];
+    // « special » s'appelait « spike » (smash bas) dans les réglages d'avant le moveset
+    const saved = rb[a] ?? (a === 'special' ? rb.spike : undefined);
+    const pair = Array.isArray(saved) ? (saved as unknown[]) : [];
     bindings[a] = [code(pair[0], b[a][0]), code(pair[1], b[a][1])];
   }
   const rp = (
@@ -188,7 +191,8 @@ export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()):
   ) as Record<string, unknown>;
   const padBindings = {} as PadBindings;
   for (const a of PAD_ACTIONS) {
-    const pair = Array.isArray(rp[a]) ? (rp[a] as unknown[]) : [];
+    const savedPad = rp[a] ?? (a === 'special' ? rp.spike : undefined);
+    const pair = Array.isArray(savedPad) ? (savedPad as unknown[]) : [];
     const d = base.padBindings[a];
     padBindings[a] = [padButton(pair[0], d[0]), padButton(pair[1], d[1])];
   }
@@ -198,20 +202,26 @@ export function sanitizeOptions(raw: unknown, base: Options = defaultOptions()):
   }
   // ancienne touche de parade par défaut (K) : on passe à la nouvelle (E)
   if (bindings.block[0] === 'KeyK' && bindings.block[1] === '') bindings.block = ['KeyE', ''];
-  // Réglages enregistrés avant la touche « smash bas » : la souris était sous-entendue (clic
-  // gauche attaque, clic droit parade). Elle devient explicite : clic gauche reste l'attaque et le
-  // clic droit passe au smash bas, sauf si ces touches sont déjà prises ailleurs.
-  if (rb.spike === undefined) {
+  // Réglages enregistrés avant la touche spéciale : la souris était sous-entendue (clic gauche
+  // attaque, clic droit parade). Elle devient explicite : clic gauche reste l'attaque et le clic
+  // droit passe à l'attaque spéciale, sauf si ces touches sont déjà prises ailleurs.
+  if (rb.special === undefined && rb.spike === undefined) {
     const used = new Set<string>();
     for (const a of ACTIONS) {
-      if (a !== 'spike') for (const c of bindings[a]) if (c !== '') used.add(c);
+      if (a !== 'special') for (const c of bindings[a]) if (c !== '') used.add(c);
     }
     if (bindings.attack[1] === '' && !used.has('Mouse0')) bindings.attack[1] = 'Mouse0';
     used.add(bindings.attack[1]);
     const free = (c: string): string => (used.has(c) ? '' : c);
-    const first = free(DEFAULT_BINDINGS.spike[0]);
-    const second = free(DEFAULT_BINDINGS.spike[1]);
-    bindings.spike = first !== '' ? [first, second] : [second, ''];
+    const first = free(DEFAULT_BINDINGS.special[0]);
+    const second = free(DEFAULT_BINDINGS.special[1]);
+    bindings.special = first !== '' ? [first, second] : [second, ''];
+  }
+  // La parade est devenue un mode qu'on bascule : le clic molette est sa seconde touche par défaut
+  // (réglages d'avant, où elle était libre), sauf si la molette sert déjà à autre chose.
+  if (rb.block !== undefined && bindings.block[1] === '') {
+    const taken = ACTIONS.some((a) => a !== 'block' && bindings[a].includes('Mouse1'));
+    if (!taken) bindings.block[1] = 'Mouse1';
   }
   return {
     lang: pick(r.lang, ['fr', 'en'] as const, base.lang),

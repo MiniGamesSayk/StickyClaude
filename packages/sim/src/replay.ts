@@ -44,7 +44,7 @@ export function applyOp(world: World, op: RecordOp, lobbyArena: ArenaData): void
 /** Rejoue un enregistrement pas à pas (relecture visuelle, tests). */
 export class ReplayCursor {
   readonly world: World;
-  private readonly inputs = new Uint16Array(MAX_PLAYERS);
+  private readonly inputs = new Uint32Array(MAX_PLAYERS);
   private oi = 0;
   private ii = 0;
   private ti = 0;

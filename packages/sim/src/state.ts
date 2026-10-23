@@ -64,7 +64,6 @@ export function exportOwn(world: World, slot: number, out: OwnState): void {
     (p.ghost ? StatusFlag.GHOST : 0) |
     (p.dead ? StatusFlag.DEAD : 0) |
     (p.hasBomb ? StatusFlag.HAS_BOMB : 0) |
-    (p.kicking ? StatusFlag.KICKING : 0) |
     (p.dodging ? StatusFlag.DODGING : 0);
   out.stunImmune = p.stunImmune;
   out.dashTicks = p.dashTicks;
@@ -124,7 +123,6 @@ export function importOwn(world: World, slot: number, o: OwnState): void {
   p.ghost = (o.status & StatusFlag.GHOST) !== 0;
   p.dead = (o.status & StatusFlag.DEAD) !== 0;
   p.hasBomb = (o.status & StatusFlag.HAS_BOMB) !== 0;
-  p.kicking = (o.status & StatusFlag.KICKING) !== 0;
   p.dodging = (o.status & StatusFlag.DODGING) !== 0;
   p.stunImmune = o.stunImmune;
   p.dashTicks = o.dashTicks;
@@ -329,7 +327,6 @@ export function hashWorld(world: World): number {
         (p.ghost ? 16 : 0) |
         (p.dead ? 32 : 0) |
         (p.hasBomb ? 64 : 0) |
-        (p.kicking ? 128 : 0) |
         (p.dodging ? 256 : 0),
     );
     h = mix(h, p.groundMover + 1);

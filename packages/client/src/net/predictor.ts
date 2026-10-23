@@ -114,7 +114,7 @@ export class Predictor {
   /** Événements locaux du dernier `stepTick` (son et effets du joueur). */
   readonly localEvents: LocalEvent[] = [];
   private readonly hist: HistoryEntry[] = [];
-  private readonly inputs = new Uint16Array(MAX_PLAYERS);
+  private readonly inputs = new Uint32Array(MAX_PLAYERS);
   private readonly scratch = createOwnState();
   private live = false;
 

@@ -38,7 +38,6 @@ export function resetCombatState(p: Player): void {
   p.dashY = 0;
   p.dodging = false;
   p.grappleTicks = 0;
-  p.kicking = false;
   p.ghost = false;
   p.dead = false;
   p.hasBomb = false;

@@ -1,6 +1,7 @@
 import { aimSectorOfAngle, withAim } from '@stickyclaude/shared';
 import type { Options } from '../app/options.ts';
 import { GamepadInput } from './gamepad.ts';
+import { defenseMask } from './defense.ts';
 import { KeyboardInput } from './keyboard.ts';
 import { touchAimAngle, touchMask } from './touch.ts';
 
@@ -16,7 +17,7 @@ export class InputManager {
    * puis la souris ; sans aucun des trois, la simulation vise dans la direction tenue.
    */
   sample(): number {
-    const m = this.keyboard.sample() | this.gamepad.sample() | touchMask();
+    const m = this.keyboard.sample() | this.gamepad.sample() | touchMask() | defenseMask();
     const a = this.aimAngle();
     return a === null ? m : withAim(m, aimSectorOfAngle(a));
   }

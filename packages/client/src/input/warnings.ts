@@ -16,7 +16,6 @@ export type WarningId =
   | 'meta'
   | 'function_key'
   | 'mouse_side'
-  | 'mouse_middle'
   | 'duplicate';
 
 export interface BindingWarning {
@@ -76,7 +75,6 @@ export function bindingWarnings(b: Readonly<Bindings>, env: Env): BindingWarning
   if (fn.length > 0) out.push({ id: 'function_key', keys: fn });
   const side = has((c) => mouseButtonOf(c) === 3 || mouseButtonOf(c) === 4);
   if (side.length > 0) out.push({ id: 'mouse_side', keys: side });
-  if (all.includes('Mouse1')) out.push({ id: 'mouse_middle', keys: ['Mouse1'] });
   const seen = new Set<string>();
   const dup = new Set<string>();
   for (const c of all) (seen.has(c) ? dup : seen).add(c);

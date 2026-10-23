@@ -87,12 +87,21 @@ describe('objectifs du carnet', () => {
     expect(t.event(SimEvent.HIT, 3, [10, 10, 0, 5, 0])).toEqual(['punch']);
   });
 
-  it('coup chargé et coup de pied se reconnaissent au geste en cours', () => {
+  it('attaque spéciale et coup vers le bas en l’air se reconnaissent au geste en cours', () => {
     const t = new TrainingTracker();
     t.tick(PlayerState.ATTACK, true, 100, AttackKind.CHARGED, 1);
     expect(t.event(SimEvent.HIT, 1, [10, 10, 0, 20, 1])).toContain('charged');
-    t.tick(PlayerState.ATTACK, false, 100, AttackKind.KICK, 1);
+    t.tick(PlayerState.ATTACK, false, 100, AttackKind.AIR_DOWN, 1);
     expect(t.event(SimEvent.HIT, 1, [10, 10, 0, 10, 0])).toContain('kick');
+    const d = new TrainingTracker();
+    d.tick(PlayerState.ATTACK, true, 100, AttackKind.SPECIAL_DOWN, 1);
+    expect(d.event(SimEvent.HIT, 1, [10, 10, 0, 12, 1])).toContain('charged');
+  });
+
+  it('la ruée invulnérable en l’air se reconnaît à son événement, pas le dash simple', () => {
+    const t = new TrainingTracker();
+    expect(t.event(SimEvent.DASH, 0, [100, 100, 1, 0])).toEqual(['dash']);
+    expect(t.event(SimEvent.DASH, 0, [100, 100, 1, 1])).toEqual(['airspecial']);
   });
 
   it('courir 700 unités, rester accroupi 0,5 s, enchaîner 3 coups', () => {

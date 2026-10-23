@@ -95,7 +95,7 @@ function macros(): Macro[] {
 }
 
 const MACROS = macros();
-const inputs = new Uint16Array(MAX_PLAYERS);
+const inputs = new Uint32Array(MAX_PLAYERS);
 
 /** Rejoue un macro depuis (cx, cy) ; retourne la cellule d'atterrissage, ou null. */
 function simulate(world: World, from: Node, m: Macro): Node | null {

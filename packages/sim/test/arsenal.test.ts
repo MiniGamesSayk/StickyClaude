@@ -14,13 +14,13 @@ import { damageObject, spawnObj } from '../src/index.ts';
 import type { World } from '../src/index.ts';
 import {
   ATTACK,
-  BLOCK,
   DOWN,
   FLOOR,
   JUMP,
   LEFT,
   PICKUP,
   RIGHT,
+  SPECIAL,
   UP,
   fightWorld,
   pl,
@@ -437,14 +437,14 @@ describe('dash dans toutes les directions', () => {
   });
 });
 
-describe('coup chargé dans toutes les directions', () => {
+describe('attaque spéciale dans toutes les directions', () => {
   it('vers le haut', () => {
     const w = fightWorld();
     const q = pl(w, 1);
     q.x = 304;
     q.y = FLOOR - 30;
     q.grounded = false;
-    ticks(w, 30, UP | ATTACK);
+    ticks(w, 30, UP | SPECIAL);
     tick(w, UP);
     expect(pl(w, 0).atkKind).toBe(AttackKind.CHARGED);
     let minVy = 0;
@@ -459,7 +459,7 @@ describe('coup chargé dans toutes les directions', () => {
   it('vers l’avant, avec la même force qu’avant', () => {
     const w = fightWorld();
     pl(w, 1).x = 330;
-    ticks(w, 40, ATTACK);
+    ticks(w, 40, SPECIAL);
     ticks(w, 12, 0);
     expect(pl(w, 1).hp).toBeLessThanOrEqual(100 - COMBAT.charged.damageMin);
     expect(pl(w, 1).vx).toBeGreaterThan(0);
@@ -468,7 +468,7 @@ describe('coup chargé dans toutes les directions', () => {
   it('vers l’arrière : on se retourne', () => {
     const w = fightWorld();
     pl(w, 1).x = 270;
-    ticks(w, 40, ATTACK);
+    ticks(w, 40, SPECIAL);
     ticks(w, 12, LEFT);
     expect(pl(w, 1).hp).toBeLessThanOrEqual(100 - COMBAT.charged.damageMin);
     expect(pl(w, 1).vx).toBeLessThan(0);
@@ -505,8 +505,8 @@ describe('armes de mêlée chargées', () => {
   });
 });
 
-describe('coups vers le bas en l’air', () => {
-  it('attaque + bas : un petit coup sous les pieds, pas un plongeon', () => {
+describe('coup vers le bas en l’air', () => {
+  it('attaque + bas : un coup sous les pieds, sans plongeon', () => {
     const w = fightWorld();
     pl(w, 0).y = FLOOR - 45;
     pl(w, 0).grounded = false;
@@ -516,70 +516,9 @@ describe('coups vers le bas en l’air', () => {
     for (let i = 0; i < 12; i++) {
       tick(w, DOWN);
       if (pl(w, 0).atkKind === AttackKind.AIR_DOWN) sawAirDown = true;
-      expect(pl(w, 0).kicking).toBe(false);
     }
     expect(sawAirDown).toBe(true);
     expect(pl(w, 1).hp).toBe(100 - COMBAT.airDown.damage);
-  });
-
-  it('« smash bas » (attaque + parade ensemble) lance le coup de pied plongeant', () => {
-    const w = fightWorld();
-    pl(w, 0).y = FLOOR - 200;
-    pl(w, 0).grounded = false;
-    pl(w, 1).x = 900;
-    tick(w, ATTACK | BLOCK);
-    ticks(w, 4, 0);
-    expect(pl(w, 0).kicking).toBe(true);
-    expect(pl(w, 0).blockTicks).toBe(0);
-    expect(pl(w, 0).vy).toBeGreaterThan(300);
-  });
-
-  it('le plongeon s’annule avec un dash', () => {
-    const w = fightWorld();
-    pl(w, 0).y = FLOOR - 250;
-    pl(w, 0).grounded = false;
-    pl(w, 1).x = 900;
-    tick(w, ATTACK | BLOCK);
-    ticks(w, 3, 0);
-    expect(pl(w, 0).kicking).toBe(true);
-    tick(w, RIGHT | DASH);
-    expect(pl(w, 0).kicking).toBe(false);
-    expect(pl(w, 0).atkPhase).toBe(0);
-    expect(pl(w, 0).dashTicks).toBeGreaterThan(0);
-  });
-
-  it('le plongeon s’annule avec un saut (double saut)', () => {
-    const w = fightWorld();
-    pl(w, 0).y = FLOOR - 250;
-    pl(w, 0).grounded = false;
-    pl(w, 1).x = 900;
-    tick(w, ATTACK | BLOCK);
-    ticks(w, 3, 0);
-    tick(w, JUMP);
-    expect(pl(w, 0).kicking).toBe(false);
-    expect(pl(w, 0).vy).toBeLessThan(0);
-  });
-
-  it('le plongeon s’annule avec la parade', () => {
-    const w = fightWorld();
-    pl(w, 0).y = FLOOR - 250;
-    pl(w, 0).grounded = false;
-    pl(w, 1).x = 900;
-    tick(w, ATTACK | BLOCK);
-    ticks(w, 3, 0);
-    tick(w, BLOCK);
-    expect(pl(w, 0).kicking).toBe(false);
-    expect(pl(w, 0).blockTicks).toBeGreaterThan(0);
-  });
-
-  it('au sol, « smash bas » ne pare pas : c’est une simple attaque', () => {
-    const w = fightWorld();
-    pl(w, 1).x = 900;
-    tick(w, ATTACK | BLOCK);
-    expect(pl(w, 0).blockTicks).toBe(0);
-    ticks(w, 20, 0);
-    tick(w, BLOCK);
-    expect(pl(w, 0).blockTicks).toBeGreaterThan(0);
   });
 });
 

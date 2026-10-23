@@ -48,7 +48,7 @@ export function worldWithPlayer(a: ArenaData = arena(), seed = 1): World {
   return w;
 }
 
-export const inputs = new Uint16Array(MAX_PLAYERS);
+export const inputs = new Uint32Array(MAX_PLAYERS);
 
 export function run(w: World, ticks: number, mask = 0, slot = 0): void {
   inputs.fill(0);

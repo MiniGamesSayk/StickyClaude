@@ -16,10 +16,10 @@ import { overlapsSolid } from './helpers.ts';
 
 /** Entrées aléatoires « réalistes » : appuis tenus quelques ticks, tous les boutons. */
 class Bots {
-  private readonly cur = new Uint16Array(MAX_PLAYERS);
+  private readonly cur = new Uint32Array(MAX_PLAYERS);
   private readonly hold = new Int32Array(MAX_PLAYERS);
   constructor(private readonly rng: Rng) {}
-  next(out: Uint16Array, n: number): void {
+  next(out: Uint32Array, n: number): void {
     for (let s = 0; s < n; s++) {
       if (this.hold[s] <= 0) {
         this.hold[s] = 3 + this.rng.int(30);
@@ -93,10 +93,10 @@ describe('propriétés d une partie', () => {
         fc.boolean(),
         (seed, n, mode, weapons, ghosts) => {
           const w = setup(n, seed, weapons, ghosts);
-          for (let i = 0; i < 100; i++) step(w, new Uint16Array(MAX_PLAYERS));
+          for (let i = 0; i < 100; i++) step(w, new Uint32Array(MAX_PLAYERS));
           beginRound(w, w.arena, mode);
           const bots = new Bots(new Rng(seed));
-          const inputs = new Uint16Array(MAX_PLAYERS);
+          const inputs = new Uint32Array(MAX_PLAYERS);
           let ended = false;
           for (let t = 0; t < 22_000; t++) {
             bots.next(inputs, n);
@@ -119,10 +119,10 @@ describe('propriétés d une partie', () => {
     const w = setup(8, 99, true, true);
     w.rules.bonusEvery = 2;
     w.rules.bonusModes = [...MODES.filter((m) => m !== ModeId.FFA)];
-    for (let i = 0; i < 100; i++) step(w, new Uint16Array(MAX_PLAYERS));
+    for (let i = 0; i < 100; i++) step(w, new Uint32Array(MAX_PLAYERS));
     startMatch(w);
     const bots = new Bots(new Rng(5));
-    const inputs = new Uint16Array(MAX_PLAYERS);
+    const inputs = new Uint32Array(MAX_PLAYERS);
     let over = false;
     for (let t = 0; t < 400_000 && !over; t++) {
       bots.next(inputs, 8);
@@ -140,10 +140,10 @@ describe('propriétés d une partie', () => {
       const w = setup(8, 7, true, true);
       w.rules.bonusEvery = 2;
       w.rules.bonusModes = [ModeId.KOTH, ModeId.BALL, ModeId.POTATO, ModeId.MOON];
-      for (let i = 0; i < 100; i++) step(w, new Uint16Array(MAX_PLAYERS));
+      for (let i = 0; i < 100; i++) step(w, new Uint32Array(MAX_PLAYERS));
       startMatch(w);
       const bots = new Bots(new Rng(3));
-      const inputs = new Uint16Array(MAX_PLAYERS);
+      const inputs = new Uint32Array(MAX_PLAYERS);
       for (let t = 0; t < 10_000; t++) {
         bots.next(inputs, 8);
         step(w, inputs);

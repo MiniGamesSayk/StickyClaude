@@ -16,7 +16,8 @@ import type { Bindings } from '../src/app/options.ts';
 import { detectLayout, keyLabel } from '../src/input/bindings.ts';
 import { DEFAULT_PAD_BINDINGS } from '../src/app/options.ts';
 import { GamepadInput } from '../src/input/gamepad.ts';
-import { buildKeymap, KeyboardInput, SPIKE_BITS } from '../src/input/keyboard.ts';
+import { defense, defenseMask, setDefense } from '../src/input/defense.ts';
+import { buildKeymap, KeyboardInput } from '../src/input/keyboard.ts';
 import { bindingWarnings } from '../src/input/warnings.ts';
 import {
   resetTouch,
@@ -100,7 +101,7 @@ describe('touches du clavier', () => {
   it('l’ancienne touche de parade par défaut (K) devient E', () => {
     expect(DEFAULT_BINDINGS.block[0]).toBe('KeyE');
     const o = sanitizeOptions({ bindings: { block: ['KeyK', ''] } });
-    expect(o.bindings.block).toEqual(['KeyE', '']);
+    expect(o.bindings.block).toEqual(['KeyE', 'Mouse1']);
     expect(sanitizeOptions({ bindings: { block: ['KeyK', 'KeyP'] } }).bindings.block[0]).toBe(
       'KeyK',
     );
@@ -201,14 +202,18 @@ describe('manette : un bouton tenu depuis les menus ne reste pas collé en jeu',
 
   it('un bouton déjà enfoncé après la remise à zéro est ignoré jusqu’au relâchement', () => {
     const g = new GamepadInput();
+    setDefense(false);
     plug(pad([1]));
     g.disarm();
-    expect(g.sample() & Input.BLOCK).toBe(0);
-    expect(g.sample() & Input.BLOCK).toBe(0);
+    g.sample();
+    g.sample();
+    expect(defense.value).toBe(false);
     plug(pad([]));
     g.sample();
     plug(pad([1]));
-    expect(g.sample() & Input.BLOCK).toBe(Input.BLOCK);
+    g.sample();
+    expect(defense.value).toBe(true);
+    setDefense(false);
   });
 
   it('une gâchette qui ment (pressée mais à zéro) ne compte pas', () => {
@@ -282,41 +287,55 @@ describe('touche de dash par défaut', () => {
 });
 
 describe('souris paramétrable : plus rien de sous-entendu', () => {
-  it('par défaut : clic gauche attaque, clic droit smash bas, aucune parade à la souris', () => {
+  it('par défaut : clic gauche attaque, clic droit attaque spéciale, clic molette défense', () => {
     const m = buildKeymap(DEFAULT_BINDINGS);
     expect(m.get('Mouse0')).toBe(Input.ATTACK);
-    expect(m.get('Mouse2')).toBe(SPIKE_BITS);
-    expect(SPIKE_BITS).toBe(Input.ATTACK | Input.BLOCK);
+    expect(m.get('Mouse2')).toBe(Input.SPECIAL);
+    expect(m.get('Mouse1')).toBe(Input.BLOCK);
     expect(m.get('KeyE')).toBe(Input.BLOCK);
-    expect(m.get('Mouse1')).toBeUndefined();
+    expect(m.get('KeyK')).toBe(Input.SPECIAL);
   });
 
-  it('on peut lier la parade au clic droit, et le libellé suit la langue', () => {
+  it('on peut lier la défense au clic droit, et le libellé suit la langue', () => {
     resetBindings();
     rebind('block', 1, 'Mouse2');
     expect(options.value.bindings.block).toEqual(['KeyE', 'Mouse2']);
-    // le clic droit n'appartient plus au smash bas
-    expect(options.value.bindings.spike).toEqual(['KeyK', '']);
+    // le clic droit n'appartient plus à l'attaque spéciale
+    expect(options.value.bindings.special).toEqual(['KeyK', '']);
     expect(buildKeymap(options.value.bindings).get('Mouse2')).toBe(Input.BLOCK);
     expect(keyLabel('Mouse2', 'qwerty', 'Space', 'fr')).toBe('Clic D');
     expect(keyLabel('Mouse2', 'qwerty', 'Space', 'en')).toBe('Right click');
     resetBindings();
   });
 
-  it('d’anciens réglages gardent le clic gauche pour attaquer et reçoivent le smash bas', () => {
+  it('d’anciens réglages gardent le clic gauche et reçoivent le clic droit spécial et la molette', () => {
     const o = sanitizeOptions({ bindings: { attack: ['KeyJ', ''], block: ['KeyE', ''] } });
     expect(o.bindings.attack).toEqual(['KeyJ', 'Mouse0']);
-    expect(o.bindings.spike).toEqual(['KeyK', 'Mouse2']);
+    expect(o.bindings.special).toEqual(['KeyK', 'Mouse2']);
+    expect(o.bindings.block).toEqual(['KeyE', 'Mouse1']);
     // une touche déjà prise n'est pas dupliquée
     const o2 = sanitizeOptions({ bindings: { pickup: ['KeyK', 'Mouse2'] } });
     expect(o2.bindings.pickup).toEqual(['KeyK', 'Mouse2']);
-    expect(o2.bindings.spike).toEqual(['', '']);
+    expect(o2.bindings.special).toEqual(['', '']);
+    const o4 = sanitizeOptions({
+      bindings: { dash: ['ShiftLeft', 'Mouse1'], block: ['KeyE', ''] },
+    });
+    expect(o4.bindings.block).toEqual(['KeyE', '']);
     // des réglages déjà à jour ne sont pas retouchés
     const o3 = sanitizeOptions({
-      bindings: { attack: ['KeyJ', ''], spike: ['KeyH', ''] },
+      bindings: { attack: ['KeyJ', ''], special: ['KeyH', ''] },
     });
     expect(o3.bindings.attack).toEqual(['KeyJ', '']);
-    expect(o3.bindings.spike).toEqual(['KeyH', '']);
+    expect(o3.bindings.special).toEqual(['KeyH', '']);
+  });
+
+  it('l’ancien nom de l’action (« spike ») est repris par l’attaque spéciale', () => {
+    const o = sanitizeOptions({
+      bindings: { attack: ['KeyJ', 'Mouse0'], spike: ['KeyH', 'Mouse2'] },
+      padBindings: { spike: [8, -1] },
+    });
+    expect(o.bindings.special).toEqual(['KeyH', 'Mouse2']);
+    expect(o.padBindings.special).toEqual([8, -1]);
   });
 });
 
@@ -329,7 +348,7 @@ describe('avertissements de combinaisons', () => {
     const b = base();
     expect(bindingWarnings(b, ff).map((w) => w.id)).toContain('shift_rightclick');
     expect(bindingWarnings(b, other).map((w) => w.id)).not.toContain('shift_rightclick');
-    b.spike[1] = '';
+    b.special[1] = '';
     expect(bindingWarnings(b, ff).map((w) => w.id)).not.toContain('shift_rightclick');
   });
 
@@ -345,8 +364,6 @@ describe('avertissements de combinaisons', () => {
     expect(bindingWarnings(b, other).map((w) => w.id)).toContain('function_key');
     b.dash = ['Mouse3', ''];
     expect(bindingWarnings(b, other).map((w) => w.id)).toContain('mouse_side');
-    b.dash = ['Mouse1', ''];
-    expect(bindingWarnings(b, other).map((w) => w.id)).toContain('mouse_middle');
   });
 
   it('une même touche pour deux actions', () => {
@@ -360,7 +377,7 @@ describe('avertissements de combinaisons', () => {
   });
 });
 
-describe('manette : smash bas', () => {
+describe('manette : attaque spéciale et défense', () => {
   const pad = (pressed: number[]): unknown => ({
     connected: true,
     axes: [0, 0],
@@ -372,19 +389,44 @@ describe('manette : smash bas', () => {
   const plug = (p: unknown): void => {
     vi.stubGlobal('navigator', { getGamepads: () => [p] });
   };
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setDefense(false);
+  });
 
-  it('envoie attaque + parade une seule fois à l’appui', () => {
+  it('le clic du stick droit envoie l’attaque spéciale tant qu’il est tenu', () => {
     const g = new GamepadInput();
     plug(pad([]));
     g.sample();
     plug(pad([11]));
-    expect(g.sample() & SPIKE_BITS).toBe(SPIKE_BITS);
-    expect(g.sample() & SPIKE_BITS).toBe(0);
+    expect(g.sample() & Input.SPECIAL).toBe(Input.SPECIAL);
+    expect(g.sample() & Input.SPECIAL).toBe(Input.SPECIAL);
+    plug(pad([]));
+    expect(g.sample() & Input.SPECIAL).toBe(0);
+  });
+
+  it('B bascule le mode défense à chaque appui, et n’envoie jamais le bit lui-même', () => {
+    const g = new GamepadInput();
     plug(pad([]));
     g.sample();
-    plug(pad([11]));
-    expect(g.sample() & SPIKE_BITS).toBe(SPIKE_BITS);
+    plug(pad([1]));
+    expect(g.sample() & Input.BLOCK).toBe(0);
+    expect(defense.value).toBe(true);
+    expect(g.sample() & Input.BLOCK).toBe(0); // tenu : pas de nouvelle bascule
+    expect(defense.value).toBe(true);
+    plug(pad([]));
+    g.sample();
+    plug(pad([1]));
+    g.sample();
+    expect(defense.value).toBe(false);
+  });
+
+  it('un bouton tenu depuis un menu ne bascule rien', () => {
+    const g = new GamepadInput();
+    plug(pad([1]));
+    g.disarm();
+    g.sample();
+    expect(defense.value).toBe(false);
   });
 });
 
@@ -426,6 +468,51 @@ describe('clavier : une touche relâchée ne reste jamais collée', () => {
     };
   };
   afterEach(() => vi.unstubAllGlobals());
+
+  it('la défense se bascule au clavier et à la molette, sans répétition de touche', () => {
+    setDefense(false);
+    const { kb, fire, body, canvas } = rig();
+    fire('keydown', { code: 'KeyE', target: body });
+    expect(defense.value).toBe(true);
+    fire('keydown', { code: 'KeyE', repeat: true, target: body });
+    expect(defense.value).toBe(true);
+    fire('keyup', { code: 'KeyE', target: body });
+    expect(kb.sample() & Input.BLOCK).toBe(0); // le clavier n'envoie pas le bit : c'est le mode
+    expect(defenseMask()).toBe(Input.BLOCK);
+    fire('pointerdown', {
+      button: 1,
+      pointerType: 'mouse',
+      target: canvas,
+      clientX: 5,
+      clientY: 5,
+    });
+    expect(defense.value).toBe(false);
+    fire('pointerup', { button: 1, pointerType: 'mouse', target: canvas });
+    fire('pointerdown', {
+      button: 1,
+      pointerType: 'mouse',
+      target: canvas,
+      clientX: 5,
+      clientY: 5,
+    });
+    expect(defense.value).toBe(true);
+    setDefense(false);
+  });
+
+  it('le clic droit est l’attaque spéciale, tenu comme un bouton', () => {
+    const { kb, fire, canvas, body } = rig();
+    fire('pointerdown', {
+      button: 2,
+      pointerType: 'mouse',
+      target: canvas,
+      clientX: 5,
+      clientY: 5,
+    });
+    kb.sample();
+    expect(kb.sample() & Input.SPECIAL).toBe(Input.SPECIAL);
+    fire('pointerup', { button: 2, pointerType: 'mouse', target: body });
+    expect(kb.sample() & Input.SPECIAL).toBe(0);
+  });
 
   it('relâchée pendant la pause, elle ne revient pas collée à la reprise', () => {
     const { kb, fire, body } = rig();

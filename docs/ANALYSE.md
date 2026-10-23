@@ -53,7 +53,7 @@ Durée cible : 30 à 90 s par manche, 5 à 10 min par partie.
 
 **Combat** :
 
-- **Mains nues** : enchaînement de 3 coups (le 3e projette), coup chargé (en maintenant le bouton) qui projette fort, coup de pied sauté vers le bas.
+- **Mains nues** : enchaînement de 3 coups (le 3e projette), coups légers selon la direction (tacle, coup vers le haut, balayages aériens, spike), spécial chargeable au clic droit, mode défense orientable (voir D78).
 - **Parade** : maintenir le bouton bloque 70 % des dégâts de face ; une **parade parfaite** (100 ms après l'appui) annule le coup, renvoie les projectiles lents et étourdit l'attaquant 0,4 s. Temps de recharge de 0,5 s pour éviter le spam.
 - **Ramasser, lancer, lâcher** une arme. Une arme vide se lance (petits dégâts et projection).
 - **Points de vie** : 100. **Knockback** proportionnel aux dégâts et légèrement plus fort quand on a peu de PV (le mélange avec l'esprit Smash).

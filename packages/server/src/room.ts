@@ -124,7 +124,7 @@ export class Room {
   readonly retired = new Uint8Array(MAX_PLAYERS);
   readonly reliable = new ReliableLog();
   readonly snap: Snapshot = createSnapshot();
-  private readonly inputs = new Uint16Array(MAX_PLAYERS);
+  private readonly inputs = new Uint32Array(MAX_PLAYERS);
   private readonly payload = new Uint8Array(MAX_EVENT_PAYLOAD);
   private readonly decoded = createDecodedEvent();
   settings: RoomSettings;

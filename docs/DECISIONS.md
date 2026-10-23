@@ -536,3 +536,25 @@ Correctifs de l'audit du commit `3f66483` ; chaque point a son test. Les choix q
 - **Compensation de latence : alignée sur 12 ticks (200 ms)**, pas de passage de `REWIND_STEP` à 5 : cela changerait le sens des bits 14-15 des enregistrements (format `Recording`) pour gagner 50 ms que les projectiles lents, non compensés, ne justifient pas. `LAG_COMP_TICKS` vaut 12 (c'était déjà le plafond réel).
 - **`SNAPSHOT_HZ`** est ramené à la plus proche des valeurs 10, 12, 15, 20, 30, 60 (diviseurs de 60) : la fréquence annoncée au client est toujours la vraie.
 - Le test de bout en bout `2 onglets` cherchait « Rejoindre » sans tenir compte d'un salon public listé en dessous (`.first()`).
+
+### D78. Nouveau moveset : tilts, spéciaux, mode défense
+
+**Contexte.** Le jeu avait un coup chargeable sur le clic gauche, un smash bas (coup de pied plongeant) et une parade maintenue. Le joueur voulait un moveset plus lisible : des coups légers selon la direction, un clic droit « spécial » chargeable, et une parade orientable à volonté.
+
+**Décision.**
+
+- **Clic gauche (tilts, plus chargeables, immédiats à l'appui).** Au sol : gauche/droite = jab en 3 coups (portée courte, le 3e projette), le personnage se retourne vers la direction tenue ; bas = tacle accroupi sur place (`CROUCH_SWEEP`, fait tomber, repousse peu, portée un peu supérieure au jab) ; haut = coup qui projette vers le haut (`UPPER`, portée augmentée). En l'air : neutre = frappe ce qui est collé (`AIR_NEUTRAL`), côtés = balayage (`AIR_SIDE`), haut = petit balayage vers le haut (`AIR_UP`), bas = spike (`AIR_DOWN`, remplace le smash bas ; projette plus fort).
+- **Annulation.** Un coup léger est annulable pendant sa **récupération** par une autre touche ou direction (pas pendant l'élan ni la phase active : cela supprimerait tout engagement). La direction d'un coup se lit sur les **touches**, jamais sur la souris.
+- **Clic droit (spécial).** Au sol, maintenu = charge (la pose de charge montre la variante : côté, haut ou bas). Au relâchement : gauche/droite = gros coup de poing qui s'allonge (`CHARGED`, longue récupération, repousse bien), haut = même coup vers le haut, bas = deux coups de part et d'autre (`SPECIAL_DOWN`). En l'air : neutre = arrêt invulnérable sur place ; une direction = ruée invulnérable qui laisse les dernières images vulnérables (`airSpecial`). La ruée partage le temps de recharge du dash.
+- **Dash.** Reste sur Maj, dans la direction tenue (diagonale avec deux touches), inchangé.
+- **Mode défense.** La parade n'est plus un bouton tenu : le clic molette (ou `E`, un bouton de la manette ou de l'écran) **bascule** un mode défense. Tant qu'il est actif, le client émet `Input.BLOCK` à chaque image et la garde est orientée vers la visée (`guardCovers`, cône de 72° environ, `COMBAT.guardMinDot`), y compris en l'air. Le mode est inopérant avec une arme (pas de parade, les spéciaux restent bloqués). Le mode retombe à la mort, en fantôme, hors partie et à chaque manche.
+- **Les spéciaux sont inactifs avec une arme** : l'arme a ses propres attaques.
+
+**Conséquences techniques.**
+
+- Le masque d'entrées n'avait plus de bit libre sur 16 bits : le bit 14 devient `SPECIAL`, le bit 15 reste réservé, le retard de compensation passe aux bits 16-17 (ajouté par le serveur) et les tampons de la simulation deviennent des `Uint32Array`. Le fil reste en u16. `PROTOCOL_VERSION` = 5, `Recording.version` = 4.
+- `AttackKind` est réattribué pour tenir dans les 4 bits du variant de snapshot ; `StatusFlag.KICKING` et `Player.kicking` disparaissent.
+- Migration des réglages : l'ancienne action `spike` est remplacée par `special` (défaut `K` / clic droit), la parade par défaut passe de `K` à `E` + clic molette.
+- Le carnet d'entraînement suit : objectif `airspecial`, `charged` accepte `SPECIAL_DOWN`, `kick` correspond à `AIR_DOWN`.
+
+**Rejetés.** Garder la parade maintenue (incompatible avec un mode orientable sans occuper une main) ; lire la direction des coups sur la souris (un tilt dépendrait alors du curseur, imprécis en plein combat).

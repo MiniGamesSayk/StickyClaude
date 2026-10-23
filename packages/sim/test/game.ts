@@ -19,8 +19,8 @@ export function modeArena(): ArenaData {
   return a;
 }
 
-export const idle = new Uint16Array(MAX_PLAYERS);
-const buf = new Uint16Array(MAX_PLAYERS);
+export const idle = new Uint32Array(MAX_PLAYERS);
+const buf = new Uint32Array(MAX_PLAYERS);
 
 export interface MatchOptions {
   n?: number;

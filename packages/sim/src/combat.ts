@@ -5,7 +5,7 @@ import {
   AttackKind,
   Cause,
   COMBAT,
-  CROUCH_PUNCH,
+  CROUCH_SWEEP,
   FIST,
   GamePhase,
   HISTORY_TICKS,
@@ -25,7 +25,7 @@ import {
 import type { Explosion } from '@stickyclaude/shared';
 import { bodyHeight, raycastGrid, segmentBox } from './collision.ts';
 import type { RayHit } from './collision.ts';
-import { cancelActions, endKick } from './player.ts';
+import { cancelActions } from './player.ts';
 import { addPuddle, explodeTerrain } from './terrain.ts';
 import { emit } from './world.ts';
 import type { Obj, Player, World } from './world.ts';
@@ -121,6 +121,18 @@ export function applyHits(world: World): void {
   world.hitCount = 0;
 }
 
+/**
+ * La garde de `v` (sa visée) couvre-t-elle un coup parti du point (sx, sy) ? Elle couvre un cône
+ * autour de sa direction, quel que soit le côté où le personnage regarde, en l'air comme au sol.
+ */
+export function guardCovers(v: Player, sx: number, sy: number): boolean {
+  const dx = sx - v.x;
+  const dy = sy - (v.y - 14);
+  const d = Math.hypot(dx, dy);
+  if (d < 1) return true;
+  return (dx * AIM_DX[v.aim] + dy * AIM_DY[v.aim]) / d >= COMBAT.guardMinDot;
+}
+
 /** La parade vient d'être levée : le coup est annulé en entier. */
 function perfectWindow(v: Player): boolean {
   return v.blockTicks <= COMBAT.perfectParryTicks;
@@ -151,10 +163,10 @@ function applyHit(world: World, index: number): void {
 
   if (!h.unblockable) {
     const w = weaponDef(v.weapon);
-    // Un coup venu de dessus ou de dessous (coup de pied plongeant, coup vers le haut) est paré
-    // s'il arrive dans l'aplomb du corps, même dans le dos.
+    // Le bouclier d'une arme couvre le devant ; la parade à mains nues couvre le côté visé.
     const dxh = h.x - v.x;
     const front = dxh * v.facing >= -2 || Math.abs(dxh) <= world.params.width * 0.5;
+    const guarded = guardCovers(v, h.x, h.y);
     if (h.ranged && w.kind === WeaponKind.SHIELD && v.ammo > 0 && front) {
       v.ammo--;
       if (v.ammo === 0) {
@@ -163,7 +175,7 @@ function applyHit(world: World, index: number): void {
       emit(world, SimEvent.BLOCKED, h.victim, v.x, v.y - 14, attacker < 0 ? NO_SLOT : attacker, 0);
       return;
     }
-    if (v.blockTicks > 0 && front && (!h.pierce || (!h.ranged && perfectWindow(v)))) {
+    if (v.blockTicks > 0 && guarded && (!h.pierce || (!h.ranged && perfectWindow(v)))) {
       const perfect = !h.ranged && perfectWindow(v);
       // La parade n'encaisse qu'un coup : elle retombe et ne reviendra qu'après la recharge.
       v.blockTicks = 0;
@@ -357,8 +369,10 @@ function meleeSpec(p: Player): boolean {
       spec.cause = Cause.MELEE;
       return true;
     }
-    case AttackKind.CHARGED: {
-      const c = COMBAT.charged;
+    case AttackKind.CHARGED:
+    case AttackKind.SPECIAL_DOWN: {
+      // attaques spéciales : la charge (clic droit tenu) fait varier dégâts, projection, étourdissement
+      const c = p.atkKind === AttackKind.CHARGED ? COMBAT.charged : COMBAT.specialDown;
       const level = Math.min(1, p.chargeTicks / COMBAT.chargeMaxTicks);
       spec.damage = c.damageMin + (c.damageMax - c.damageMin) * level;
       spec.kbx = c.kbxMin + (c.kbxMax - c.kbxMin) * level;
@@ -372,7 +386,7 @@ function meleeSpec(p: Player): boolean {
     }
     case AttackKind.UPPER:
     case AttackKind.CROUCH: {
-      const a = p.atkKind === AttackKind.UPPER ? UPPER : CROUCH_PUNCH;
+      const a = p.atkKind === AttackKind.UPPER ? UPPER : CROUCH_SWEEP;
       spec.damage = a.damage;
       spec.kbx = a.kbx;
       spec.kby = a.kby;
@@ -383,28 +397,27 @@ function meleeSpec(p: Player): boolean {
       spec.cause = Cause.MELEE;
       return true;
     }
-    case AttackKind.AIR_DOWN: {
-      const a = COMBAT.airDown;
+    case AttackKind.AIR_DOWN:
+    case AttackKind.AIR_NEUTRAL:
+    case AttackKind.AIR_SIDE:
+    case AttackKind.AIR_UP: {
+      const a =
+        p.atkKind === AttackKind.AIR_DOWN
+          ? COMBAT.airDown
+          : p.atkKind === AttackKind.AIR_NEUTRAL
+            ? COMBAT.airNeutral
+            : p.atkKind === AttackKind.AIR_SIDE
+              ? COMBAT.airSide
+              : COMBAT.airUp;
       spec.damage = a.damage;
       spec.kbx = a.kbx;
       spec.kby = a.kby;
       spec.stun = a.stun;
       spec.reach = a.reach;
       spec.halfHeight = 0;
-      spec.flags = 0;
-      spec.cause = Cause.MELEE;
-      return true;
-    }
-    case AttackKind.KICK: {
-      const k = COMBAT.kick;
-      spec.damage = k.damage;
-      spec.kbx = k.kbx;
-      spec.kby = k.kby;
-      spec.stun = k.stun;
-      spec.reach = k.reachDown;
-      spec.halfHeight = 0;
-      spec.flags = 0;
-      spec.cause = Cause.KICK;
+      spec.flags = p.atkKind === AttackKind.AIR_DOWN ? HitFlag.HEAVY : 0;
+      // le coup vers le bas est un pied qui pique : cause « coup de pied »
+      spec.cause = p.atkKind === AttackKind.AIR_DOWN ? Cause.KICK : Cause.MELEE;
       return true;
     }
     case AttackKind.WEAPON:
@@ -450,7 +463,12 @@ function meleeBox(world: World, p: Player): void {
   const h = bodyHeight(world, p);
   if (p.atkKind === AttackKind.CHARGED) {
     chargedDir(p);
-    const reach = spec.reach + MELEE_BODY_BONUS;
+    // le poing s'allonge pendant les images actives
+    const c = COMBAT.charged;
+    const reach =
+      spec.reach +
+      MELEE_BODY_BONUS +
+      c.extend * Math.min(1, p.atkTicks / Math.max(1, c.active - 1));
     const side = Math.abs(cdir.x) > 0.4;
     if (cdir.x > 0.4) {
       box.l = p.x;
@@ -474,11 +492,42 @@ function meleeBox(world: World, p: Player): void {
     }
     return;
   }
-  if (p.atkKind === AttackKind.KICK) {
-    box.l = p.x - COMBAT.kick.reachX;
-    box.r = p.x + COMBAT.kick.reachX;
-    box.t = p.y - 6;
-    box.b = p.y + COMBAT.kick.reachDown;
+  if (p.atkKind === AttackKind.SPECIAL_DOWN) {
+    // de chaque côté, à hauteur du corps
+    box.l = p.x - hw - spec.reach - MELEE_BODY_BONUS;
+    box.r = p.x + hw + spec.reach + MELEE_BODY_BONUS;
+    box.t = p.y - h - 2;
+    box.b = p.y + 2;
+    return;
+  }
+  if (p.atkKind === AttackKind.AIR_NEUTRAL) {
+    // tout autour du corps
+    box.l = p.x - hw - spec.reach;
+    box.r = p.x + hw + spec.reach;
+    box.t = p.y - h - spec.reach * 0.5;
+    box.b = p.y + spec.reach * 0.5;
+    return;
+  }
+  if (p.atkKind === AttackKind.AIR_SIDE) {
+    // large balayage devant, du haut à mi-jambes
+    const reach = spec.reach + MELEE_BODY_BONUS;
+    if (p.facing > 0) {
+      box.l = p.x;
+      box.r = p.x + hw + reach;
+    } else {
+      box.l = p.x - hw - reach;
+      box.r = p.x;
+    }
+    box.t = p.y - h - 6;
+    box.b = p.y + 4;
+    return;
+  }
+  if (p.atkKind === AttackKind.AIR_UP) {
+    // au-dessus de la tête, un peu des deux côtés
+    box.l = p.x - hw - 8;
+    box.r = p.x + hw + 8;
+    box.t = p.y - h - spec.reach;
+    box.b = p.y - h * 0.3;
     return;
   }
   if (p.atkKind === AttackKind.AIR_DOWN) {
@@ -545,9 +594,11 @@ export function resolveMelee(world: World): void {
       p.hitMask |= 1 << v;
       hitAny = true;
       const dir =
-        p.atkKind === AttackKind.KICK ||
         p.atkKind === AttackKind.UPPER ||
-        p.atkKind === AttackKind.AIR_DOWN
+        p.atkKind === AttackKind.AIR_DOWN ||
+        p.atkKind === AttackKind.AIR_NEUTRAL ||
+        p.atkKind === AttackKind.AIR_UP ||
+        p.atkKind === AttackKind.SPECIAL_DOWN
           ? q.x >= p.x
             ? 1
             : -1
@@ -599,10 +650,6 @@ export function resolveMelee(world: World): void {
       o.hitBy |= 1 << s;
       if (o.type === ObjType.BALL) kickBall(world, o, p, spec.kbx, spec.kby);
       else damageObject(world, o, Math.max(spec.damage, 8), s);
-    }
-    if (hitAny && p.atkKind === AttackKind.KICK) {
-      p.vy = -COMBAT.kick.bounce;
-      endKick(p);
     }
     if (hitAny && p.atkKind === AttackKind.AIR_DOWN) p.vy = -COMBAT.airDown.bounce;
   }

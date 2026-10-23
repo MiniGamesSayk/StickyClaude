@@ -8,6 +8,7 @@ import type { Mood } from '../audio/engine.ts';
 import { NetGraph } from '../dev/netgraph.ts';
 import { setLang, t } from '../i18n/index.ts';
 import { loadLayoutMap } from '../input/bindings.ts';
+import { setDefense } from '../input/defense.ts';
 import { InputManager } from '../input/manager.ts';
 import { isTouchDevice, resetTouch, vibrate } from '../input/touch.ts';
 import { loadFonts } from '../render/fonts.ts';
@@ -361,6 +362,7 @@ export async function startApp(): Promise<void> {
   };
   let moodAt = 0;
   let padFocus = false;
+  let defenseRound = -1;
   let lastCount = -1;
   let wentGo = false;
   renderer.ticker.add((tk) => {
@@ -397,6 +399,13 @@ export async function startApp(): Promise<void> {
     const playing =
       mode.value !== 'menu' && overlay.value === null && !padFocus && podium.value === null;
     const mask = playing ? input.sample() : 0;
+    // Le mode défense ne survit ni au menu, ni à la mort (le fantôme s'en sert comme d'un bouton
+    // d'appui : une goutte d'encre à chaque bascule), ni au changement de manche.
+    const hd = hud.value;
+    if (!playing || hd.dead || hd.ghost || hd.round !== defenseRound) {
+      setDefense(false);
+      defenseRound = hd.round;
+    }
     if (!playing) {
       input.gamepad.disarm();
       input.sample();

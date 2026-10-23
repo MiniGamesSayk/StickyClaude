@@ -2,7 +2,7 @@ import {
   AtkPhase,
   AttackKind,
   COMBAT,
-  CROUCH_PUNCH,
+  CROUCH_SWEEP,
   FIST,
   GamePhase,
   Input,
@@ -19,6 +19,7 @@ import {
   JUMP,
   LEFT,
   RIGHT,
+  SPECIAL,
   UP,
   countEvents,
   eventCount,
@@ -100,11 +101,10 @@ describe('mains nues : enchaînement de 3 coups', () => {
 });
 
 describe('direction pendant les coups', () => {
-  it('on peut se retourner avant que le coup parte (départ et récupération), pas pendant', () => {
+  it('on se retourne au départ du coup, pas pendant les images actives', () => {
     const w = fightWorld();
     const a = pl(w, 0);
-    tick(w, ATTACK);
-    tick(w, LEFT); // départ du coup : on se retourne
+    tick(w, ATTACK | LEFT); // le coup part tout de suite, vers la direction tenue
     expect(a.atkPhase).toBe(AtkPhase.STARTUP);
     expect(a.facing).toBe(-1);
     ticks(w, FIST[0].startup, LEFT);
@@ -118,11 +118,11 @@ describe('direction pendant les coups', () => {
   });
 });
 
-describe('coup chargé', () => {
+describe('attaque spéciale (clic droit) au sol', () => {
   it('maintenir le bouton charge puis projette fort au relâchement', () => {
     const w = fightWorld();
     pl(w, 1).x = 330;
-    ticks(w, 60, ATTACK); // charge pleine
+    ticks(w, 60, SPECIAL); // charge pleine
     expect(pl(w, 0).state).toBe(PlayerState.CHARGE);
     const hpBefore = pl(w, 1).hp;
     pl(w, 1).x = 330;
@@ -133,103 +133,77 @@ describe('coup chargé', () => {
     expect(Math.abs(pl(w, 1).vx)).toBeGreaterThan(200);
   });
 
-  it('maintenir le bouton ne donne pas d abord un coup : la charge démarre directement', () => {
+  it('la pose de charge est visible dès l appui, sans coup parasite', () => {
     const w = fightWorld();
     pl(w, 1).x = 330;
-    const swings = countEvents(w, 40, SimEvent.SWING, ATTACK);
+    tick(w, SPECIAL);
+    expect(pl(w, 0).state).toBe(PlayerState.CHARGE);
+    expect(pl(w, 0).chargeTicks).toBeGreaterThan(0);
+    const swings = countEvents(w, 40, SimEvent.SWING, SPECIAL);
     expect(swings).toBe(0);
     expect(pl(w, 1).hp).toBe(100);
-    expect(pl(w, 0).state).toBe(PlayerState.CHARGE);
   });
 
-  it('la pose de charge est visible dès l appui, et la charge démarre au seuil', () => {
+  it('un appui bref lance quand même l attaque, au minimum', () => {
     const w = fightWorld();
-    tick(w, ATTACK);
-    expect(pl(w, 0).state).toBe(PlayerState.CHARGE);
-    expect(pl(w, 0).chargeTicks).toBe(0);
-    ticks(w, COMBAT.chargeHoldTicks, ATTACK);
-    expect(pl(w, 0).chargeTicks).toBeGreaterThan(0);
-  });
-
-  it('un appui bref reste un jab, qui part au relâchement', () => {
-    const w = fightWorld();
-    tick(w, ATTACK);
-    expect(pl(w, 0).atkKind).toBe(AttackKind.NONE);
+    pl(w, 1).x = 330;
+    tick(w, SPECIAL);
     tick(w, 0);
-    expect(pl(w, 0).atkKind).toBe(AttackKind.FIST1);
+    expect(pl(w, 0).atkKind).toBe(AttackKind.CHARGED);
+    ticks(w, 14, 0);
+    expect(100 - pl(w, 1).hp).toBeGreaterThanOrEqual(COMBAT.charged.damageMin);
+  });
+
+  it('le bouton d attaque ne charge plus : maintenu, un seul jab part', () => {
+    const w = fightWorld();
+    pl(w, 1).x = 330;
+    const swings = countEvents(w, 60, SimEvent.SWING, ATTACK);
+    expect(swings).toBe(1);
+    expect(pl(w, 0).state).not.toBe(PlayerState.CHARGE);
+    expect(pl(w, 0).chargeTicks).toBe(0);
   });
 
   it('une charge courte fait moins mal qu une charge pleine', () => {
     const run = (hold: number): number => {
       const w = fightWorld();
       pl(w, 1).x = 330;
-      ticks(w, hold, ATTACK);
+      ticks(w, hold, SPECIAL);
       const before = pl(w, 1).hp;
       pl(w, 1).x = 330;
       pl(w, 1).vx = 0;
       ticks(w, 16, 0);
       return before - pl(w, 1).hp;
     };
-    // Le premier jab est donné pendant la charge ; on compare ce qui s'ajoute.
-    expect(run(60)).toBeGreaterThan(run(20));
+    expect(run(60)).toBeGreaterThan(run(10));
   });
 
   it('on avance lentement en chargeant', () => {
     const w = fightWorld();
-    ticks(w, 30, ATTACK | RIGHT);
+    ticks(w, 30, SPECIAL | RIGHT);
     expect(pl(w, 0).vx).toBeLessThan(80);
   });
 });
 
-describe('coup de pied sauté vers le bas', () => {
-  it('« smash bas » en l air plonge et touche en dessous, puis rebondit', () => {
-    const w = fightWorld();
-    const p = pl(w, 0);
-    const q = pl(w, 1);
-    p.y = FLOOR - 120;
-    p.grounded = false;
-    q.x = p.x + 4;
-    tick(w, ATTACK | BLOCK);
-    expect(p.kicking).toBe(true);
-    let hit = false;
-    for (let i = 0; i < 40 && !hit; i++) {
-      tick(w, DOWN);
-      if (q.hp < 100) hit = true;
-    }
-    expect(hit).toBe(true);
-    expect(q.hp).toBe(100 - COMBAT.kick.damage);
-    expect(p.vy).toBeLessThan(0);
-    expect(p.kicking).toBe(false);
-  });
-
-  it('au sol, bas + attaque ne déclenche pas de coup de pied', () => {
-    const w = fightWorld();
-    tick(w, DOWN | ATTACK);
-    expect(pl(w, 0).kicking).toBe(false);
-  });
-});
-
 describe('coup accroupi et coup vers le haut', () => {
-  it('accroupi, le coup porte plus loin que le jab et projette vers le haut', () => {
+  it('accroupi, le balayage porte un peu plus loin que le jab et fait tomber l adversaire', () => {
     const w = fightWorld();
-    // hors de portée du jab (à 26 unités du corps : x_cible - 6,4 - 20 > x), dans celle du coup accroupi
-    expect(FIST[0].reach).toBeLessThan(CROUCH_PUNCH.reach);
-    pl(w, 1).x = 300 + 6.4 + FIST[0].reach + 6.4 + 8;
+    // hors de portée du jab, dans celle du balayage
+    expect(FIST[0].reach).toBeLessThan(CROUCH_SWEEP.reach);
+    pl(w, 1).x = 300 + 6.4 + FIST[0].reach + 6.4 + 4;
     tap(w, 14, ATTACK);
     expect(pl(w, 1).hp).toBe(100);
     const w2 = fightWorld();
-    pl(w2, 1).x = 300 + 6.4 + FIST[0].reach + 6.4 + 8;
+    pl(w2, 1).x = 300 + 6.4 + FIST[0].reach + 6.4 + 4;
     tick(w2, DOWN | ATTACK);
     tick(w2, DOWN);
     expect(pl(w2, 0).atkKind).toBe(AttackKind.CROUCH);
     expect(pl(w2, 0).crouching).toBe(true);
-    let sawUp = false;
-    for (let i = 0; i < 16; i++) {
-      tick(w2, DOWN);
-      if (pl(w2, 1).vy < -100) sawUp = true;
-    }
-    expect(pl(w2, 1).hp).toBe(100 - CROUCH_PUNCH.damage);
-    expect(sawUp).toBe(true);
+    ticks(w2, 16, DOWN);
+    expect(pl(w2, 1).hp).toBe(100 - CROUCH_SWEEP.damage);
+    // repoussé légèrement, et à terre (étourdi)
+    expect(pl(w2, 1).stun + pl(w2, 1).stunImmune).toBeGreaterThan(0);
+    expect(pl(w2, 1).vy).toBeGreaterThan(-200);
+    expect(pl(w2, 0).x).toBe(300); // en place : le balayage n'avance pas
     expect(pl(w2, 0).crouching).toBe(true);
   });
 
@@ -328,8 +302,8 @@ describe('parade', () => {
     expect(afterFirst).toBe(100 - Math.round(FIST[0].damage * COMBAT.blockDamageTaken));
     expect(q.blockTicks).toBe(0);
     expect(q.blockCd).toBeGreaterThan(0);
-    // tenir le bouton ne ré-engage pas la parade pendant la recharge
-    ticks(w, COMBAT.parryCooldownTicks - 2, 0, BLOCK);
+    // tenir le mode défense ne ré-engage pas la parade pendant la recharge
+    ticks(w, 5, 0, BLOCK);
     expect(q.blockTicks).toBe(0);
     // l'attaquant est sorti de son étourdissement : le coup suivant passe en entier
     pl(w, 0).stun = 0;
@@ -339,25 +313,24 @@ describe('parade', () => {
     q.vx = 0;
     tap(w, 12, ATTACK, BLOCK);
     expect(q.hp).toBeLessThan(afterFirst - FIST[0].damage + 1);
-    // relâcher puis rappuyer après la recharge : la parade revient
-    ticks(w, COMBAT.parryCooldownTicks + 20, 0, 0);
-    tick(w, 0, BLOCK);
-    expect(q.blockTicks).toBe(1);
+    // mode défense : la garde revient d'elle-même une fois la recharge écoulée
+    ticks(w, COMBAT.parryCooldownTicks + 20, 0, BLOCK);
+    expect(q.blockTicks).toBeGreaterThan(0);
   });
 
-  it('le coup de pied plongeant est paré et étourdit celui qui le porte', () => {
+  it('un coup aérien est paré et étourdit celui qui le porte', () => {
     const w = fightWorld();
     const q = pl(w, 1);
     q.facing = -1;
-    ticks(w, 20, 0, BLOCK);
     const a = pl(w, 0);
-    a.x = q.x - 2;
-    a.y = FLOOR - 70;
+    ticks(w, 20, 0, BLOCK);
+    a.x = q.x - 14;
+    a.y = FLOOR - 20;
     a.grounded = false;
     a.vy = 0;
-    tick(w, ATTACK | BLOCK, BLOCK);
-    ticks(w, 40, DOWN, BLOCK);
-    expect(q.hp).toBeGreaterThan(100 - 10);
+    tick(w, ATTACK | RIGHT, BLOCK);
+    ticks(w, 12, 0, BLOCK);
+    expect(q.hp).toBeGreaterThan(100 - COMBAT.airSide.damage);
     expect(a.stun + a.stunImmune).toBeGreaterThan(0);
   });
 
@@ -569,8 +542,9 @@ describe('compensation de latence', () => {
 describe('bits réservés', () => {
   it('le retard de compensation vient du serveur : les bits hauts sont ignorés comme boutons', () => {
     const w = fightWorld();
-    tick(w, 0xc000 | ATTACK);
-    const swings = countEvents(w, 7, SimEvent.SWING, 0xc000);
+    // bit 15 réservé et bits de retard (16-17) : jamais lus comme des boutons
+    tick(w, 0x38000 | ATTACK);
+    const swings = countEvents(w, 7, SimEvent.SWING, 0x38000);
     expect(swings).toBe(1);
     expect(eventCount(w, SimEvent.SWING)).toBeGreaterThanOrEqual(0);
   });

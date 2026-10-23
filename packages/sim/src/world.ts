@@ -84,11 +84,10 @@ export interface Player {
   grappleTicks: number;
   grappleX: number;
   grappleY: number;
-  /** Fantôme, mort, porteur de bombe, coup de pied en cours. */
+  /** Fantôme, mort, porteur de bombe. */
   ghost: boolean;
   dead: boolean;
   hasBomb: boolean;
-  kicking: boolean;
   /** Esquive sur place en cours (`dashTicks` compte sa durée). */
   dodging: boolean;
   respawnTimer: number;
@@ -404,7 +403,6 @@ export function createPlayer(): Player {
     ghost: false,
     dead: false,
     hasBomb: false,
-    kicking: false,
     dodging: false,
     respawnTimer: 0,
     ghostX: 0,

@@ -2,8 +2,9 @@ import {
   AtkPhase,
   AttackKind,
   COMBAT,
-  CROUCH_PUNCH,
+  CROUCH_SWEEP,
   FIST,
+  fistPhaseTicks,
   PlayerState,
   UPPER,
   WeaponKind,
@@ -72,7 +73,8 @@ export interface PoseInput {
   state: number;
   /** Ticks dans l'état (attaque : dans la phase ; parade : depuis l'appui). */
   animProg: number;
-  /** Attaque : `AttackKind` (bits 0 à 3) et `AtkPhase` (bits 4 et 5) ; charge : ticks de charge. */
+  /** Attaque : `AttackKind` (bits 0 à 3) et `AtkPhase` (bits 4 et 5) ; charge : ticks de charge. La
+   * direction d'une charge ou d'une garde est celle de `aimX` / `aimY`. */
   variant: number;
   vx: number;
   vy: number;
@@ -132,44 +134,9 @@ export function attackPhaseTicks(
   weapon: number,
   w: WeaponTimes,
 ): number {
+  const fist = fistPhaseTicks(kind, phase);
+  if (fist >= 0) return fist;
   switch (kind) {
-    case AttackKind.FIST1:
-    case AttackKind.FIST2:
-    case AttackKind.FIST3: {
-      const a = FIST[kind - AttackKind.FIST1];
-      return phase === AtkPhase.STARTUP
-        ? a.startup
-        : phase === AtkPhase.ACTIVE
-          ? a.active
-          : a.recovery;
-    }
-    case AttackKind.CHARGED: {
-      const c = COMBAT.charged;
-      return phase === AtkPhase.STARTUP
-        ? c.startup
-        : phase === AtkPhase.ACTIVE
-          ? c.active
-          : c.recovery;
-    }
-    case AttackKind.UPPER:
-    case AttackKind.CROUCH: {
-      const a = kind === AttackKind.UPPER ? UPPER : CROUCH_PUNCH;
-      return phase === AtkPhase.STARTUP
-        ? a.startup
-        : phase === AtkPhase.ACTIVE
-          ? a.active
-          : a.recovery;
-    }
-    case AttackKind.KICK:
-      return phase === AtkPhase.RECOVERY ? COMBAT.kick.recovery : 0;
-    case AttackKind.AIR_DOWN: {
-      const a = COMBAT.airDown;
-      return phase === AtkPhase.STARTUP
-        ? a.startup
-        : phase === AtkPhase.ACTIVE
-          ? a.active
-          : a.recovery;
-    }
     case AttackKind.THROW:
       return phase === AtkPhase.STARTUP ? 3 : phase === AtkPhase.ACTIVE ? 1 : 8;
     default:
@@ -185,8 +152,12 @@ export function fistReach(kind: number): number {
   if (kind >= AttackKind.FIST1 && kind <= AttackKind.FIST3)
     return FIST[kind - AttackKind.FIST1].reach;
   if (kind === AttackKind.CHARGED) return COMBAT.charged.reach;
-  if (kind === AttackKind.CROUCH) return CROUCH_PUNCH.reach;
+  if (kind === AttackKind.SPECIAL_DOWN) return COMBAT.specialDown.reach;
+  if (kind === AttackKind.CROUCH) return CROUCH_SWEEP.reach;
   if (kind === AttackKind.UPPER) return UPPER.reach;
+  if (kind === AttackKind.AIR_SIDE) return COMBAT.airSide.reach;
+  if (kind === AttackKind.AIR_UP) return COMBAT.airUp.reach;
+  if (kind === AttackKind.AIR_NEUTRAL) return COMBAT.airNeutral.reach;
   return 20;
 }
 
@@ -456,23 +427,58 @@ export class Rig {
           if (hold === 3) hold = 2;
           weaponAng = -2.35;
         }
-        raw[T_LEAN] = 0.2 + 0.1 * k;
-        set(raw, T_PEL, -1.0, -8.8);
-        set(raw, T_FTL, -4.5, 0);
-        set(raw, T_FTR, 4.5, 0);
-        set(raw, T_HNR, -5.5, -15.5);
-        set(raw, T_HNL, 2.0, -16.0);
         raw[T_JIT] = 0.3 + 1.1 * k;
+        if (armed) {
+          raw[T_LEAN] = 0.2 + 0.1 * k;
+          set(raw, T_PEL, -1.0, -8.8);
+          set(raw, T_FTL, -4.5, 0);
+          set(raw, T_FTR, 4.5, 0);
+          set(raw, T_HNR, -5.5, -15.5);
+          set(raw, T_HNL, 2.0, -16.0);
+          break;
+        }
+        // attaque spéciale : la pose dit laquelle va partir (côté, haut ou de chaque côté)
+        if (p.aimY > 0.5) {
+          // bas : accroupi, les deux poings ramenés vers soi, prêts à frapper de chaque côté
+          raw[T_LEAN] = 0.05;
+          set(raw, T_PEL, -1.0, -5.8 - 0.8 * k);
+          set(raw, T_HEAD, 2.0, -13.0);
+          set(raw, T_NECK, 1.2, -8.6);
+          set(raw, T_FTL, -6.5, 0);
+          set(raw, T_FTR, 6.5, 0);
+          set(raw, T_HNR, 3.0, -7.0);
+          set(raw, T_HNL, -1.0, -7.0);
+        } else if (p.aimY < -0.5) {
+          // haut : le poing se ramasse au creux de la hanche, l'autre bras lève la garde
+          raw[T_LEAN] = -0.1 - 0.1 * k;
+          set(raw, T_PEL, -0.4, -9.2);
+          set(raw, T_FTL, -4.5, 0);
+          set(raw, T_FTR, 4.5, 0);
+          set(raw, T_HNR, 1.0, -9.0);
+          set(raw, T_HNL, 3.0, -27.0);
+        } else {
+          // côté : le bras part loin en arrière, le corps se charge
+          raw[T_LEAN] = 0.2 + 0.1 * k;
+          set(raw, T_PEL, -1.0, -8.8);
+          set(raw, T_FTL, -4.5, 0);
+          set(raw, T_FTR, 4.5, 0);
+          set(raw, T_HNR, -5.5 - 2 * k, -15.5);
+          set(raw, T_HNL, 2.0, -16.0);
+        }
         break;
       }
-      case PlayerState.BLOCK:
-        raw[T_LEAN] = -0.06;
+      case PlayerState.BLOCK: {
+        // la garde se tend dans la direction de la visée (devant, au-dessus, en dessous, derrière)
+        const gx = p.aimX;
+        const gy = p.aimY;
+        raw[T_LEAN] = -0.06 + 0.12 * gx;
         set(raw, T_PEL, 0, -10.6);
         set(raw, T_FTL, -4.2, 0);
         set(raw, T_FTR, 4.8, 0);
-        set(raw, T_HNR, 5.2, -24.0);
-        set(raw, T_HNL, 4.0, -17.8);
+        set(raw, T_HNR, 1.5 + gx * 12 - gy * 2.5, -17 + gy * 12 + gx * 2.5);
+        set(raw, T_HNL, 1.5 + gx * 8 + gy * 2.5, -17 + gy * 8 - gx * 2.5);
         break;
+      }
       case PlayerState.STUN:
         raw[T_LEAN] = 0.2;
         set(raw, T_PEL, 0, -10.8);
@@ -585,7 +591,8 @@ export class Rig {
           const side = lx > 0.4;
           const dirx = side ? lx : 0.15;
           const diry = side && Math.abs(ly) < 0.4 ? 0 : ly;
-          const len = 8 + COMBAT.charged.reach * 0.7;
+          // le poing s'allonge pendant l'attaque (Rayman)
+          const len = 8 + COMBAT.charged.reach * 0.7 + COMBAT.charged.extend * e;
           set(o, T_PEL, 1.0, -10.6);
           set(o, T_HNR, lerp(-2, 1.6 + dirx * len, e), lerp(-10, -17.8 + diry * len, e));
           set(o, T_HNL, 0.5, -14.5);
@@ -610,23 +617,84 @@ export class Rig {
         break;
       }
       case AttackKind.CROUCH: {
-        // accroupi, le poing part du sol vers l'avant et monte (long bras, projette vers le haut)
+        // accroupi, une jambe part droit devant au ras du sol (balayage qui fait tomber)
         const k =
           phase === AtkPhase.STARTUP
             ? 0
             : phase === AtkPhase.ACTIVE
               ? 0.3 + 0.7 * ease(t)
               : 1 - ease(t);
-        set(o, T_PEL, -1.0, -5.6);
-        set(o, T_HEAD, 3.0, -13.4);
-        set(o, T_NECK, 1.6, -8.7);
-        set(o, T_SHL, 0.4, -8.2);
-        set(o, T_SHR, 3.0, -8.0);
-        set(o, T_FTL, -4.0, 0);
-        set(o, T_FTR, 4.5, 0);
-        set(o, T_HNR, lerp(0.6, 6.4 + reach * 0.85, k), lerp(-2.0, -10.5, k));
-        set(o, T_HNL, 5.0, -4.5);
-        o[T_LEAN] = 0.1 + 0.12 * k;
+        set(o, T_PEL, -2.0, -5.0);
+        set(o, T_HEAD, 2.0, -12.6);
+        set(o, T_NECK, 0.8, -8.2);
+        set(o, T_SHL, -0.4, -8.0);
+        set(o, T_SHR, 1.6, -7.8);
+        set(o, T_FTL, -5.0, 0);
+        set(o, T_FTR, lerp(2.0, 5.0 + reach * 0.95, k), -0.4);
+        set(o, T_HNR, 5.0, -5.0);
+        set(o, T_HNL, -2.0, -6.0);
+        o[T_LEAN] = -0.1 + 0.05 * k;
+        break;
+      }
+      case AttackKind.SPECIAL_DOWN: {
+        // accroupi, les deux poings partent de chaque côté à ras du sol
+        const k =
+          phase === AtkPhase.STARTUP
+            ? 0
+            : phase === AtkPhase.ACTIVE
+              ? 0.3 + 0.7 * ease(t)
+              : 1 - ease(t);
+        set(o, T_PEL, -1.0, -5.8);
+        set(o, T_HEAD, 2.0, -13.0);
+        set(o, T_NECK, 1.2, -8.6);
+        set(o, T_FTL, -6.5, 0);
+        set(o, T_FTR, 6.5, 0);
+        set(o, T_HNR, lerp(3.0, 7.0 + reach * 0.9, k), -6.5);
+        set(o, T_HNL, lerp(-1.0, -7.0 - reach * 0.9, k), -6.5);
+        o[T_LEAN] = 0.05;
+        break;
+      }
+      case AttackKind.AIR_NEUTRAL: {
+        // étoile : bras et jambes écartés, tout autour du corps
+        const k = phase === AtkPhase.STARTUP ? 0 : phase === AtkPhase.ACTIVE ? 1 : 1 - ease(t);
+        set(o, T_PEL, 0, -12.0);
+        set(o, T_FTL, lerp(-3.4, -8.0, k), lerp(-5.5, -3.0, k));
+        set(o, T_FTR, lerp(3.4, 8.0, k), lerp(-5.5, -3.0, k));
+        set(o, T_HNR, lerp(3.0, 11.0, k), lerp(-14.0, -16.0, k));
+        set(o, T_HNL, lerp(-1.0, -9.0, k), lerp(-14.0, -16.0, k));
+        o[T_LEAN] = 0;
+        break;
+      }
+      case AttackKind.AIR_SIDE: {
+        // large balayage du bras, comme une patte de chat : il part de l'arrière et fauche devant
+        const k =
+          phase === AtkPhase.STARTUP
+            ? 0
+            : phase === AtkPhase.ACTIVE
+              ? 0.25 + 0.75 * ease(t)
+              : 1 - ease(t);
+        set(o, T_PEL, 0.4, -11.6);
+        set(o, T_FTL, -5.0, -4.0);
+        set(o, T_FTR, 1.0, -5.5);
+        set(o, T_HNR, lerp(-4.0, 6.4 + reach * 0.95, k), lerp(-23.0, -12.5, k));
+        set(o, T_HNL, 0.6, -15.0);
+        o[T_LEAN] = 0.12 + 0.35 * k;
+        break;
+      }
+      case AttackKind.AIR_UP: {
+        // petit balayage vers le haut, jambes repliées
+        const k =
+          phase === AtkPhase.STARTUP
+            ? 0
+            : phase === AtkPhase.ACTIVE
+              ? 0.3 + 0.7 * ease(t)
+              : 1 - ease(t);
+        set(o, T_PEL, 0, -12.4);
+        set(o, T_FTL, -3.4, -6.0);
+        set(o, T_FTR, 3.4, -7.0);
+        set(o, T_HNR, lerp(5.0, 2.0, k), lerp(-12.5, -33.0, k));
+        set(o, T_HNL, lerp(-2.0, 0.0, k), lerp(-13.0, -26.0, k));
+        o[T_LEAN] = -0.12 * k;
         break;
       }
       case AttackKind.UPPER: {
@@ -656,14 +724,6 @@ export class Rig {
         o[T_LEAN] = 0.12;
         break;
       }
-      case AttackKind.KICK:
-        set(o, T_PEL, -1.0, -13.0);
-        set(o, T_FTR, 9.0, 2.5);
-        set(o, T_FTL, -1.5, -7.0);
-        set(o, T_HNR, -5.0, -20.5);
-        set(o, T_HNL, -6.5, -17.0);
-        o[T_LEAN] = 0.5;
-        break;
       case AttackKind.SHOOT: {
         // bras tendus dans la direction de visée, recul qui se résorbe
         const recoil = phase === AtkPhase.RECOVERY ? (1 - t) * 2.2 : 2.2;

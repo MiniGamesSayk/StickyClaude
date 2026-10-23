@@ -1,10 +1,12 @@
 /**
- * Masque d'entrées (16 bits).
+ * Masque d'entrées. Le client en envoie 15 bits (un u16 sur le fil) ; la simulation en lit 18.
  *
- * Bits 0 à 7 : boutons, envoyés par le client. Bits 8 à 11 : secteur de visée (0 à 15), bit 12 :
- * visée explicite (souris, joystick) et bit 13 : dash, envoyés par le client. Bits 14 et 15 : retard
- * de compensation de latence (par pas de `REWIND_STEP` ticks), ajouté par le **serveur** avant d'appeler `step`
- * (jamais lu depuis le réseau : le masque reçu est filtré par `INPUT_MASK_USED`).
+ * Bits 0 à 7 : boutons. Bits 8 à 11 : secteur de visée (0 à 15), bit 12 : visée explicite (souris,
+ * joystick), bit 13 : dash, bit 14 : attaque spéciale (clic droit). `BLOCK` (bit 6) est un état et
+ * non une impulsion : « mode défense » tenu tant qu'il est actif (le client le bascule). Bits 16 et
+ * 17 : retard de compensation de latence (par pas de `REWIND_STEP` ticks), ajouté par le
+ * **serveur** avant d'appeler `step` (jamais lu depuis le réseau : le masque reçu est filtré par
+ * `INPUT_MASK_USED`). Les tampons d'entrées de la simulation sont donc des `Uint32Array`.
  */
 export const Input = {
   LEFT: 1 << 0,
@@ -16,21 +18,22 @@ export const Input = {
   BLOCK: 1 << 6,
   PICKUP: 1 << 7,
   DASH: 1 << 13,
+  SPECIAL: 1 << 14,
 } as const;
 
 /** Seuls ces bits sont acceptés d'un client. */
-export const INPUT_MASK_USED = 0x3fff;
+export const INPUT_MASK_USED = 0x7fff;
 
 /** Visée explicite : secteur dans les bits 8 à 11, drapeau dans le bit 12. */
 export const AIM_SHIFT = 8;
 export const AIM_SET = 1 << 12;
 
 /** Position du retard de compensation de latence dans le masque : 2 bits, par pas de 4 ticks. */
-export const REWIND_SHIFT = 14;
+export const REWIND_SHIFT = 16;
 export const REWIND_MASK = 3;
 export const REWIND_STEP = 4;
 
-/** Retard en ticks (0 à 12, arrondi au pas de 4) rangé dans les bits 14 et 15. */
+/** Retard en ticks (0 à 12, arrondi au pas de 4) rangé dans les bits 16 et 17. */
 export function withRewind(mask: number, rewindTicks: number): number {
   const q = Math.round(rewindTicks / REWIND_STEP);
   const r = q < 0 ? 0 : q > REWIND_MASK ? REWIND_MASK : q;

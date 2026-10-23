@@ -5,7 +5,7 @@ import type { Player, World } from '../src/index.ts';
 import { boxArena, fill, customArena } from './helpers.ts';
 
 export const FLOOR = 33 * CELL;
-export const { LEFT, RIGHT, UP, DOWN, JUMP, ATTACK, BLOCK, PICKUP } = Input;
+export const { LEFT, RIGHT, UP, DOWN, JUMP, ATTACK, BLOCK, PICKUP, SPECIAL } = Input;
 
 export interface FightOptions {
   n?: number;
@@ -35,7 +35,7 @@ export function fightWorld(opts: FightOptions = {}): World {
     w.rules.teamsMode = true;
     for (let s = 0; s < n; s++) w.team[s] = opts.teams[s]!;
   }
-  const zero = new Uint16Array(MAX_PLAYERS);
+  const zero = new Uint32Array(MAX_PLAYERS);
   for (let i = 0; i < 100; i++) step(w, zero);
   for (let s = 0; s < n; s++) {
     const p = w.players[s];
@@ -51,7 +51,7 @@ export function fightWorld(opts: FightOptions = {}): World {
   return w;
 }
 
-const buf = new Uint16Array(MAX_PLAYERS);
+const buf = new Uint32Array(MAX_PLAYERS);
 
 /** Un tick avec les masques donnés (les emplacements non précisés restent à 0). */
 export function tick(w: World, ...masks: number[]): void {

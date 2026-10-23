@@ -8,7 +8,7 @@ export class RoomRecorder {
   private readonly ops: RecordOp[] = [];
   private readonly inputs: Recording['inputs'] = [];
   private readonly tunes: [number, string, number][] = [];
-  private readonly last = new Uint16Array(MAX_PLAYERS);
+  private readonly last = new Uint32Array(MAX_PLAYERS);
 
   constructor(
     private readonly arenaId: string,
@@ -33,7 +33,7 @@ export class RoomRecorder {
 
   toRecording(ticks: number, finalHash?: number): Recording {
     return {
-      version: 3,
+      version: 4,
       arenaId: this.arenaId,
       seed: this.seed,
       tickHz: TICK_HZ,

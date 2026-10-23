@@ -150,12 +150,14 @@ describe('ticks, entrées et snapshots', () => {
     h.advance(100);
     const room = h.room(code);
     const t = room.world.tick;
-    // un client forge le retard de compensation (bits 14 et 15) et des bits inexistants
+    // un client forge le retard de compensation (bits 14 et 15 d'un ancien client, 16-17 inatteignables) et des bits inexistants
     h.sendInput(a, t + 3, [0xf000 | 0x0f00 | Input.ATTACK]);
     h.advance(5);
     const p = room.world.players[0];
     expect(rewindOf(p.prevInput)).toBe(0);
-    expect(p.prevInput & 0xc000).toBe(0);
+    // le bit 14 est le bouton spécial ; seul le bit 15 réservé doit être filtré
+    expect(p.prevInput & 0x8000).toBe(0);
+    expect(p.prevInput & Input.SPECIAL).toBe(Input.SPECIAL);
   });
 
   it('borne la compensation de latence annoncée', () => {

@@ -72,24 +72,26 @@ Le client n'a besoin d'aucune hypothèse sur son horloge locale (décalage quelc
 
 Tout est en **little-endian**. Le premier octet est toujours le type. Client → serveur : types 1 à 15. Serveur → client : types 16 à 31. Les codecs sont dans `packages/shared/src/codec/` ; chaque décodeur vérifie les bornes (lecture hors limites, compteurs, octets en trop, valeurs hors énumération) et lève `DecodeError`.
 
-### Masque d'entrées (u16)
+### Masque d'entrées (u16 sur le fil, 32 bits dans la simulation)
 
 | Bit   | Valeur   | Action                                                                                                     |
 | ----- | -------- | ---------------------------------------------------------------------------------------------------------- |
 | 0     | `0x01`   | gauche                                                                                                     |
 | 1     | `0x02`   | droite                                                                                                     |
 | 2     | `0x04`   | haut (visée)                                                                                               |
-| 3     | `0x08`   | bas (accroupi, chute rapide, traversée, coup de pied, lâcher avec `ramasser`)                              |
+| 3     | `0x08`   | bas (accroupi, chute rapide, traversée, tacle et coups vers le bas, lâcher avec `ramasser`)                |
 | 4     | `0x10`   | saut                                                                                                       |
-| 5     | `0x20`   | attaque (maintenu : coup chargé ; tir en continu avec une arme à tir)                                      |
-| 6     | `0x40`   | parade                                                                                                     |
+| 5     | `0x20`   | attaque (coup léger selon la direction tenue, immédiat ; tir en continu avec une arme à tir)               |
+| 6     | `0x40`   | mode défense (niveau, émis à chaque image tant que le mode est actif ; sans effet avec une arme)           |
 | 7     | `0x80`   | ramasser / lancer                                                                                          |
 | 8–11  |          | secteur de visée explicite (0 à 15), valable si le bit 12 est levé                                         |
 | 12    | `0x1000` | drapeau de visée explicite (souris, joystick) ; sinon la visée se déduit des directions                    |
 | 13    | `0x2000` | dash                                                                                                       |
-| 14–15 |          | retard de compensation de latence, en pas de 4 ticks (0 à 3, soit 0 à 12 ticks), **ajouté par le serveur** |
+| 14    | `0x4000` | spécial (clic droit : chargeable au sol, ruée invulnérable en l'air)                                       |
+| 15    |          | réservé (filtré par le serveur)                                                                            |
+| 16–17 |          | retard de compensation de latence, en pas de 4 ticks (0 à 3, soit 0 à 12 ticks), **ajouté par le serveur** |
 
-Le serveur ne lit que les 14 bits de poids faible d'un paquet (`INPUT_MASK_USED` = `0x3fff`) : un client ne peut pas se donner une compensation de latence qu'il n'a pas. Le curseur du fantôme-crayon utilise les mêmes bits (directions pour le déplacer, attaque pour poser un trait, parade pour une goutte d'encre).
+Le serveur ne lit que les 15 bits de poids faible d'un paquet (`INPUT_MASK_USED` = `0x7fff`) ; le retard de compensation est ajouté par lui aux bits 16 et 17, ce qui a obligé la simulation à passer ses tampons d'entrées en `Uint32Array` (protocole 5, enregistrements en version 4) : un client ne peut pas se donner une compensation de latence qu'il n'a pas. Le curseur du fantôme-crayon utilise les mêmes bits (directions pour le déplacer, attaque pour poser un trait, parade pour une goutte d'encre).
 
 ### `INPUT` (client → serveur) : 9 à 15 octets
 
@@ -172,14 +174,14 @@ Drapeaux de joueur (u16) : bit 0 vivant · 1 tourné à droite · 2 au sol · 3 
 
 **Bloc `own` (74 octets).** L'état _exact_ de prédiction du destinataire : tout ce qui influence l'évolution future de sa simulation. Flottants 32 bits (l'arrondi vaut moins de 10⁻⁴ unité). Ordre des champs (`OWN_FIELDS`, `packages/shared/src/codec/snapshot.ts`) :
 
-| Octets | Type | Champs                                                                                                                                                                                                                                                                                                                                                                   |
-| ------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0–31   | f32  | `x`, `y`, `vx`, `vy`, `grappleX`, `grappleY`, `ghostX`, `ghostY`                                                                                                                                                                                                                                                                                                         |
-| 32–37  | u8   | `flags` (bit 0 au sol · 1 accroupi · 2 double saut disponible · 3 saut en cours · 4 tourné à droite), `coyote`, `jumpBuffer`, `wallLock`, `wallCoyote`, `dropTimer`                                                                                                                                                                                                      |
-| 38–39  | i8   | `wallDir` (−1, 0, 1), `groundMover` (indice de plateforme mobile, −1 sinon)                                                                                                                                                                                                                                                                                              |
-| 40–63  | u8   | `hp`, `weapon`, `ammo`, `stun`, `hitLock`, `invuln` (plafonné à 255), `atkPhase`, `atkKind`, `atkTicks`, `combo`, `comboWindow`, `chargeTicks`, `attackHeld`, `blockTicks`, `blockCd`, `atkBuffer`, `pickupCd`, `aim`, `grappleTicks`, `status` (bit 0 fantôme · 1 mort · 2 porte la bombe · 3 coup de pied plongeant), `stunImmune`, `dashTicks`, `dashCd`, `glueTicks` |
-| 64–65  | i8   | `dashX`, `dashY` (direction du dash, −1, 0, 1)                                                                                                                                                                                                                                                                                                                           |
-| 66–73  | u16  | `prevInput`, `respawns`, `respawnTimer`, `ghostCd`                                                                                                                                                                                                                                                                                                                       |
+| Octets | Type | Champs                                                                                                                                                                                                                                                                                                                                                    |
+| ------ | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0–31   | f32  | `x`, `y`, `vx`, `vy`, `grappleX`, `grappleY`, `ghostX`, `ghostY`                                                                                                                                                                                                                                                                                          |
+| 32–37  | u8   | `flags` (bit 0 au sol · 1 accroupi · 2 double saut disponible · 3 saut en cours · 4 tourné à droite), `coyote`, `jumpBuffer`, `wallLock`, `wallCoyote`, `dropTimer`                                                                                                                                                                                       |
+| 38–39  | i8   | `wallDir` (−1, 0, 1), `groundMover` (indice de plateforme mobile, −1 sinon)                                                                                                                                                                                                                                                                               |
+| 40–63  | u8   | `hp`, `weapon`, `ammo`, `stun`, `hitLock`, `invuln` (plafonné à 255), `atkPhase`, `atkKind`, `atkTicks`, `combo`, `comboWindow`, `chargeTicks`, `attackHeld`, `blockTicks`, `blockCd`, `atkBuffer`, `pickupCd`, `aim`, `grappleTicks`, `status` (bit 0 fantôme · 1 mort · 2 porte la bombe · 3 réservé), `stunImmune`, `dashTicks`, `dashCd`, `glueTicks` |
+| 64–65  | i8   | `dashX`, `dashY` (direction du dash, −1, 0, 1)                                                                                                                                                                                                                                                                                                            |
+| 66–73  | u16  | `prevInput`, `respawns`, `respawnTimer`, `ghostCd`                                                                                                                                                                                                                                                                                                        |
 
 **Événement fiable (4 + `len` octets).**
 
@@ -326,7 +328,7 @@ Sans elle, il faudrait viser là où l'adversaire _sera_ : ce que le tireur voit
 
 1. Il conserve les positions (x, y, hauteur) de chaque joueur sur les **16 derniers ticks**.
 2. Chaque client annonce, dans le champ `rewind` de ses paquets, la durée qui sépare ses entrées de ce qu'il voit des autres : `RTT + (avance + durée d'une image) × 16,7 ms + retard d'interpolation`, en pas de 4 ms.
-3. Le serveur borne ce retard à **12 ticks (200 ms)**, le place dans les bits 14 et 15 du masque (par pas de 4 ticks : 0, 4, 8 ou 12) d'entrées du joueur et, pour chaque coup de mêlée ou tir instantané, teste les cibles à leur position d'il y a `rewind` ticks (`rewoundBox`).
+3. Le serveur borne ce retard à **12 ticks (200 ms)**, le place dans les bits 16 et 17 du masque (par pas de 4 ticks : 0, 4, 8 ou 12) d'entrées du joueur et, pour chaque coup de mêlée ou tir instantané, teste les cibles à leur position d'il y a `rewind` ticks (`rewoundBox`).
 4. L'aide à la visée (±8° vers la cible la plus proche dans le cône) est calculée avec les mêmes positions passées, pour tous les appareils.
 
 Les projectiles lents (boulettes, avions, roquettes, gomme) **ne sont pas compensés** : ils sont simulés sur le serveur et apparaissent chez les autres à leur place du moment. Une parade parfaite se juge elle aussi sur le serveur, au tick où le coup arrive (fenêtre de 100 ms après l'appui). Au-delà de 200 ms de retard annoncé, la compensation est partielle : un joueur très lent doit viser un peu devant.
@@ -347,7 +349,7 @@ Le champ `rewind` ne vient que du client, mais il est borné, et ne peut servir 
 - **Simulateur de réseau** : `?lag=150&jitter=30&loss=2`. `lag` = latence **aller-retour** ajoutée (moitié dans chaque sens), `jitter` = ± ms par sens, `loss` = % de messages « perdus ». L'ordre est conservé comme en TCP : un message perdu est retransmis après `max(200 ms, 2 × lag)` et retarde tous les suivants. Code : `packages/client/src/net/transport.ts`.
 - **Graphe réseau** (`F3` ou `?debug=1`) : RTT, débit montant et descendant, corrections par seconde, retard d'interpolation, avance, tick prédit et estimé, marge, tampon, gigue. Le fantôme rouge est le dernier état confirmé par le serveur pour son propre stickman.
 - **Panneau de réglage** (build de développement seulement, serveur lancé avec `DEV_TOOLS=1`, ce que fait `npm run dev`) : les 26 constantes de `packages/shared/src/movement.ts`, appliquées en direct à la salle entière.
-- **Enregistrement / relecture** : avec `DEV_TOOLS=1` (ou `RECORD_DIR=dossier`), chaque salle enregistre ses entrées **et les opérations du salon** (arrivées, départs, lancement de partie avec ses règles, retour au salon, éliminations par abandon, réglages), dans l'ordre où le serveur les a exécutées (format `Recording` version 3). `GET /dev/recording/CODE` renvoie le JSON. Relecture visuelle : `?replay=/dev/recording/CODE` (espace : pause, `[` et `]` : vitesse) ; relecture headless et vérification du hash : `npm run simulate -- --replay fichier.json`. Une partie complète rejouée donne exactement le même état final.
+- **Enregistrement / relecture** : avec `DEV_TOOLS=1` (ou `RECORD_DIR=dossier`), chaque salle enregistre ses entrées **et les opérations du salon** (arrivées, départs, lancement de partie avec ses règles, retour au salon, éliminations par abandon, réglages), dans l'ordre où le serveur les a exécutées (format `Recording` version 4). `GET /dev/recording/CODE` renvoie le JSON. Relecture visuelle : `?replay=/dev/recording/CODE` (espace : pause, `[` et `]` : vitesse) ; relecture headless et vérification du hash : `npm run simulate -- --replay fichier.json`. Une partie complète rejouée donne exactement le même état final.
 - **`npm run simulate`** : déterminisme sur 60 000 ticks (deux mondes, hash comparé tous les 1 000 ticks) en mouvement seul, puis en parties enchaînées avec combat, armes, modes bonus et fantômes ; et coût d'un pas.
 - **`npm run loadtest`** : voir §10. `-- --no-combat` mesure les déplacements seuls.
 - **`node scripts/browser-check.mjs`** : N onglets Chromium dans le même salon avec réseau dégradé.

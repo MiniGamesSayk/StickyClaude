@@ -54,6 +54,7 @@ export const TRAINING_OBJECTIVES: readonly ObjectiveDef[] = [
   { id: 'drop', goal: 1 },
   { id: 'crouch', goal: 1 },
   { id: 'dash', goal: 1 },
+  { id: 'airspecial', goal: 1 },
   { id: 'punch', goal: 3 },
   { id: 'combo', goal: 1 },
   { id: 'charged', goal: 1 },
@@ -181,6 +182,8 @@ export class TrainingTracker {
         break;
       case SimEvent.DASH:
         if (slot === 0) add('dash');
+        // le 4e argument vaut 1 pour la ruée invulnérable de l'attaque spéciale aérienne
+        if (slot === 0 && (a[3] ?? 0) === 1) add('airspecial');
         break;
       case SimEvent.DROP_THROUGH:
         if (slot === 0) add('drop');
@@ -189,8 +192,13 @@ export class TrainingTracker {
         // victime = slot ; attaquant = a[2]
         if ((a[2] ?? 255) === 0 && slot !== 0) {
           add('punch');
-          if (this.lastAttackKind === AttackKind.CHARGED) add('charged');
-          if (this.lastAttackKind === AttackKind.KICK) add('kick');
+          if (
+            this.lastAttackKind === AttackKind.CHARGED ||
+            this.lastAttackKind === AttackKind.SPECIAL_DOWN
+          ) {
+            add('charged');
+          }
+          if (this.lastAttackKind === AttackKind.AIR_DOWN) add('kick');
           if (this.lastAttackKind === AttackKind.CROUCH) add('lowpunch');
           if (this.lastAttackKind === AttackKind.UPPER) add('upper');
         }
@@ -256,7 +264,7 @@ export class SoloSource implements RenderSource {
   tracker: TrainingTracker;
   paused = false;
   private acc = 0;
-  private readonly inputs = new Uint16Array(MAX_PLAYERS);
+  private readonly inputs = new Uint32Array(MAX_PLAYERS);
   private readonly prevX = new Float64Array(MAX_PLAYERS);
   private readonly prevY = new Float64Array(MAX_PLAYERS);
   private readonly snap = createSnapshot();

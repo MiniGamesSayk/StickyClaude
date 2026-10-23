@@ -39,7 +39,7 @@ export type RecordOp =
  *   de latence.
  */
 export interface Recording {
-  version: 3;
+  version: 4;
   /** Arène du salon d'attente. */
   arenaId: string;
   seed: number;

@@ -16,7 +16,6 @@ import { GhostMark, placeMark, spawnProps } from '../src/index.ts';
 import type { World } from '../src/index.ts';
 import {
   ATTACK,
-  BLOCK,
   DOWN,
   FLOOR,
   RIGHT,
@@ -96,15 +95,15 @@ const SCENARIOS: Scenario[] = [
   },
   {
     cause: Cause.KICK,
-    name: 'un coup de pied plongeant',
+    name: 'un coup de pied vers le bas, en l’air',
     build: () => {
       const w = fightWorld({ ghosts: false });
       const p = pl(w, 0);
-      p.y = FLOOR - 120;
+      p.y = FLOOR - 45;
       p.grounded = false;
       pl(w, 1).x = p.x + 4;
       pl(w, 1).hp = 1;
-      tick(w, ATTACK | BLOCK);
+      tick(w, ATTACK | DOWN);
       return { w, victim: 1, ticks: 40, masks: [DOWN] };
     },
   },

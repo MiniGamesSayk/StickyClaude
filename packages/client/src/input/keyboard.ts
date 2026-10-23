@@ -1,12 +1,7 @@
 import { Input } from '@stickyclaude/shared';
 import type { Action, Bindings } from '../app/options.ts';
 import { ACTIONS, DEFAULT_BINDINGS, mouseButtonOf, mouseCode } from '../app/options.ts';
-
-/**
- * « Smash bas » : attaque et parade envoyées ensemble, une seule fois à l'appui (la simulation y
- * reconnaît le coup de pied plongeant en l'air ; au sol c'est une simple attaque).
- */
-export const SPIKE_BITS = Input.ATTACK | Input.BLOCK;
+import { toggleDefense } from './defense.ts';
 
 const BIT: Record<Action, number> = {
   left: Input.LEFT,
@@ -18,7 +13,7 @@ const BIT: Record<Action, number> = {
   block: Input.BLOCK,
   pickup: Input.PICKUP,
   dash: Input.DASH,
-  spike: SPIKE_BITS,
+  special: Input.SPECIAL,
 };
 
 /** Table `event.code` → bit d'entrée, construite à partir des touches choisies. */
@@ -151,9 +146,9 @@ export class KeyboardInput {
     const bit = this.keymap.get(mouseCode(e.button)) ?? 0;
     if (bit === 0 || mouseButtonOf(mouseCode(e.button)) < 0) return;
     // Un relâchement compte partout : si l'écran de fin ou un menu recouvre le canvas pendant que
-    // le bouton est tenu, la parade ne doit pas rester collée.
+    // le bouton est tenu, il ne doit pas rester collé. Le mode défense, lui, se bascule à l'appui.
     if (!down) {
-      if (bit !== SPIKE_BITS) this.mouse &= ~bit;
+      this.mouse &= ~bit;
       return;
     }
     if (!(e.target instanceof HTMLCanvasElement)) return;
@@ -161,9 +156,11 @@ export class KeyboardInput {
     this.mouseY = e.clientY;
     this.mouseSeen = true;
     if (this.on) {
-      // « smash bas » : un seul appui par clic, jamais maintenu
-      if (bit !== SPIKE_BITS) this.mouse |= bit;
-      this.edges |= bit;
+      if (bit === Input.BLOCK) toggleDefense();
+      else {
+        this.mouse |= bit;
+        this.edges |= bit;
+      }
     }
   }
 
@@ -172,7 +169,7 @@ export class KeyboardInput {
     // Sans cela, une touche lâchée pendant ce temps resterait enfoncée à la reprise.
     if (!down) {
       const up = this.keymap.get(e.code);
-      if (up !== undefined && up !== SPIKE_BITS) this.held &= ~up;
+      if (up !== undefined) this.held &= ~up;
     }
     const t = e.target;
     if (
@@ -195,8 +192,9 @@ export class KeyboardInput {
     if (bit === undefined) return;
     e.preventDefault();
     if (!down) return;
-    if (bit === SPIKE_BITS) {
-      if (!e.repeat) this.edges |= bit;
+    if (bit === Input.BLOCK) {
+      // la parade est un mode qu'on bascule, pas une touche qu'on tient
+      if (!e.repeat) toggleDefense();
     } else {
       this.held |= bit;
       this.edges |= bit;

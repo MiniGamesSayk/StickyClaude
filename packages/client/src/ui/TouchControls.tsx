@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { options, setOptions } from '../app/options.ts';
 import { actions, overlay } from '../app/store.ts';
 import { pick, t } from '../i18n/index.ts';
+import { defense, toggleDefense } from '../input/defense.ts';
 import { resetTouch, setButton, setStick, STICK_RADIUS, vibrate } from '../input/touch.ts';
 import { Button } from './components.tsx';
 
@@ -42,6 +43,27 @@ function Btn(p: {
       onContextMenu={(e) => e.preventDefault()}
     >
       {p.children}
+    </button>
+  );
+}
+
+/** Bouton de défense : il bascule le mode (la garde ne se tient pas), l'état se lit à l'écran. */
+function DefenseBtn(p: { label: string }): JSX.Element {
+  const on = defense.value;
+  return (
+    <button
+      type="button"
+      class={`tbtn block${on ? ' down' : ''}`}
+      aria-label={p.label}
+      aria-pressed={on}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        toggleDefense();
+        if (options.value.vibration) vibrate(12);
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      🛡
     </button>
   );
 }
@@ -125,8 +147,9 @@ export function TouchControls(): JSX.Element {
         <Btn cls="attack" bit={Input.ATTACK} label={t('touch.attack')}>
           ✊
         </Btn>
-        <Btn cls="block" bit={Input.BLOCK} label={t('touch.block')}>
-          🛡
+        <DefenseBtn label={t('touch.block')} />
+        <Btn cls="special" bit={Input.SPECIAL} label={t('touch.special')}>
+          ✦
         </Btn>
         <Btn cls="crouch" bit={Input.DOWN} label={t('touch.crouch')}>
           ⤓

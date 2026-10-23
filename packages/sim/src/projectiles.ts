@@ -11,7 +11,7 @@ import {
 } from '@stickyclaude/shared';
 import { bodyHeight, raycastGrid, segmentBox } from './collision.ts';
 import type { RayHit } from './collision.ts';
-import { explode, HitFlag, isTeammate, queueHit } from './combat.ts';
+import { explode, guardCovers, HitFlag, isTeammate, queueHit } from './combat.ts';
 import { breakCrate, damageObject, spawnWeaponObj } from './objects.ts';
 import { eraseCell } from './terrain.ts';
 import { emit, newUid } from './world.ts';
@@ -511,7 +511,7 @@ export function stepProjectiles(world: World): void {
       const hx = p.x + ux * reach * bestT;
       const hy = p.y + uy * reach * bestT;
       const speed = Math.hypot(p.vx, p.vy);
-      const front = (p.x - q.x) * q.facing >= -2;
+      const front = guardCovers(q, p.x, p.y);
       // Parade parfaite : les projectiles lents sont renvoyés.
       if (
         q.blockTicks > 0 &&

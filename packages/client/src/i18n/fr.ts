@@ -226,6 +226,7 @@ export const fr = {
   'hud.ghost_ready_short': 'Dessin prêt',
   'hud.ghost_line': 'trace un trait',
   'hud.ghost_drop': 'goutte d’encre',
+  'hud.defense': 'Défense',
   'hud.emotes': 'emotes',
   'hud.emote_wait': 'prochaine dans {s} s',
   'hud.hp': '{hp} PV',
@@ -308,15 +309,16 @@ export const fr = {
   'train.double': 'Fais un double saut',
   'train.wall': 'Saute contre un mur (saut mural)',
   'train.drop': 'Descends d’une plateforme (↓)',
+  'train.airspecial': 'Ruée invulnérable en l’air (clic droit en l’air + direction)',
   'train.dash': 'Fais un dash (Maj)',
   'train.crouch': 'Accroupis-toi une demi-seconde',
   'train.punch': 'Frappe un mannequin',
   'train.combo': 'Enchaîne 3 coups',
-  'train.charged': 'Frappe avec un coup chargé (maintiens l’attaque)',
-  'train.kick': 'Coup de pied plongeant (en l’air : smash bas, clic droit ou K)',
-  'train.lowpunch': 'Coup accroupi, longue portée (↓ au sol + attaque)',
+  'train.charged': 'Frappe avec l’attaque spéciale chargée (maintiens le clic droit)',
+  'train.kick': 'Spike : coup vers le bas en l’air (↓ + attaque en l’air)',
+  'train.lowpunch': 'Balayage accroupi (↓ au sol + attaque)',
   'train.upper': 'Coup vers le haut (↑ + attaque)',
-  'train.block': 'Pare un coup',
+  'train.block': 'Active le mode défense (clic molette) et pare un coup',
   'train.parry': 'Réussis une parade parfaite',
   'train.pickup': 'Ramasse une arme',
   'train.shoot': 'Tire ou frappe avec une arme',
@@ -416,7 +418,7 @@ export const fr = {
   'opt.pad_rumble': 'Vibration de la manette',
   'opt.fullscreen': 'Plein écran au lancement (mobile)',
   'opt.gamepad':
-    'Par défaut : A saute, X ou RT attaque, B ou LT pare, Y ou RB ramasse (maintenu : lancer chargé), LB dash, clic du stick droit smash bas, croix ou stick pour bouger. Dash sans direction : esquive.',
+    'Par défaut : A saute, X ou RT attaque, B ou LT bascule la défense, Y ou RB ramasse (maintenu : lancer chargé), LB dash, clic du stick droit attaque spéciale, croix ou stick pour bouger. Dash sans direction : esquive.',
   'opt.reset_all': 'Réinitialiser les options',
   'act.left': 'Gauche',
   'act.right': 'Droite',
@@ -424,10 +426,10 @@ export const fr = {
   'act.down': 'Bas / s’accroupir',
   'act.jump': 'Sauter',
   'act.attack': 'Attaquer / tirer',
-  'act.block': 'Parer',
+  'act.block': 'Défense (bascule)',
   'act.pickup': 'Ramasser / lancer',
   'act.dash': 'Dash',
-  'act.spike': 'Smash bas (en l’air)',
+  'act.special': 'Attaque spéciale (clic droit)',
   'opt.mouse_hint':
     'La souris se règle comme les touches : clique sur une case, puis clique avec le bouton voulu. Rien n’est sous-entendu.',
   'opt.warn_title': 'Attention aux combinaisons',
@@ -444,7 +446,6 @@ export const fr = {
     'F1 à F12 ont un rôle dans le navigateur (F5 recharge, F11 plein écran, F12 outils).',
   'opt.warn.mouse_side':
     'Les boutons latéraux de la souris servent souvent à « précédent / suivant ».',
-  'opt.warn.mouse_middle': 'Le clic molette peut lancer le défilement automatique.',
   'opt.warn.duplicate': 'Une même touche sert à plusieurs actions.',
 
   // Aide et crédits
@@ -454,7 +455,7 @@ export const fr = {
   'help.move':
     'Bouger : flèches ou WASD/ZQSD, manette, joystick. Sauter deux fois = double saut ; contre un mur = saut mural. Dash (Maj, LB) : ruée horizontale de 0,15 s, recharge 0,75 s ; sans toucher à une direction, il devient une esquive sur place (invulnérable 0,33 s, recharge 1,25 s). Un mur rend le double saut.',
   'help.fight':
-    'Attaquer : 3 coups enchaînés, maintenir pour charger ; ↑ + attaque : coup vers le haut ; ↓ + attaque : coup accroupi (au sol) ou plongeant (en l’air). Parer : un seul coup encaissé, il étourdit l’attaquant 0,4 s, puis 0,5 s de recharge ; juste après l’appui = parade parfaite. La visée suit la souris (ou le joystick).',
+    'Attaque (clic gauche) : jab, crochet puis final qui projette ; ↑ + attaque : coup vers le haut ; ↓ + attaque : balayage qui fait tomber ; en l’air, un coup par direction (↓ : spike). Attaque spéciale (clic droit) : maintiens pour charger, direction lue au relâchement (côté : poing qui s’allonge, ↑ : vers le haut, ↓ : de chaque côté) ; en l’air : ruée invulnérable dans la direction tenue, ou esquive sur place. Défense (clic molette, bascule) : la garde suit la visée, au sol comme en l’air ; elle n’encaisse qu’un coup (il étourdit l’attaquant 0,4 s, puis 0,5 s de recharge), impossible avec une arme. La visée suit la souris (ou le joystick).',
   'help.weapons':
     'Ramasser / lancer une arme : touche de ramassage ; ↓ + ramassage pour la lâcher.',
   'help.ghost':
@@ -473,7 +474,8 @@ export const fr = {
   'touch.jump': 'Saut',
   'touch.stick': 'Déplacer / viser',
   'touch.attack': 'Coup',
-  'touch.block': 'Parade',
+  'touch.special': 'Spécial',
+  'touch.block': 'Défense',
   'touch.pickup': 'Prendre',
   'touch.dash': 'Dash',
   'touch.emote': 'Emotes',

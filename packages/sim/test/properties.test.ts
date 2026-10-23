@@ -14,7 +14,7 @@ describe('propriétés', () => {
         fc.array(inputSeq, { minLength: 1, maxLength: 3 }),
         (arenaId, seqs) => {
           const w = createWorld(arena(arenaId), 3);
-          const inputs = new Uint16Array(MAX_PLAYERS);
+          const inputs = new Uint32Array(MAX_PLAYERS);
           for (let s = 0; s < seqs.length; s++) addPlayer(w, s);
           const len = Math.max(...seqs.map((q) => q.length));
           for (let t = 0; t < len; t++) {
@@ -55,7 +55,7 @@ describe('propriétés', () => {
           if (overlapsSolid(w, p)) return true;
           p.vx = vx;
           p.vy = vy;
-          const inputs = new Uint16Array(MAX_PLAYERS);
+          const inputs = new Uint32Array(MAX_PLAYERS);
           for (let t = 0; t < seq.length; t++) {
             inputs[0] = seq[t]!;
             step(w, inputs);
@@ -73,7 +73,7 @@ describe('propriétés', () => {
       fc.property(fc.integer({ min: 0, max: 7 }), (slot) => {
         const w = createWorld(arena('test-flat'), 5);
         addPlayer(w, slot);
-        const inputs = new Uint16Array(MAX_PLAYERS);
+        const inputs = new Uint32Array(MAX_PLAYERS);
         for (let t = 0; t < 400; t++) step(w, inputs);
         return w.players[slot].grounded;
       }),
@@ -84,7 +84,7 @@ describe('propriétés', () => {
   it('les tampons d événements ne débordent jamais avec 8 joueurs', () => {
     const w = createWorld(arena('test-flat'), 11);
     for (let s = 0; s < MAX_PLAYERS; s++) addPlayer(w, s);
-    const inputs = new Uint16Array(MAX_PLAYERS);
+    const inputs = new Uint32Array(MAX_PLAYERS);
     let seed = 12345;
     for (let t = 0; t < 3000; t++) {
       for (let s = 0; s < MAX_PLAYERS; s++) {

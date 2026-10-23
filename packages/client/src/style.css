@@ -666,7 +666,23 @@ a.btn {
   display: block;
   overflow: visible;
 }
-html[data-touch='on'] .hud-self {
+html[data-touch='on'] .defense-badge {
+  position: absolute;
+  left: 50%;
+  bottom: max(70px, calc(var(--safe-bottom) + 56px));
+  transform: translateX(-50%);
+  padding: 2px 12px;
+  border: 2.5px solid var(--ink);
+  border-radius: 8px 14px 9px 13px;
+  background: var(--paper-2);
+  box-shadow: 2px 3px 0 var(--shadow);
+  font-size: 0.95rem;
+  pointer-events: none;
+}
+.defense-badge.off {
+  opacity: 0.5;
+}
+.hud-self {
   left: 50%;
   transform: translateX(-50%);
 }
@@ -1136,6 +1152,12 @@ table.table td {
 .tbtn.block {
   right: calc(8.6rem * var(--touch-size));
   bottom: calc(5.2rem * var(--touch-size));
+}
+.tbtn.special {
+  right: calc(5.2rem * var(--touch-size));
+  bottom: calc(4.9rem * var(--touch-size));
+  width: max(2.75rem, calc(3.6rem * var(--touch-size)));
+  height: max(2.75rem, calc(3.6rem * var(--touch-size)));
 }
 .tbtn.crouch {
   right: calc(10.2rem * var(--touch-size));

@@ -136,10 +136,10 @@ describe('Rig', () => {
     p.state = PlayerState.BLOCK;
     p.animProg = 10;
     run(r, p, 0.1);
-    const early = pt(r, J.HNR)[1];
+    const early = pt(r, J.HNR)[0];
     run(r, p, 0.4);
-    const late = pt(r, J.HNR)[1];
-    expect(late).toBeLessThan(-22);
+    const late = pt(r, J.HNR)[0];
+    expect(late).toBeGreaterThan(11);
     // à 100 ms, on a parcouru l'essentiel du chemin
     expect(Math.abs(early - late)).toBeLessThan(2.5);
   });
@@ -167,7 +167,7 @@ describe('Rig', () => {
     expect(pt(r, J.HNR)[1]).toBeLessThan(pt(r, J.HEAD)[1] - 3);
   });
 
-  it('le coup accroupi reste bas et tend le bras plus loin que le jab', () => {
+  it('le tacle accroupi reste bas et tend le pied loin devant', () => {
     const jab = new Rig();
     const low = new Rig();
     const p = createPoseInput();
@@ -178,7 +178,9 @@ describe('Rig', () => {
     p.variant = AttackKind.CROUCH | (AtkPhase.ACTIVE << 4);
     run(low, p, 0.3);
     expect(pt(low, J.HEAD)[1]).toBeGreaterThan(-16);
-    expect(pt(low, J.HNR)[0]).toBeGreaterThan(pt(jab, J.HNR)[0]);
+    expect(pt(low, J.FTR)[0]).toBeGreaterThan(12);
+    expect(pt(low, J.FTR)[0]).toBeGreaterThan(pt(jab, J.FTR)[0] + 8);
+    expect(pt(low, J.FTR)[1]).toBeGreaterThan(-4);
     for (const v of low.joints) expect(Number.isFinite(v)).toBe(true);
   });
 

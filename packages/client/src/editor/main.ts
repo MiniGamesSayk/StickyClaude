@@ -305,7 +305,7 @@ function frame(now: number): void {
   last = now;
   if (world) {
     acc += dt;
-    const inputs = new Uint16Array(8);
+    const inputs = new Uint32Array(8);
     while (acc >= TICK_MS) {
       acc -= TICK_MS;
       inputs[0] = held;

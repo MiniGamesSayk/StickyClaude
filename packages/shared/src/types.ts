@@ -50,8 +50,10 @@ export const AttackKind = {
   FIST1: 1,
   FIST2: 2,
   FIST3: 3,
+  /** Attaque spéciale au sol (clic droit chargé), vers le côté ou vers le haut : poing qui s'allonge. */
   CHARGED: 4,
-  KICK: 5,
+  /** Attaque en l'air sans direction : frappe ceux qui sont collés au personnage. */
+  AIR_NEUTRAL: 5,
   /** Coup d'une arme de mêlée. */
   WEAPON: 6,
   /** Tir : posture de recul. */
@@ -62,10 +64,16 @@ export const AttackKind = {
   BASH: 9,
   /** Coup vers le haut. */
   UPPER: 10,
-  /** Coup accroupi : allonge longue, projette vers le haut. */
+  /** Balayage accroupi : un pied tendu qui fait tomber l'adversaire. */
   CROUCH: 11,
-  /** Petit coup vers le bas, en l'air (attaque + bas) : touche sous les pieds, rebond du frappeur. */
+  /** Coup vers le bas en l'air : touche sous les pieds, projette fort (spike), rebond du frappeur. */
   AIR_DOWN: 12,
+  /** Coup de côté en l'air : un large balayage devant le personnage. */
+  AIR_SIDE: 13,
+  /** Petit balayage vers le haut en l'air. */
+  AIR_UP: 14,
+  /** Attaque spéciale accroupie : frappe de chaque côté (chargeable). */
+  SPECIAL_DOWN: 15,
 } as const;
 export type AttackKindId = (typeof AttackKind)[keyof typeof AttackKind];
 
@@ -153,7 +161,7 @@ export const StatusFlag = {
   GHOST: 1 << 0,
   DEAD: 1 << 1,
   HAS_BOMB: 1 << 2,
-  KICKING: 1 << 3,
+  /** Bit 3 : libre (coup de pied plongeant supprimé). */
   DODGING: 1 << 4,
 } as const;
 

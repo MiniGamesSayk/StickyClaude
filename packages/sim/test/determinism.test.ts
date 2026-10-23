@@ -18,12 +18,12 @@ import { arena } from './helpers.ts';
 /** Génère des entrées « réalistes » : appuis tenus pendant plusieurs ticks. */
 class InputGen {
   private readonly rng: Rng;
-  private readonly cur = new Uint16Array(MAX_PLAYERS);
+  private readonly cur = new Uint32Array(MAX_PLAYERS);
   private readonly hold = new Int32Array(MAX_PLAYERS);
   constructor(seed: number) {
     this.rng = new Rng(seed);
   }
-  next(out: Uint16Array): void {
+  next(out: Uint32Array): void {
     for (let s = 0; s < MAX_PLAYERS; s++) {
       if (this.hold[s] <= 0) {
         this.hold[s] = 1 + this.rng.int(40);
@@ -43,8 +43,8 @@ describe('déterminisme', () => {
       const b = createWorld(arena(id), 42);
       const genA = new InputGen(7);
       const genB = new InputGen(7);
-      const inA = new Uint16Array(MAX_PLAYERS);
-      const inB = new Uint16Array(MAX_PLAYERS);
+      const inA = new Uint32Array(MAX_PLAYERS);
+      const inB = new Uint32Array(MAX_PLAYERS);
       for (let s = 0; s < MAX_PLAYERS; s++) {
         addPlayer(a, s);
         addPlayer(b, s);
@@ -65,8 +65,8 @@ describe('déterminisme', () => {
     const b = createWorld(arena(), 42);
     addPlayer(a, 0);
     addPlayer(b, 0);
-    const inA = new Uint16Array(MAX_PLAYERS);
-    const inB = new Uint16Array(MAX_PLAYERS);
+    const inA = new Uint32Array(MAX_PLAYERS);
+    const inB = new Uint32Array(MAX_PLAYERS);
     inB[0] = 2;
     for (let t = 0; t < 100; t++) {
       step(a, inA);
@@ -78,9 +78,9 @@ describe('déterminisme', () => {
   it('la relecture d un enregistrement redonne exactement le même état', () => {
     const w = createWorld(arena('test-tower'), 99);
     const gen = new InputGen(5);
-    const inputs = new Uint16Array(MAX_PLAYERS);
+    const inputs = new Uint32Array(MAX_PLAYERS);
     const rec: Recording = {
-      version: 3,
+      version: 4,
       arenaId: 'test-tower',
       seed: 99,
       tickHz: TICK_HZ,
@@ -129,7 +129,7 @@ describe('restauration d état (réconciliation)', () => {
     // Mouvements seulement : sans coups ni armes, rien ne vient d'un autre joueur.
     const full = createWorld(arena('test-flat'), 1);
     const gen = new InputGen(21);
-    const inputs = new Uint16Array(MAX_PLAYERS);
+    const inputs = new Uint32Array(MAX_PLAYERS);
     for (let s = 0; s < MAX_PLAYERS; s++) addPlayer(full, s);
     for (let t = 0; t < 500; t++) {
       gen.next(inputs);
@@ -142,7 +142,7 @@ describe('restauration d état (réconciliation)', () => {
     exportOwn(full, 3, own);
     setTick(client, full.tick);
     importOwn(client, 3, own);
-    const mine = new Uint16Array(MAX_PLAYERS);
+    const mine = new Uint32Array(MAX_PLAYERS);
     for (let t = 0; t < 2000; t++) {
       gen.next(inputs);
       for (let s = 0; s < MAX_PLAYERS; s++) inputs[s] = inputs[s] & 0x1f;
@@ -171,7 +171,7 @@ describe('restauration d état (réconciliation)', () => {
   it('avec des positions arrondies en 32 bits, l écart reste négligeable', () => {
     const full = createWorld(arena('test-flat'), 1);
     const gen = new InputGen(33);
-    const inputs = new Uint16Array(MAX_PLAYERS);
+    const inputs = new Uint32Array(MAX_PLAYERS);
     addPlayer(full, 0);
     for (let t = 0; t < 400; t++) {
       gen.next(inputs);
@@ -189,7 +189,7 @@ describe('restauration d état (réconciliation)', () => {
     let maxErr = 0;
     for (let t = 0; t < 600; t++) {
       gen.next(inputs);
-      const mine = new Uint16Array(MAX_PLAYERS);
+      const mine = new Uint32Array(MAX_PLAYERS);
       mine[0] = inputs[0]!;
       step(full, inputs);
       step(client, mine);

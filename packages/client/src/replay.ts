@@ -25,7 +25,7 @@ export async function startReplay(
   if (!res.ok) throw new Error(`enregistrement introuvable (${res.status})`);
   const rec = (await res.json()) as Recording;
   const arena = getArena(rec.arenaId);
-  if (rec.version !== 3 || !arena) throw new Error('enregistrement invalide');
+  if (rec.version !== 4 || !arena) throw new Error('enregistrement invalide');
   renderer.setArena(arena);
   const cursor = new ReplayCursor(rec, arena);
   let speed = 1;

@@ -40,7 +40,7 @@ function fail(msg: string): never {
 function replay(file: string): void {
   const rec = JSON.parse(readFileSync(file, 'utf8')) as Recording;
   const arena = getArena(rec.arenaId);
-  if (rec.version !== 3 || !arena) fail('enregistrement invalide');
+  if (rec.version !== 4 || !arena) fail('enregistrement invalide');
   const t0 = performance.now();
   const world = replayRecording(rec, arena);
   const ms = performance.now() - t0;
@@ -65,10 +65,10 @@ function replay(file: string): void {
 
 /** Entrées « réalistes » : appuis tenus plusieurs ticks. */
 class Bot {
-  private readonly cur = new Uint16Array(MAX_PLAYERS);
+  private readonly cur = new Uint32Array(MAX_PLAYERS);
   private readonly hold = new Int32Array(MAX_PLAYERS);
   constructor(private readonly rng: Rng) {}
-  next(out: Uint16Array, n: number): void {
+  next(out: Uint32Array, n: number): void {
     for (let s = 0; s < n; s++) {
       if (this.hold[s] <= 0) {
         this.hold[s] = 3 + this.rng.int(50);
@@ -92,8 +92,8 @@ function soak(arenaId: string, players: number, ticks: number, seed: number): vo
   }
   const botA = new Bot(new Rng(seed + 1));
   const botB = new Bot(new Rng(seed + 1));
-  const inA = new Uint16Array(MAX_PLAYERS);
-  const inB = new Uint16Array(MAX_PLAYERS);
+  const inA = new Uint32Array(MAX_PLAYERS);
+  const inB = new Uint32Array(MAX_PLAYERS);
 
   // Déterminisme : deux mondes, mêmes entrées, hash identique à chaque point de contrôle.
   let checkpoints = 0;
@@ -111,7 +111,7 @@ function soak(arenaId: string, players: number, ticks: number, seed: number): vo
   // Coût d'un pas : mesure par lots de 100 pas, sans allocation dans la boucle mesurée.
   const batches: number[] = [];
   const bot = new Bot(new Rng(seed + 2));
-  const inputs = new Uint16Array(MAX_PLAYERS);
+  const inputs = new Uint32Array(MAX_PLAYERS);
   const c = createWorld(arena, seed);
   for (let s = 0; s < players; s++) addPlayer(c, s);
   const gc = (globalThis as { gc?: () => void }).gc;
@@ -137,10 +137,10 @@ function soak(arenaId: string, players: number, ticks: number, seed: number): vo
 
 /** Entrées de combat : déplacements, sauts, coups, parades, ramassages (appuis tenus). */
 class FightBot {
-  private readonly cur = new Uint16Array(MAX_PLAYERS);
+  private readonly cur = new Uint32Array(MAX_PLAYERS);
   private readonly hold = new Int32Array(MAX_PLAYERS);
   constructor(private readonly rng: Rng) {}
-  next(out: Uint16Array, n: number): void {
+  next(out: Uint32Array, n: number): void {
     for (let s = 0; s < n; s++) {
       if (this.hold[s] <= 0) {
         this.hold[s] = 3 + this.rng.int(40);
@@ -188,8 +188,8 @@ function matchSoak(players: number, ticks: number, seed: number): void {
   const b = make();
   const botA = new FightBot(new Rng(seed + 1));
   const botB = new FightBot(new Rng(seed + 1));
-  const inA = new Uint16Array(MAX_PLAYERS);
-  const inB = new Uint16Array(MAX_PLAYERS);
+  const inA = new Uint32Array(MAX_PLAYERS);
+  const inB = new Uint32Array(MAX_PLAYERS);
   let checkpoints = 0;
   let matches = 0;
   for (let t = 1; t <= ticks; t++) {
@@ -210,7 +210,7 @@ function matchSoak(players: number, ticks: number, seed: number): void {
 
   const batches: number[] = [];
   const bot = new FightBot(new Rng(seed + 2));
-  const inputs = new Uint16Array(MAX_PLAYERS);
+  const inputs = new Uint32Array(MAX_PLAYERS);
   const c = make();
   const gc = (globalThis as { gc?: () => void }).gc;
   gc?.();
