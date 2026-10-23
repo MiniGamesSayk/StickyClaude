@@ -445,7 +445,7 @@ Les blocs ont été ajoutés au dépôt ClaudeGame le 22/10/2026 ; ils restent d
 - **Alternatives.** Masque 32 bits (touche tous les tampons et enregistrements, voir D-visée) ; combo de boutons existants (ambigu).
 - **À valider.** Équilibre du dash, et la précision de la compensation à 4 ticks (à mesurer avec `loadtest`).
 
-### D71. Correctifs de jeu : manette, sauts, charge, esquive, armes, salons
+### D73. Correctifs de jeu : manette, sauts, charge, esquive, armes, salons
 
 - **Entrées collées en parade.** Deux causes corrigées côté client : le relâchement du bouton de souris n'était pris en compte que sur le canvas (si l'écran de fin ou un menu le recouvrait pendant l'appui, parade/attaque restaient collées) ; il l'est maintenant partout (et sur `pointercancel`). À la manette, les boutons d'action sont « armés » seulement une fois vus relâchés (`GamepadInput.disarm`, appelé tant que le jeu n'est pas actif) : un A ou B tenu depuis les menus, ou une gâchette qui lit « pressée » au repos, ne fuit plus en partie. Les gâchettes exigent aussi une valeur > 0,5.
 - **Double saut** : même vitesse que le premier saut (`doubleJumpSpeed` = `jumpSpeed`) et plus de coupure au relâchement (enchaîner deux appuis très vite ne donne plus un saut court). **S'accrocher à un mur** (contact en l'air ou saut mural) rend le double saut.

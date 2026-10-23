@@ -136,7 +136,7 @@ Modes bonus v1 :
 
 ### 1.7 Salons et parcours
 
-- **Créer un salon** : code de 5 caractères tirés d'un alphabet sans caractères ambigus (pas de `0/O`, `1/I/L`), et lien `https://stickyclaude.sayk.fr/?salon=CODE`. Public par défaut (D71) ; l'hôte peut le rendre privé.
+- **Créer un salon** : code de 5 caractères tirés d'un alphabet sans caractères ambigus (pas de `0/O`, `1/I/L`), et lien `https://stickyclaude.sayk.fr/?salon=CODE`. Public par défaut (D73) ; l'hôte peut le rendre privé.
 - **Rejoindre** : par code, par lien ou depuis la **liste des salons publics** (nom, nombre de joueurs, mode, en jeu ou en attente). La liste se met à jour toutes les 3 s.
 - **Partie rapide** : place le joueur dans le salon public le plus rempli qui n'est pas plein (de préférence en attente), sinon crée un salon public avec les réglages par défaut. Un salon public en attente se lance tout seul 20 s après que 2 joueurs ou plus sont prêts.
 - **Capacité** : 8 joueurs + 4 spectateurs. Au-delà, le salon est plein.
