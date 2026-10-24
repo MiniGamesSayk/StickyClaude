@@ -7,7 +7,10 @@ export const TICK_HZ = 60;
 export const TICK_MS = 1000 / TICK_HZ;
 export const DT = 1 / TICK_HZ;
 
-/** Fréquence d'envoi des snapshots par défaut (réglable entre 20 et 60 côté serveur). */
+/**
+ * Fréquence d'envoi des snapshots par défaut (réglable de 10 à 60 côté serveur). 60 réduirait
+ * l'interpolation à ≈ 50 ms, mais dépasse le budget de débit en combat à 8 (voir D79).
+ */
 export const SNAPSHOT_HZ_DEFAULT = 30;
 
 /** Grille de terrain : 64 × 36 cellules de 16 unités (ratio 16:9). */
@@ -56,13 +59,13 @@ export const MARGIN_TARGET = 2;
 /**
  * Compensation de latence : historique des positions conservé côté serveur. L'analyse prévoit
  * 200 ms ; les entrées étant étiquetées dans le futur (voir DECISIONS.md), la durée à remonter est
- * 2 × latence aller + avance + interpolation. Le retard voyage sur 2 bits du masque, par pas de
- * 4 ticks (`REWIND_STEP`) : au plus 12 ticks, soit 200 ms.
+ * 2 × latence aller + avance + interpolation. Le retard voyage sur 5 bits du masque, au tick
+ * près : au plus 18 ticks, soit 300 ms (un aller-retour de 200 ms avec 50 ms d'interpolation).
  */
-export const LAG_COMP_MS = 200;
-export const LAG_COMP_TICKS = 12;
+export const LAG_COMP_MS = 300;
+export const LAG_COMP_TICKS = 18;
 /** Taille de l'anneau d'historique (puissance de 2 > LAG_COMP_TICKS). */
-export const HISTORY_TICKS = 16;
+export const HISTORY_TICKS = 32;
 
 /** Reconnexion : un joueur déconnecté garde sa place pendant ce délai. */
 export const RECONNECT_GRACE_MS = 20_000;

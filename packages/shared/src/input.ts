@@ -1,10 +1,12 @@
+import { LAG_COMP_TICKS } from './constants.ts';
+
 /**
- * Masque d'entrées. Le client en envoie 15 bits (un u16 sur le fil) ; la simulation en lit 18.
+ * Masque d'entrées. Le client en envoie 15 bits (un u16 sur le fil) ; la simulation en lit 21.
  *
  * Bits 0 à 7 : boutons. Bits 8 à 11 : secteur de visée (0 à 15), bit 12 : visée explicite (souris,
- * joystick), bit 13 : dash, bit 14 : attaque spéciale (clic droit). `BLOCK` (bit 6) est un état et
- * non une impulsion : « mode défense » tenu tant qu'il est actif (le client le bascule). Bits 16 et
- * 17 : retard de compensation de latence (par pas de `REWIND_STEP` ticks), ajouté par le
+ * joystick), bit 13 : dash, bit 14 : attaque spéciale (clic droit). `BLOCK` (bit 6) est tenu tant
+ * que le joueur garde la parade (bouton maintenu). Bits 16 à
+ * 20 : retard de compensation de latence (par pas de `REWIND_STEP` ticks), ajouté par le
  * **serveur** avant d'appeler `step` (jamais lu depuis le réseau : le masque reçu est filtré par
  * `INPUT_MASK_USED`). Les tampons d'entrées de la simulation sont donc des `Uint32Array`.
  */
@@ -28,15 +30,19 @@ export const INPUT_MASK_USED = 0x7fff;
 export const AIM_SHIFT = 8;
 export const AIM_SET = 1 << 12;
 
-/** Position du retard de compensation de latence dans le masque : 2 bits, par pas de 4 ticks. */
+/**
+ * Position du retard de compensation de latence dans le masque : 5 bits (16 à 20), au tick près.
+ * Les tampons de la simulation sont des `Uint32Array` : la place ne manque plus.
+ */
 export const REWIND_SHIFT = 16;
-export const REWIND_MASK = 3;
-export const REWIND_STEP = 4;
+export const REWIND_MASK = 31;
+export const REWIND_STEP = 1;
 
-/** Retard en ticks (0 à 12, arrondi au pas de 4) rangé dans les bits 16 et 17. */
+/** Retard en ticks (0 à `LAG_COMP_TICKS`) rangé dans les bits 16 à 20. */
 export function withRewind(mask: number, rewindTicks: number): number {
   const q = Math.round(rewindTicks / REWIND_STEP);
-  const r = q < 0 ? 0 : q > REWIND_MASK ? REWIND_MASK : q;
+  const max = Math.floor(LAG_COMP_TICKS / REWIND_STEP);
+  const r = q < 0 ? 0 : q > max ? max : q;
   return (mask & INPUT_MASK_USED) | (r << REWIND_SHIFT);
 }
 

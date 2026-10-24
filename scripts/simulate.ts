@@ -40,7 +40,7 @@ function fail(msg: string): never {
 function replay(file: string): void {
   const rec = JSON.parse(readFileSync(file, 'utf8')) as Recording;
   const arena = getArena(rec.arenaId);
-  if (rec.version !== 4 || !arena) fail('enregistrement invalide');
+  if (rec.version !== 5 || !arena) fail('enregistrement invalide');
   const t0 = performance.now();
   const world = replayRecording(rec, arena);
   const ms = performance.now() - t0;

@@ -35,11 +35,11 @@ export type RecordOp =
  *   le tick `tick + 1`), dans l'ordre.
  * - `tunes` : à partir du tick `tick` (avant le pas suivant), la constante change de valeur.
  * - `inputs` : `[tick, slot, masque]` = à partir du pas qui produit le tick `tick`, ce joueur
- *   applique ce masque (jusqu'au changement suivant). Les bits 13 à 15 portent la compensation
- *   de latence.
+ *   applique ce masque (jusqu'au changement suivant). Les bits 16 à 20 portent la compensation
+ *   de latence, au tick près (version 5 ; la version 4 la rangeait sur 2 bits par pas de 4 ticks).
  */
 export interface Recording {
-  version: 4;
+  version: 5;
   /** Arène du salon d'attente. */
   arenaId: string;
   seed: number;

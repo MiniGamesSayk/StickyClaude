@@ -305,10 +305,11 @@ describe('fréquence des snapshots', () => {
 });
 
 describe('compensation de latence', () => {
-  it('le plafond annoncé est celui que le masque d’entrées peut porter (12 ticks)', () => {
-    expect(LAG_COMP_TICKS).toBe(REWIND_MASK * REWIND_STEP);
-    expect(Room.rewindFromWire(255)).toBe(12);
-    expect(rewindOf(withRewind(0, 15))).toBe(12);
-    expect(rewindOf(withRewind(0, 100))).toBe(12);
+  it('le plafond annoncé (18 ticks) tient dans le masque d’entrées, au tick près', () => {
+    expect(LAG_COMP_TICKS).toBe(18);
+    expect(LAG_COMP_TICKS).toBeLessThanOrEqual(REWIND_MASK * REWIND_STEP);
+    expect(Room.rewindFromWire(255)).toBe(18);
+    expect(rewindOf(withRewind(0, 15))).toBe(15);
+    expect(rewindOf(withRewind(0, 100))).toBe(18);
   });
 });

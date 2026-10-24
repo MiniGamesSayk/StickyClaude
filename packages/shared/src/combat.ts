@@ -34,18 +34,15 @@ export const COMBAT = {
   comboWindowTicks: 18,
   /** Charge de l'attaque spéciale (clic droit tenu) : durée de la charge pleine. */
   chargeMaxTicks: 54,
-  /** Parade : part des dégâts subis du côté gardé, et des projections. */
+  /** Parade : part des dégâts subis de face, et des projections. */
   blockDamageTaken: 0.3,
   blockKnockbackMul: 0.4,
   /**
-   * Parade orientée : un coup est paré s'il vient du côté de la garde (la visée), à moins de
-   * ≈ 72° de sa direction : produit scalaire minimal entre la garde et la direction du coup.
-   */
-  guardMinDot: 0.31,
-  /**
    * Parade : elle n'encaisse qu'un seul coup (puis elle retombe), l'attaquant dont le coup de
    * mêlée est paré est étourdi 0,4 s, et il faut attendre 0,5 s avant de parer de nouveau.
-   * Parade parfaite : fenêtre après l'appui, pendant laquelle le coup n'inflige rien.
+   * Parade parfaite : fenêtre après l'appui, pendant laquelle le coup n'inflige rien. Une garde
+   * relevée sans nouvel appui (bouton resté tenu après une recharge, ou pendant un coup) n'y a pas
+   * droit.
    */
   perfectParryTicks: 6,
   parryStunTicks: 24,

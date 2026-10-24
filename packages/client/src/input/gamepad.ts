@@ -1,7 +1,6 @@
 import { Input } from '@stickyclaude/shared';
 import { DEFAULT_PAD_BINDINGS, PAD_ACTIONS, padButtonReserved } from '../app/options.ts';
 import type { PadAction, PadBindings } from '../app/options.ts';
-import { toggleDefense } from './defense.ts';
 
 const DEADZONE = 0.35;
 const PAD_BIT: Record<PadAction, number> = {
@@ -50,8 +49,6 @@ export class GamepadInput {
   private navDir = 0;
   private navRepeating = false;
   private prevButtons = 0;
-  /** Le bouton de défense était déjà enfoncé à l'échantillon précédent (il bascule le mode). */
-  private blockHeld = false;
   /**
    * Boutons d'action « armés » : vus relâchés depuis la dernière remise à zéro. Un bouton resté
    * enfoncé depuis les menus (A, B) ou qui ment (gâchette qui lit « pressée » au repos) est ignoré
@@ -135,12 +132,7 @@ export class GamepadInput {
     }
     if (pads.length === 0) this.armed = 0;
     this.armed |= ~m & ACTIONS;
-    // La défense est un mode : l'appui bascule, il ne se tient pas (un bouton tenu depuis un menu
-    // ne bascule rien tant qu'il n'a pas été relâché, comme les autres actions).
-    const blockNow = (m & Input.BLOCK) !== 0;
-    if (blockNow && !this.blockHeld && (this.armed & Input.BLOCK) !== 0) toggleDefense();
-    this.blockHeld = blockNow;
-    return (m & ~ACTIONS & ~Input.BLOCK) | (m & this.armed & ~Input.BLOCK);
+    return (m & ~ACTIONS) | (m & this.armed);
   }
 
   /**

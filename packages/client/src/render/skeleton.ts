@@ -467,18 +467,17 @@ export class Rig {
         }
         break;
       }
-      case PlayerState.BLOCK: {
-        // la garde se tend dans la direction de la visée (devant, au-dessus, en dessous, derrière)
-        const gx = p.aimX;
-        const gy = p.aimY;
-        raw[T_LEAN] = -0.06 + 0.12 * gx;
-        set(raw, T_PEL, 0, -10.6);
-        set(raw, T_FTL, -4.2, 0);
+      case PlayerState.BLOCK:
+        // garde de boxeur : les deux avant-bras devant le visage et le torse, du côté où l'on
+        // regarde, appuis écartés ; la garde se lève d'un coup (voir `snappy`)
+        snappy = true;
+        raw[T_LEAN] = -0.04;
+        set(raw, T_PEL, -0.4, -10.4);
+        set(raw, T_FTL, -4.4, 0);
         set(raw, T_FTR, 4.8, 0);
-        set(raw, T_HNR, 1.5 + gx * 12 - gy * 2.5, -17 + gy * 12 + gx * 2.5);
-        set(raw, T_HNL, 1.5 + gx * 8 + gy * 2.5, -17 + gy * 8 - gx * 2.5);
+        set(raw, T_HNR, 8.2, -20.4);
+        set(raw, T_HNL, 7.6, -16.4);
         break;
-      }
       case PlayerState.STUN:
         raw[T_LEAN] = 0.2;
         set(raw, T_PEL, 0, -10.8);
@@ -521,9 +520,12 @@ export class Rig {
     if (p.victory > 0) this.victoryPose(raw, p);
     else if (p.emote > 0 && calm) this.emotePose(raw, p);
 
-    // Mélange (exponentiel) vers la pose cible : 80 à 120 ms, plus sec pendant un coup.
+    // Mélange (exponentiel) vers la pose cible : 80 à 120 ms, plus sec pendant un coup. Les images
+    // actives d'un coup ne sont pas mélangées du tout : elles ne durent que 2 à 4 ticks, et un
+    // mélange les mangerait (le poing n'arriverait jamais au bout).
     const tau = snappy ? 0.018 : 0.04;
-    const k = this.ready ? 1 - Math.exp(-p.dtS / tau) : 1;
+    const strike = p.state === PlayerState.ATTACK && phase === AtkPhase.ACTIVE;
+    const k = this.ready && !strike ? 1 - Math.exp(-p.dtS / tau) : 1;
     const base = this.base;
     for (let i = 0; i < NT; i++) base[i] += (raw[i] - base[i]) * k;
     this.ready = true;

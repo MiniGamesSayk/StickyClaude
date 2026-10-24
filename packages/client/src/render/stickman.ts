@@ -1,6 +1,8 @@
 import {
   AIM_DX,
   AIM_DY,
+  AtkPhase,
+  AttackKind,
   Cell,
   CELL,
   GRID_H,
@@ -90,6 +92,54 @@ function footDrop(cells: Uint8Array, wx: number, wy: number): number {
 }
 
 /** Segment entre deux points du squelette (indices a et b), sans bouts : ils sont posés aux jointures. */
+/**
+ * Traînée d'un coup à mains nues : pendant les images actives, trois traits de vitesse derrière le
+ * poing qui frappe, dans l'axe épaule → poing (le geste se lit même s'il ne dure que 2 ticks).
+ */
+function swingLines(
+  pen: Pen,
+  p: DrawPlayer,
+  w: Float32Array,
+  ink: number,
+  alpha: number,
+  style: number,
+  wd: number,
+): void {
+  if (p.state !== PlayerState.ATTACK) return;
+  const kind = p.variant & 15;
+  if (((p.variant >> 4) & 3) !== AtkPhase.ACTIVE) return;
+  if (
+    kind === AttackKind.NONE ||
+    kind === AttackKind.WEAPON ||
+    kind === AttackKind.SHOOT ||
+    kind === AttackKind.THROW ||
+    kind === AttackKind.BASH
+  ) {
+    return;
+  }
+  const hand = kind === AttackKind.FIST2 ? J.HNL : J.HNR;
+  const sh = kind === AttackKind.FIST2 ? J.SHL : J.SHR;
+  const hx = w[hand * 2];
+  const hy = w[hand * 2 + 1];
+  let dx = hx - w[sh * 2];
+  let dy = hy - w[sh * 2 + 1];
+  const len = Math.hypot(dx, dy);
+  if (len < 3) return;
+  dx /= len;
+  dy /= len;
+  const nx = -dy;
+  const ny = dx;
+  const big = kind === AttackKind.FIST3 || kind === AttackKind.CHARGED;
+  const tail = big ? 13 : 9;
+  for (let i = -1; i <= 1; i++) {
+    const off = i * 2.2;
+    const l = tail * (i === 0 ? 1 : 0.7);
+    const x1 = hx - dx * 3 + nx * off;
+    const y1 = hy - dy * 3 + ny * off;
+    pen.seg(x1 - dx * l, y1 - dy * l, x1, y1, wd * 0.45, ink, alpha * 0.55, style);
+  }
+}
+
 function seg(
   pen: Pen,
   w: Float32Array,
@@ -256,6 +306,7 @@ export class StickmanPainter {
     if (p.self && !mannequin) pen.glow(ox, oy - 13, 25, ink, 0.26);
 
     this.paintBody(pen, v, p, w, ink, alpha, style, wd, env);
+    if (!env.reducedMotion) swingLines(pen, p, w, ink, alpha, style, wd);
     this.headTopY = w[J.HEAD * 2 + 1] - BODY.headR - 2;
     this.headX = w[J.HEAD * 2];
     v.topY = this.headTopY;

@@ -22,6 +22,8 @@ export interface MovementParams {
   // Verticalité
   gravity: number;
   maxFallSpeed: number;
+  /** Gravité multipliée par ce facteur dans la descente : le saut monte comme avant, retombe plus sec. */
+  fallGravityMul: number;
   fastFallGravityMul: number;
   fastFallSpeed: number;
   jumpSpeed: number;
@@ -61,10 +63,11 @@ export const DEFAULT_MOVEMENT: Readonly<MovementParams> = {
   groundTurnAccel: 3400,
   groundDecel: 2600,
   airAccel: 1100,
-  airDecel: 350,
+  airDecel: 900, // lâcher la direction en l'air arrête la dérive en ≈ 0,2 s
 
   gravity: 1250,
   maxFallSpeed: 620,
+  fallGravityMul: 1.4,
   fastFallGravityMul: 1.8,
   fastFallSpeed: 820,
   jumpSpeed: 395, // ≈ 3,9 cellules de haut
@@ -75,7 +78,7 @@ export const DEFAULT_MOVEMENT: Readonly<MovementParams> = {
 
   wallSlideSpeed: 90,
   wallJumpSpeedX: 120,
-  wallJumpSpeedY: 375,
+  wallJumpSpeedY: 400, // compense la gravité en descente : le puits de 4 cases se monte comme avant
   wallLockTicks: 5,
   wallCoyoteTicks: 5,
 
@@ -114,6 +117,7 @@ export const MOVEMENT_TUNING: Readonly<Record<MovementKey, TuningMeta>> = {
   airDecel: { label: 'Décélération air', min: 0, max: 3000, step: 10 },
   gravity: { label: 'Gravité', min: 300, max: 4000, step: 10 },
   maxFallSpeed: { label: 'Vitesse de chute max', min: 200, max: 1200, step: 5 },
+  fallGravityMul: { label: 'Gravité en descente (×)', min: 1, max: 3, step: 0.05 },
   fastFallGravityMul: { label: 'Chute rapide (×gravité)', min: 1, max: 4, step: 0.05 },
   fastFallSpeed: { label: 'Chute rapide max', min: 300, max: 1500, step: 5 },
   jumpSpeed: { label: 'Saut', min: 150, max: 700, step: 1 },

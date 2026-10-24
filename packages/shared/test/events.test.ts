@@ -25,6 +25,8 @@ import {
   rewindOf,
   withAim,
   withRewind,
+  INPUT_MASK_USED,
+  LAG_COMP_TICKS,
   aimFromInput,
   Input,
 } from '../src/index.ts';
@@ -99,12 +101,12 @@ describe('événements réseau génériques', () => {
 });
 
 describe('compensation de latence dans le masque', () => {
-  it('les bits 13 à 15 portent le retard (pas de 2 ticks), boutons et visée restent intacts', () => {
+  it('les bits 16 à 20 portent le retard au tick près, boutons et visée restent intacts', () => {
     const m = withRewind(0xffff, 9);
-    expect(rewindOf(m)).toBe(8);
-    expect(m & 0x3fff).toBe(0x3fff);
+    expect(rewindOf(m)).toBe(9);
+    expect(m & INPUT_MASK_USED).toBe(INPUT_MASK_USED);
     expect(rewindOf(withRewind(0, 8))).toBe(8);
-    expect(rewindOf(withRewind(0, 99))).toBe(12);
+    expect(rewindOf(withRewind(0, 99))).toBe(LAG_COMP_TICKS);
     expect(rewindOf(withRewind(0, -4))).toBe(0);
   });
 

@@ -133,15 +133,31 @@ describe('Rig', () => {
     const r = new Rig();
     const p = createPoseInput();
     run(r, p, 0.3);
-    p.state = PlayerState.BLOCK;
-    p.animProg = 10;
+    p.state = PlayerState.JUMP;
+    p.grounded = false;
     run(r, p, 0.1);
-    const early = pt(r, J.HNR)[0];
+    const early = pt(r, J.HNR)[1];
     run(r, p, 0.4);
-    const late = pt(r, J.HNR)[0];
-    expect(late).toBeGreaterThan(11);
+    const late = pt(r, J.HNR)[1];
+    expect(late).toBeLessThan(-20);
     // à 100 ms, on a parcouru l'essentiel du chemin
     expect(Math.abs(early - late)).toBeLessThan(2.5);
+  });
+
+  it('parade : les deux mains devant, quelle que soit la visée, et la garde se lève d’un coup', () => {
+    const r = new Rig();
+    const p = createPoseInput();
+    run(r, p, 0.3);
+    p.state = PlayerState.BLOCK;
+    p.animProg = 1;
+    p.aimX = 0;
+    p.aimY = 1; // visée vers le bas : sans effet
+    run(r, p, 0.05);
+    for (const j of [J.HNR, J.HNL]) {
+      const [x, y] = pt(r, j);
+      expect(x).toBeGreaterThan(3);
+      expect(y).toBeLessThan(-15);
+    }
   });
 
   it('une arme à feu pointe dans la direction de visée, tenue à deux mains', () => {

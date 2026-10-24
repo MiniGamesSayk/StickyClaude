@@ -506,10 +506,17 @@ export class Renderer {
   }
 
   /** Un événement de la simulation à illustrer. */
-  addEvent(e: GameEvent): void {
+  addEvent(e: GameEvent, confirmed = false): void {
     this.fxEnv.nowMs = this.nowMs || performance.now();
     this.fxEnv.reducedMotion = this.options.reducedMotion;
-    this.fx.add(e, this.fxEnv);
+    this.fx.add(e, this.fxEnv, confirmed);
+  }
+
+  /** Impact d'un coup de `attacker` confirmé à l'écran avant le serveur (voir `FxSystem.confirm`). */
+  hitConfirm(attacker: number, victim: number, x: number, y: number, heavy: boolean): void {
+    this.fxEnv.nowMs = this.nowMs || performance.now();
+    this.fxEnv.reducedMotion = this.options.reducedMotion;
+    this.fx.confirm(attacker, victim, x, y, heavy, this.fxEnv);
   }
 
   private hooks(): FxHooks {

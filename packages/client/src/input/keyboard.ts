@@ -1,7 +1,6 @@
 import { Input } from '@stickyclaude/shared';
 import type { Action, Bindings } from '../app/options.ts';
 import { ACTIONS, DEFAULT_BINDINGS, mouseButtonOf, mouseCode } from '../app/options.ts';
-import { toggleDefense } from './defense.ts';
 
 const BIT: Record<Action, number> = {
   left: Input.LEFT,
@@ -146,7 +145,7 @@ export class KeyboardInput {
     const bit = this.keymap.get(mouseCode(e.button)) ?? 0;
     if (bit === 0 || mouseButtonOf(mouseCode(e.button)) < 0) return;
     // Un relâchement compte partout : si l'écran de fin ou un menu recouvre le canvas pendant que
-    // le bouton est tenu, il ne doit pas rester collé. Le mode défense, lui, se bascule à l'appui.
+    // le bouton est tenu, il ne doit pas rester collé.
     if (!down) {
       this.mouse &= ~bit;
       return;
@@ -156,11 +155,8 @@ export class KeyboardInput {
     this.mouseY = e.clientY;
     this.mouseSeen = true;
     if (this.on) {
-      if (bit === Input.BLOCK) toggleDefense();
-      else {
-        this.mouse |= bit;
-        this.edges |= bit;
-      }
+      this.mouse |= bit;
+      this.edges |= bit;
     }
   }
 
@@ -192,13 +188,8 @@ export class KeyboardInput {
     if (bit === undefined) return;
     e.preventDefault();
     if (!down) return;
-    if (bit === Input.BLOCK) {
-      // la parade est un mode qu'on bascule, pas une touche qu'on tient
-      if (!e.repeat) toggleDefense();
-    } else {
-      this.held |= bit;
-      this.edges |= bit;
-    }
+    this.held |= bit;
+    this.edges |= bit;
   }
 
   /** État des touches, y compris un appui plus court qu'un tick. */

@@ -16,7 +16,7 @@ import type { Player, World } from './world.ts';
  * aucun `Math.random` : le même état et les mêmes entrées donnent toujours le même résultat.
  *
  * `inputs[slot]` est le masque d'entrées de ce tick pour chaque emplacement (voir `Input`) ; les
- * bits 12 à 15 portent le retard de compensation de latence, ajouté par le serveur. Les
+ * bits 16 à 20 portent le retard de compensation de latence, ajouté par le serveur. Les
  * événements du pas sont dans `world.events` (remis à zéro au début de chaque pas).
  *
  * Deux passes. Passe 1 (tous les mondes) : mouvement et machine à états des actions de chaque

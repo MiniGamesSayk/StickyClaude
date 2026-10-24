@@ -10,7 +10,7 @@ Ce document décrit le protocole réseau **tel qu'il est implémenté** (version
   - **Passe 2** (`world.auth`, serveur seulement) : résolution des coups et des tirs, objets, projectiles, explosions, terrain, règles de manche et de partie. Le client la reçoit : PV, projections, étourdissements, ramassages et éliminations arrivent par le bloc « own » et les événements fiables.
 - **Entrées étiquetées par tick.** Chaque entrée porte le numéro du tick serveur où elle doit s'exécuter. Le client se cale sur l'horloge du serveur et vise un tick _légèrement dans le futur_ : l'entrée arrive juste avant d'être consommée.
 - **Prédiction + réconciliation.** Le client simule son propre stickman (mouvement, attaque, parade, charge, munitions) avec la même fonction. À chaque snapshot, il compare sa prédiction à l'état exact du serveur ; en cas d'écart il restaure cet état et rejoue ses entrées.
-- **Interpolation.** Les autres joueurs, les objets et les projectiles sont affichés dans le passé (latence + 100 à 300 ms), interpolés entre deux snapshots.
+- **Interpolation.** Les autres joueurs, les objets et les projectiles sont affichés dans le passé (latence + 50 à 300 ms), interpolés entre deux snapshots ; leur animation avance au tick près entre deux snapshots (`sampleAnim`).
 - **Compensation de latence** de la mêlée et des tirs instantanés (§7).
 - **WebSocket (TCP), messages binaires** pour le jeu, `permessage-deflate` désactivé. Les messages de salon sont en JSON validé par zod.
 
@@ -74,24 +74,24 @@ Tout est en **little-endian**. Le premier octet est toujours le type. Client →
 
 ### Masque d'entrées (u16 sur le fil, 32 bits dans la simulation)
 
-| Bit   | Valeur   | Action                                                                                                     |
-| ----- | -------- | ---------------------------------------------------------------------------------------------------------- |
-| 0     | `0x01`   | gauche                                                                                                     |
-| 1     | `0x02`   | droite                                                                                                     |
-| 2     | `0x04`   | haut (visée)                                                                                               |
-| 3     | `0x08`   | bas (accroupi, chute rapide, traversée, tacle et coups vers le bas, lâcher avec `ramasser`)                |
-| 4     | `0x10`   | saut                                                                                                       |
-| 5     | `0x20`   | attaque (coup léger selon la direction tenue, immédiat ; tir en continu avec une arme à tir)               |
-| 6     | `0x40`   | mode défense (niveau, émis à chaque image tant que le mode est actif ; sans effet avec une arme)           |
-| 7     | `0x80`   | ramasser / lancer                                                                                          |
-| 8–11  |          | secteur de visée explicite (0 à 15), valable si le bit 12 est levé                                         |
-| 12    | `0x1000` | drapeau de visée explicite (souris, joystick) ; sinon la visée se déduit des directions                    |
-| 13    | `0x2000` | dash                                                                                                       |
-| 14    | `0x4000` | spécial (clic droit : chargeable au sol, ruée invulnérable en l'air)                                       |
-| 15    |          | réservé (filtré par le serveur)                                                                            |
-| 16–17 |          | retard de compensation de latence, en pas de 4 ticks (0 à 3, soit 0 à 12 ticks), **ajouté par le serveur** |
+| Bit   | Valeur   | Action                                                                                       |
+| ----- | -------- | -------------------------------------------------------------------------------------------- |
+| 0     | `0x01`   | gauche                                                                                       |
+| 1     | `0x02`   | droite                                                                                       |
+| 2     | `0x04`   | haut (visée)                                                                                 |
+| 3     | `0x08`   | bas (accroupi, chute rapide, traversée, tacle et coups vers le bas, lâcher avec `ramasser`)  |
+| 4     | `0x10`   | saut                                                                                         |
+| 5     | `0x20`   | attaque (coup léger selon la direction tenue, immédiat ; tir en continu avec une arme à tir) |
+| 6     | `0x40`   | parade (tenue tant que le bouton est maintenu ; sans effet avec une arme)                    |
+| 7     | `0x80`   | ramasser / lancer                                                                            |
+| 8–11  |          | secteur de visée explicite (0 à 15), valable si le bit 12 est levé                           |
+| 12    | `0x1000` | drapeau de visée explicite (souris, joystick) ; sinon la visée se déduit des directions      |
+| 13    | `0x2000` | dash                                                                                         |
+| 14    | `0x4000` | spécial (clic droit : chargeable au sol, ruée invulnérable en l'air)                         |
+| 15    |          | réservé (filtré par le serveur)                                                              |
+| 16–20 |          | retard de compensation de latence, au tick près (0 à 18 ticks), **ajouté par le serveur**    |
 
-Le serveur ne lit que les 15 bits de poids faible d'un paquet (`INPUT_MASK_USED` = `0x7fff`) ; le retard de compensation est ajouté par lui aux bits 16 et 17, ce qui a obligé la simulation à passer ses tampons d'entrées en `Uint32Array` (protocole 5, enregistrements en version 4) : un client ne peut pas se donner une compensation de latence qu'il n'a pas. Le curseur du fantôme-crayon utilise les mêmes bits (directions pour le déplacer, attaque pour poser un trait, parade pour une goutte d'encre).
+Le serveur ne lit que les 15 bits de poids faible d'un paquet (`INPUT_MASK_USED` = `0x7fff`) ; le retard de compensation est ajouté par lui aux bits 16 à 20, ce qui a obligé la simulation à passer ses tampons d'entrées en `Uint32Array` (protocole 5 ; enregistrements en version 5 depuis D79) : un client ne peut pas se donner une compensation de latence qu'il n'a pas. Le curseur du fantôme-crayon utilise les mêmes bits (directions pour le déplacer, attaque pour poser un trait, parade pour une goutte d'encre).
 
 ### `INPUT` (client → serveur) : 9 à 15 octets
 
@@ -217,7 +217,7 @@ Chaque argument est `p` (position, i16 au 1/8 d'unité), `i` (i16) ou `u` (u16) 
 
 Les événements de mouvement (`JUMP`, `DOUBLE_JUMP`, `WALL_JUMP`, `LAND`, `DROP_THROUGH`, `DASH`) et le début d'un coup (`SWING`) **ne sont jamais transmis** : le client les recalcule pour son propre joueur (sons et effets immédiats) ; ceux des autres se déduisent de leur état d'animation. `ROUND_START`, `ROUND_END` et `MATCH_END` restent dans le salon, qui les annonce en JSON.
 
-Les événements qui **changent le monde** sont appliqués par le client à son propre monde dès leur réception, par les mêmes fonctions entières que le serveur : `TERRAIN` (`destroyCircle`), `GHOST_DRAW` (`placeMark` : l'expiration est `tick de pose + durée`, donc identique), `PUDDLE`. Les autres ne servent qu'aux effets : ils sont rejoués à l'écran quand le tick de leur snapshot est atteint par l'interpolation (≈ 100 à 300 ms après leur réception), pour rester synchrones avec ce que l'on voit des autres joueurs.
+Les événements qui **changent le monde** sont appliqués par le client à son propre monde dès leur réception, par les mêmes fonctions entières que le serveur : `TERRAIN` (`destroyCircle`), `GHOST_DRAW` (`placeMark` : l'expiration est `tick de pose + durée`, donc identique), `PUDDLE`. Les autres ne servent qu'aux effets : ils sont rejoués à l'écran quand le tick de leur snapshot est atteint par l'interpolation (≈ 50 à 300 ms après leur réception), pour rester synchrones avec ce que l'on voit des autres joueurs. **Exception : ses propres coups de mêlée.** Le client compare la zone de frappe de son coup prédit (`meleeHitBox`) aux autres joueurs tels qu'il les affiche ; s'ils se touchent, l'étincelle, le son et le hit-stop sont joués tout de suite (`onHitConfirm`), et l'événement `HIT` du serveur qui suit (même cible, moins de 900 ms) ne les rejoue pas : il n'ajoute que les dégâts, les traits d'impact et la projection. Sans cela, l'impact arrivait ≈ RTT + avance + interpolation après le geste.
 
 Taille à 8 joueurs en combat : 17 (en-tête) + 8 × 18 (joueurs) + 74 (`own`) = **235 octets** de base, auxquels s'ajoutent 13 octets par objet ou projectile et 4 à 17 par événement : **≈ 280 octets** en pratique, soit **8,4 Ko/s** par client à 30 Hz avec les messages de salon (mesuré, §10). Maximum théorique `SNAPSHOT_MAX_BYTES` = 17 + 8 × 18 + 32 × 13 + 64 × 13 + 8 × 2 + 74 + 24 × 20 = **1 979 octets** (32 objets, 64 projectiles, 8 données de mode, 24 événements de 16 octets de charge).
 
@@ -266,8 +266,8 @@ Serveur → client (`packages/shared/src/messages.ts`) :
 | Snapshots serveur → client            | 30 Hz par client (`SNAPSHOT_HZ` : 10, 12, 15, 20, 30 ou 60, les diviseurs de 60 ; toute autre valeur est ramenée à la plus proche), **décalés d'un tick d'un client à l'autre** du salon |
 | Marge visée de l'entrée               | 1 à 4 ticks (cible 2), avance client adaptative de 1 à 30 ticks                                                                                                                          |
 | Fenêtre d'entrées acceptées           | de `world.tick + 1` à `+ 24` ticks ; anneau de 64 entrées par joueur                                                                                                                     |
-| Compensation de latence               | historique de 16 ticks ; au plus 12 ticks (200 ms) remontés ; `rewind` = RTT + avance + interpolation                                                                                    |
-| Retard d'interpolation                | `max(100, 2 × 33 + 3 × gigue)` ms, borné à 300 ; glisse vers sa cible (+2 / −0,5 ms par snapshot)                                                                                        |
+| Compensation de latence               | historique de 32 ticks ; au plus 18 ticks (300 ms) remontés, au tick près ; `rewind` = RTT + avance + interpolation                                                                      |
+| Retard d'interpolation                | `max(50, 2 × intervalle des snapshots + 3 × gigue)` ms, borné à 300 ; glisse vers sa cible (+2 / −0,5 ms par snapshot)                                                                   |
 | Délai visuel des autres joueurs       | demi-RTT + retard d'interpolation                                                                                                                                                        |
 | Extrapolation si le snapshot manque   | 6 ticks (100 ms) puis arrêt de l'image                                                                                                                                                   |
 | Lissage visuel d'une correction (soi) | décroissance exponentielle, τ = 40 ms + 2 ms par unité d'écart (une grosse correction glisse au lieu de sauter) ; écart limité à 4 cellules, le surplus est appliqué d'un coup           |
@@ -328,12 +328,12 @@ Sans elle, il faudrait viser là où l'adversaire _sera_ : ce que le tireur voit
 
 1. Il conserve les positions (x, y, hauteur) de chaque joueur sur les **16 derniers ticks**.
 2. Chaque client annonce, dans le champ `rewind` de ses paquets, la durée qui sépare ses entrées de ce qu'il voit des autres : `RTT + (avance + durée d'une image) × 16,7 ms + retard d'interpolation`, en pas de 4 ms.
-3. Le serveur borne ce retard à **12 ticks (200 ms)**, le place dans les bits 16 et 17 du masque (par pas de 4 ticks : 0, 4, 8 ou 12) d'entrées du joueur et, pour chaque coup de mêlée ou tir instantané, teste les cibles à leur position d'il y a `rewind` ticks (`rewoundBox`).
+3. Le serveur borne ce retard à **18 ticks (300 ms)**, le place dans les bits 16 à 20 du masque d'entrées du joueur (au tick près) et, pour chaque coup de mêlée ou tir instantané, teste les cibles à leur position d'il y a `rewind` ticks (`rewoundBox`).
 4. L'aide à la visée (±8° vers la cible la plus proche dans le cône) est calculée avec les mêmes positions passées, pour tous les appareils.
 
-Les projectiles lents (boulettes, avions, roquettes, gomme) **ne sont pas compensés** : ils sont simulés sur le serveur et apparaissent chez les autres à leur place du moment. Une parade parfaite se juge elle aussi sur le serveur, au tick où le coup arrive (fenêtre de 100 ms après l'appui). Au-delà de 200 ms de retard annoncé, la compensation est partielle : un joueur très lent doit viser un peu devant.
+Les projectiles lents (boulettes, avions, roquettes, gomme) **ne sont pas compensés** : ils sont simulés sur le serveur et apparaissent chez les autres à leur place du moment. Une parade parfaite se juge elle aussi sur le serveur, au tick où le coup arrive (fenêtre de 100 ms après l'appui). Au-delà de 300 ms de retard annoncé, la compensation est partielle : un joueur très lent doit viser un peu devant.
 
-Le champ `rewind` ne vient que du client, mais il est borné, et ne peut servir qu'à tester des positions que le serveur a réellement eues : le pire qu'un tricheur obtienne est un coup contre une position vieille de 200 ms.
+Le champ `rewind` ne vient que du client, mais il est borné, et ne peut servir qu'à tester des positions que le serveur a réellement eues : le pire qu'un tricheur obtienne est un coup contre une position vieille de 300 ms.
 
 ## 8. Salons, spectateurs, reconnexion
 
@@ -420,7 +420,7 @@ Sans le lissage d'affichage des autres joueurs, la reprise après un blocage TCP
 
 ## 11. Limites connues
 
-- **Compensation de latence plafonnée à 200 ms** : au-delà (RTT > ≈ 60 ms avec 100 ms d'interpolation), le tireur doit viser un peu devant. Les projectiles lents ne sont pas compensés.
+- **Compensation de latence plafonnée à 300 ms** : au-delà (RTT > ≈ 200 ms avec ≈ 70 ms d'interpolation), le tireur doit viser un peu devant. Les projectiles lents ne sont pas compensés.
 - **Pas de collision entre joueurs** : voir `DECISIONS.md` (D4). Elle rendrait la prédiction dépendante des autres joueurs.
 - **Corrections après blocage TCP** : l'écart maximal observé est de ≈ 20 unités à 2 % de pertes (jusqu'à ≈ 60 à 5 %). Reprendre les entrées arrivées en retard pour ré-simuler un seul joueur n'est plus possible depuis que le combat lie les joueurs entre eux.
 - **Salles d'attente à 60 Hz** : l'optimisation « 30 Hz, 15 snapshots/s » de §2.5 reste repoussée : tous les salons coûtent la même chose, ce qui est le pire cas mesuré.

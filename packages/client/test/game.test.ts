@@ -8,6 +8,7 @@ import {
 } from '@stickyclaude/shared';
 import { destroyCircle, killPlayer, pointBlocked } from '@stickyclaude/sim';
 import { describe, expect, it } from 'vitest';
+import { CONFIRM_WINDOW_MS } from '../src/app/confirm.ts';
 import { TestWorld } from './harness.ts';
 import type { NetOptions, Probe } from './harness.ts';
 
@@ -286,12 +287,45 @@ describe('compensation de latence', () => {
     const room = w.room();
     for (const p of probes) {
       const st = p.client.stats;
-      // rtt + avance + interpolation (≥ 100 ms)
-      expect(st.rewindMs).toBeGreaterThan(st.rttMs + 100);
+      // rtt + avance + interpolation (≥ 50 ms)
+      expect(st.rewindMs).toBeGreaterThan(st.rttMs + 50);
       expect(st.rewindMs).toBeLessThan(st.rttMs + 400);
       const member = room.slots[p.client.slot]!;
       const expected = Math.min(LAG_COMP_TICKS, Math.round(st.rewindMs / (1000 / 60)));
       expect(Math.abs(member.rewindTicks - expected)).toBeLessThanOrEqual(2);
     }
+  });
+});
+
+describe('confirmation locale des coups', () => {
+  it('un coup qui touche à l’écran est joué avant l’événement du serveur, qui le confirme', () => {
+    const w = new TestWorld();
+    const probes = w.populate(3, NET, 'test-flat');
+    for (const p of probes) p.bot.fight = true;
+    w.run(90_000);
+    let confirms = 0;
+    let matched = 0;
+    let ahead = 0;
+    for (const p of probes) {
+      const me = p.client.slot;
+      for (const c of p.confirms) {
+        confirms++;
+        const i = p.events.findIndex(
+          (e, k) =>
+            e.type === SimEvent.HIT &&
+            (e.a[2] ?? 255) === me &&
+            e.slot === c.victim &&
+            p.eventAt[k] >= c.at &&
+            p.eventAt[k] - c.at <= CONFIRM_WINDOW_MS,
+        );
+        if (i < 0) continue;
+        matched++;
+        // l'événement du serveur arrive au moins un aller-retour (120 ms) plus tard
+        if (p.eventAt[i] - c.at >= 100) ahead++;
+      }
+    }
+    expect(confirms).toBeGreaterThanOrEqual(3);
+    expect(matched / confirms).toBeGreaterThan(0.7);
+    expect(ahead / Math.max(1, matched)).toBeGreaterThan(0.8);
   });
 });

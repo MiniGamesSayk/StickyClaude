@@ -122,15 +122,13 @@ export function applyHits(world: World): void {
 }
 
 /**
- * La garde de `v` (sa visée) couvre-t-elle un coup parti du point (sx, sy) ? Elle couvre un cône
- * autour de sa direction, quel que soit le côté où le personnage regarde, en l'air comme au sol.
+ * La garde de `v` couvre-t-elle un coup parti de l'abscisse `sx` ? Elle couvre le côté où le
+ * personnage regarde (les bras devant), et l'aplomb du corps : un coup venu de dessus ou de
+ * dessous (spike, coup vers le haut) est paré même un peu dans le dos.
  */
-export function guardCovers(v: Player, sx: number, sy: number): boolean {
+export function guardCovers(world: World, v: Player, sx: number): boolean {
   const dx = sx - v.x;
-  const dy = sy - (v.y - 14);
-  const d = Math.hypot(dx, dy);
-  if (d < 1) return true;
-  return (dx * AIM_DX[v.aim] + dy * AIM_DY[v.aim]) / d >= COMBAT.guardMinDot;
+  return dx * v.facing >= -2 || Math.abs(dx) <= world.params.width * 0.5;
 }
 
 /** La parade vient d'être levée : le coup est annulé en entier. */
@@ -163,11 +161,9 @@ function applyHit(world: World, index: number): void {
 
   if (!h.unblockable) {
     const w = weaponDef(v.weapon);
-    // Le bouclier d'une arme couvre le devant ; la parade à mains nues couvre le côté visé.
-    const dxh = h.x - v.x;
-    const front = dxh * v.facing >= -2 || Math.abs(dxh) <= world.params.width * 0.5;
-    const guarded = guardCovers(v, h.x, h.y);
-    if (h.ranged && w.kind === WeaponKind.SHIELD && v.ammo > 0 && front) {
+    // Le bouclier d'une arme et la parade à mains nues couvrent tous deux le devant.
+    const guarded = guardCovers(world, v, h.x);
+    if (h.ranged && w.kind === WeaponKind.SHIELD && v.ammo > 0 && guarded) {
       v.ammo--;
       if (v.ammo === 0) {
         v.weapon = 0;
@@ -564,6 +560,23 @@ function meleeBox(world: World, p: Player): void {
     box.t = p.y - h - 2;
     box.b = p.y + 2;
   }
+}
+
+/**
+ * Zone de frappe de mêlée de `p` à ce tick, ou null s'il ne porte pas de coup de mêlée actif. Le
+ * client s'en sert pour confirmer à l'écran un coup qui touche, sans attendre le serveur ; le
+ * rectangle est réutilisé d'un appel à l'autre (à lire tout de suite). `meleeHeavy` dit ensuite si
+ * c'est un gros coup.
+ */
+export function meleeHitBox(world: World, p: Player): Readonly<typeof box> | null {
+  if (p.atkPhase !== AtkPhase.ACTIVE || !meleeSpec(p)) return null;
+  meleeBox(world, p);
+  return box;
+}
+
+/** Le dernier coup lu par `meleeHitBox` est-il un gros coup ? */
+export function meleeHeavy(): boolean {
+  return (spec.flags & HitFlag.HEAVY) !== 0;
 }
 
 /** Détecte les coups de mêlée du tick : un coup au plus par attaque et par cible. */

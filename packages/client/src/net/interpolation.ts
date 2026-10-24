@@ -170,6 +170,7 @@ export class SnapshotBuffer {
       if (dt > 0) {
         out.x = pa.x + (pa.vx * dt * TICK_MS) / 1000;
         out.y = pa.y + (pa.vy * dt * TICK_MS) / 1000;
+        out.animProg = Math.min(255, pa.animProg + dt);
         out.extrapolating = true;
       }
       return true;
@@ -199,6 +200,7 @@ export class SnapshotBuffer {
     out.y = pa.y + (pb.y - pa.y) * t;
     out.vx = pa.vx + (pb.vx - pa.vx) * t;
     out.vy = pa.vy + (pb.vy - pa.vy) * t;
+    sampleAnim(pa, a.tick, pb, b.tick, renderTick, out);
     return true;
   }
 
@@ -310,6 +312,35 @@ export class SnapshotBuffer {
     let n = 0;
     for (let i = 0; i < s.playerCount && n < MAX_PLAYERS; i++) out[n++] = s.players[i].slot;
     return n;
+  }
+}
+
+/**
+ * Animation d'un joueur entre deux snapshots. `animProg` compte les ticks passés dans l'état (ou
+ * dans la phase de l'attaque) : au lieu de sauter d'un snapshot à l'autre (à 30 Hz, une phase de
+ * 2 ticks pouvait ne jamais se voir), il avance avec `renderTick`. L'état de `b` a commencé au
+ * tick `b.tick - animProg` : avant, on montre la fin de l'état de `a`, après, le début de celui de `b`.
+ */
+export function sampleAnim(
+  pa: PlayerSnap,
+  ta: number,
+  pb: PlayerSnap,
+  tb: number,
+  renderTick: number,
+  out: RemoteView,
+): void {
+  const startB = pb.animProg >= 255 ? Number.NEGATIVE_INFINITY : tb - pb.animProg;
+  if (renderTick >= startB) {
+    out.anim = pb.anim;
+    out.variant = pb.variant;
+    out.animProg =
+      pb.animProg >= 255
+        ? 255
+        : Math.max(0, Math.min(pb.animProg, pb.animProg - (tb - renderTick)));
+  } else {
+    out.anim = pa.anim;
+    out.variant = pa.variant;
+    out.animProg = Math.min(255, pa.animProg + Math.max(0, renderTick - ta));
   }
 }
 

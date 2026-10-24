@@ -80,7 +80,7 @@ describe('déterminisme', () => {
     const gen = new InputGen(5);
     const inputs = new Uint32Array(MAX_PLAYERS);
     const rec: Recording = {
-      version: 4,
+      version: 5,
       arenaId: 'test-tower',
       seed: 99,
       tickHz: TICK_HZ,

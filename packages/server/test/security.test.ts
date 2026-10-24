@@ -5,6 +5,7 @@ import {
   Input,
   MAX_CLIENT_MESSAGE_BYTES,
   PROTOCOL_VERSION,
+  LAG_COMP_TICKS,
 } from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import { Bot, harness } from './helpers.ts';
@@ -146,21 +147,21 @@ describe('tentatives de triche : aucun message ne fixe un état', () => {
     expect(p.prevInput & 0x8000).toBe(0);
   });
 
-  it('une compensation de latence énorme ne sert qu à rattraper 250 ms au plus', () => {
+  it('une compensation de latence énorme ne sert qu à rattraper 300 ms au plus', () => {
     const { h, code, a, b } = twoPlayers();
     h.startMatch(a, [b]);
     h.advance(300);
     const room = h.room(code);
     const slot = h.slotOf(a);
     const buf = new Uint8Array(16);
-    // le paquet annonce 1 s de retard : le serveur ramène à 15 ticks
+    // le paquet annonce 1 s de retard : le serveur ramène à LAG_COMP_TICKS (18 ticks)
     buf[0] = 1;
     new DataView(buf.buffer).setUint16(1, (room.world.tick + 3) & 0xffff, true);
     buf[5] = 255;
     buf[6] = 1;
     h.server.onMessage(a, buf.slice(0, 9), true);
     h.advance(3);
-    expect(room.world.players[slot].rewind).toBeLessThanOrEqual(15);
+    expect(room.world.players[slot].rewind).toBe(LAG_COMP_TICKS);
   });
 });
 

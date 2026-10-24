@@ -1,4 +1,5 @@
 import {
+  AtkPhase,
   BinType,
   copyOwnState,
   createDecodedEvent,
@@ -28,6 +29,7 @@ import {
   PlayerState,
   PROTOCOL_VERSION,
   SimEvent,
+  SNAPSHOT_HZ_DEFAULT,
   TICK_MS,
   MOVER_MASK,
   MOVER_SHIFT,
@@ -49,6 +51,8 @@ import {
   createWorld,
   destroyCircle,
   loadArena,
+  meleeHeavy,
+  meleeHitBox,
   placeMark,
 } from '@stickyclaude/sim';
 import type { World } from '@stickyclaude/sim';
@@ -74,7 +78,7 @@ const MAX_FRAME_LEAD_TICKS = 8;
 /** Vitesse maximale de variation de la latence utilisée (ms de latence par ms réelle). */
 const OWD_SLEW = 0.05;
 /** Plage du retard d'interpolation adaptatif (ms). */
-const INTERP_MIN_MS = 100;
+const INTERP_MIN_MS = 50;
 const INTERP_MAX_MS = 300;
 const PING_FAST_MS = 80;
 const PING_FAST_COUNT = 6;
@@ -216,6 +220,12 @@ export interface GameClientHooks {
   onEvent?: (e: GameEvent) => void;
   /** Événement local de son propre joueur (saut, atterrissage, début de coup). */
   onLocalEvent?: (e: LocalEvent) => void;
+  /**
+   * Son coup de mêlée prédit touche un adversaire tel qu'il est affiché : on peut jouer l'impact
+   * tout de suite, sans attendre l'événement `HIT` du serveur (qui arrive ≈ un aller-retour plus
+   * tard et décide des dégâts). `x`, `y` : point de contact.
+   */
+  onHitConfirm?: (victim: number, x: number, y: number, heavy: boolean) => void;
   /** Le terrain a changé (destruction, trait de fantôme). */
   onTerrain?: () => void;
   /** Les snapshots reçus sont illisibles de façon durable : la page est sans doute périmée. */
@@ -318,7 +328,7 @@ export class GameClient {
   world: World | null = null;
   predictor: Predictor | null = null;
 
-  private snapshotHz = 30;
+  private snapshotHz = SNAPSHOT_HZ_DEFAULT;
   private readonly buffer = new SnapshotBuffer();
   private leadTicks = MARGIN_TARGET;
   private interpMs = INTERP_MIN_MS;
@@ -343,6 +353,8 @@ export class GameClient {
   private readonly masks = new Uint16Array(INPUT_REDUNDANCY);
   private readonly pong = { clientTime: 0, tick: 0, frac: 0 };
   private readonly presence = new Uint8Array(MAX_PLAYERS);
+  /** Adversaires déjà confirmés touchés par le coup en cours (un bit par emplacement). */
+  private confirmMask = 0;
   private readonly shownX = new Float64Array(MAX_PLAYERS);
   private readonly shownY = new Float64Array(MAX_PLAYERS);
   private readonly keptValid = new Uint8Array(MAX_PLAYERS);
@@ -808,6 +820,7 @@ export class GameClient {
         pred.stepTick(input);
         stepped++;
         for (const e of pred.localEvents) this.hooks.onLocalEvent?.(e);
+        this.confirmHits(pred);
       }
       if (stepped > 0) {
         this.sendInput(pred, stepped);
@@ -895,6 +908,40 @@ export class GameClient {
       this.transport.send(this.sendBuf.subarray(0, n));
       newest -= INPUT_REDUNDANCY;
       if (newest < oldest) return;
+    }
+  }
+
+  /**
+   * Confirmation locale des coups : à chaque tick où son coup de mêlée prédit est actif, sa zone de
+   * frappe est comparée aux autres joueurs tels qu'ils sont affichés (ce que le serveur juge aussi,
+   * grâce à la compensation de latence). Chaque adversaire n'est confirmé qu'une fois par coup.
+   */
+  private confirmHits(pred: Predictor): void {
+    const p = pred.player;
+    if (p.atkPhase !== AtkPhase.ACTIVE) return;
+    if (p.atkTicks === 0) this.confirmMask = 0;
+    const box = meleeHitBox(pred.world, p);
+    if (!box || !this.hooks.onHitConfirm) return;
+    const heavy = meleeHeavy();
+    const P = pred.world.params;
+    const hw = P.width * 0.5;
+    const r0 = this.round;
+    const myTeam = r0 ? (r0.teams[this.slot] ?? -1) : -1;
+    const v = this.view;
+    for (let i = 0; i < v.remoteCount; i++) {
+      const r = v.remotes[i];
+      const bit = 1 << r.slot;
+      if ((this.confirmMask & bit) !== 0) continue;
+      if ((r.flags & PlayerFlag.ALIVE) === 0 || (r.flags & PlayerFlag.INVULN) !== 0) continue;
+      if (r0 && !r0.friendlyFire && myTeam >= 0 && r0.teams[r.slot] === myTeam) continue;
+      const h = (r.flags & PlayerFlag.CROUCHING) !== 0 ? P.crouchHeight : P.height;
+      const l = Math.max(box.l, r.x - hw);
+      const rr = Math.min(box.r, r.x + hw);
+      const t = Math.max(box.t, r.y - h);
+      const b = Math.min(box.b, r.y);
+      if (l > rr || t > b) continue;
+      this.confirmMask |= bit;
+      this.hooks.onHitConfirm(r.slot, (l + rr) * 0.5, (t + b) * 0.5, heavy);
     }
   }
 

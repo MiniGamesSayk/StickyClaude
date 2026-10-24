@@ -19,6 +19,7 @@ import type { ObjView, ProjView } from '../net/interpolation.ts';
 import type { Renderer } from '../render/renderer.ts';
 import type { Scene } from '../render/types.ts';
 import { TEAM_COLORS } from '../render/palette.ts';
+import { HitConfirms } from './confirm.ts';
 import { createScene } from './scene.ts';
 import { nullAudio, nullHaptics } from './source.ts';
 import type { AudioSink, Haptics, RenderSource } from './source.ts';
@@ -148,6 +149,7 @@ export class Online {
   private hudAt = 0;
   private readonly lag = parseLagOptions(location.search);
   private readonly audio: AudioSink;
+  private readonly confirms = new HitConfirms();
   private readonly haptics: Haptics;
   private names: { name: string; color: number; team: number }[] = [];
 
@@ -315,13 +317,23 @@ export class Online {
       },
       onEvent: (e) => {
         if (this.client !== c) return;
-        this.d.renderer.addEvent(e);
-        this.audio.event(e, c.slot);
+        const confirmed =
+          e.type === SimEvent.HIT &&
+          this.confirms.take(e.a[2] ?? 255, e.slot, c.slot, performance.now());
+        this.d.renderer.addEvent(e, confirmed);
+        // Le son du coup a déjà été joué à la confirmation ; une parade garde le sien.
+        if (!confirmed || ((e.a[4] ?? 0) & 2) !== 0) this.audio.event(e, c.slot);
         this.onGameEvent(e, c.slot);
       },
       onLocalEvent: (e) => {
         if (this.client !== c) return;
         this.audio.local(e.type, e.x, e.y, e.arg);
+      },
+      onHitConfirm: (victim, x, y, heavy) => {
+        if (this.client !== c) return;
+        this.confirms.mark(victim, performance.now());
+        this.d.renderer.hitConfirm(c.slot, victim, x, y, heavy);
+        this.audio.impact(x, heavy);
       },
       onError: (code, msg) => {
         if (this.client !== c) return;

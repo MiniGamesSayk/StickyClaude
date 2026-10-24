@@ -511,7 +511,7 @@ export function stepProjectiles(world: World): void {
       const hx = p.x + ux * reach * bestT;
       const hy = p.y + uy * reach * bestT;
       const speed = Math.hypot(p.vx, p.vy);
-      const front = guardCovers(q, p.x, p.y);
+      const front = guardCovers(world, q, p.x);
       // Parade parfaite : les projectiles lents sont renvoyés.
       if (
         q.blockTicks > 0 &&

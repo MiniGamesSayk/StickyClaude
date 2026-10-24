@@ -9,6 +9,7 @@ import {
   WeaponId,
   GamePhase,
   rewindOf,
+  LAG_COMP_TICKS,
 } from '@stickyclaude/shared';
 import { describe, expect, it } from 'vitest';
 import { Bot, harness } from './helpers.ts';
@@ -168,12 +169,12 @@ describe('ticks, entrées et snapshots', () => {
     const room = h.room(code);
     const t = room.world.tick;
     const buf = new Uint8Array(16);
-    // rewind = 255 pas de 4 ms (1 s) : le serveur la ramène à 15 ticks
+    // rewind = 255 pas de 4 ms (1 s) : le serveur la ramène à LAG_COMP_TICKS (18 ticks, 300 ms)
     const n = (await_import(), encode(buf, t + 3, 255));
     h.server.onMessage(a, buf.slice(0, n), true);
     expect(room.recording).toBeNull();
     h.advance(3);
-    expect(room.world.players[0].rewind).toBeLessThanOrEqual(15);
+    expect(room.world.players[0].rewind).toBe(LAG_COMP_TICKS);
   });
 });
 

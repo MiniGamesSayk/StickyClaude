@@ -140,6 +140,10 @@ export interface Probe {
   recording: boolean;
   /** Ce que le client a reçu (événements, manches, scores, résultats, erreurs…). */
   events: GameEvent[];
+  /** Instant (temps virtuel, ms) où chaque événement de `events` a été joué. */
+  eventAt: number[];
+  /** Coups de mêlée confirmés à l'écran (`onHitConfirm`) : cible et instant. */
+  confirms: { victim: number; at: number }[];
   rounds: RoundInfo[];
   scores: ScoresMessage[];
   results: ResultsMessage[];
@@ -207,6 +211,8 @@ export class TestWorld {
       frames: 0,
       recording: false,
       events: [],
+      eventAt: [],
+      confirms: [],
       rounds: [],
       scores: [],
       results: [],
@@ -222,7 +228,11 @@ export class TestWorld {
     probe.client = new GameClient(
       transport,
       {
-        onEvent: (e) => probe.events.push(e),
+        onEvent: (e) => {
+          probe.events.push(e);
+          probe.eventAt.push(this.net.nowMs);
+        },
+        onHitConfirm: (victim) => probe.confirms.push({ victim, at: this.net.nowMs }),
         onRound: (r) => probe.rounds.push(r),
         onScores: (m) => probe.scores.push(m),
         onResults: (m) => probe.results.push(m),

@@ -458,8 +458,31 @@ export class FxSystem {
 
   // --- Événements -----------------------------------------------------------------------------
 
-  /** Transforme un événement de la simulation en effets, hit-stop, secousse, ragdoll. */
-  add(e: GameEvent, env: FxEnv): void {
+  /**
+   * Impact d'un coup confirmé localement (`onHitConfirm`), avant l'événement du serveur :
+   * l'étincelle et le hit-stop du frappeur et de sa cible, tout de suite.
+   */
+  confirm(
+    attacker: number,
+    victim: number,
+    x: number,
+    y: number,
+    heavy: boolean,
+    env: FxEnv,
+  ): void {
+    this.ring(x, y, 3, heavy ? 22 : 13, 0.22, INK.black, false);
+    this.spray(PK.SPARK, heavy ? 8 : 5, x, y, 130, 5, 0.22, INK.black, env);
+    if (env.reducedMotion) return;
+    const ms = heavy ? 90 : 45;
+    this.hooks.freeze(victim, ms);
+    this.hooks.freeze(attacker, ms);
+  }
+
+  /**
+   * Transforme un événement de la simulation en effets, hit-stop, secousse, ragdoll. `confirmed` :
+   * ce coup a déjà été confirmé à l'écran (`confirm`), son étincelle et son hit-stop sont joués.
+   */
+  add(e: GameEvent, env: FxEnv, confirmed = false): void {
     const a = e.a;
     switch (e.type) {
       case SimEvent.HIT: {
@@ -472,16 +495,18 @@ export class FxSystem {
         const blocked = (flags & 2) !== 0;
         const lethal = (flags & 4) !== 0;
         const color = env.colorOf(e.slot);
-        this.ring(x, y, 3, heavy ? 22 : 13, 0.22, INK.black, false);
-        this.spray(PK.SPARK, heavy ? 8 : 5, x, y, 130, 5, 0.22, INK.black, env);
+        if (!confirmed) {
+          this.ring(x, y, 3, heavy ? 22 : 13, 0.22, INK.black, false);
+          this.spray(PK.SPARK, heavy ? 8 : 5, x, y, 130, 5, 0.22, INK.black, env);
+        }
         if (blocked) break;
         this.impact(x, y, attacker, e.slot, dmg, heavy || lethal, color, env);
         if (env.showDamage && dmg > 0) this.damageNumber(x, y, dmg, heavy || lethal, attacker, env);
-        let ms = 0;
+        // Hit-stop sur tout coup qui porte, même un jab : c'est lui qui donne du poids aux coups.
+        let ms = 45;
         if (lethal || heavy || dmg >= 12) ms = 90;
-        else if (dmg >= 8) ms = 60;
-        else if (dmg >= 5) ms = 40;
-        if (ms >= 50 && !env.reducedMotion) {
+        else if (dmg >= 8) ms = 65;
+        if (dmg > 0 && !env.reducedMotion && !confirmed) {
           this.hooks.freeze(e.slot, ms);
           if (attacker !== 255) this.hooks.freeze(attacker, ms);
         }
@@ -498,6 +523,8 @@ export class FxSystem {
           this.spray(PK.SCRAP, 4, x, y, 90, 3.4, 0.7, 0xffffff, env);
         } else if (dmg >= 8) {
           this.hooks.shake(1.3);
+        } else if (dmg > 0) {
+          this.hooks.shake(0.6);
         }
         break;
       }

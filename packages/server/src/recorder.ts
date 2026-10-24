@@ -33,7 +33,7 @@ export class RoomRecorder {
 
   toRecording(ticks: number, finalHash?: number): Recording {
     return {
-      version: 4,
+      version: 5,
       arenaId: this.arenaId,
       seed: this.seed,
       tickHz: TICK_HZ,

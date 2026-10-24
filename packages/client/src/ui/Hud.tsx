@@ -26,7 +26,6 @@ import {
   toast,
 } from '../app/store.ts';
 import { keyLabel } from '../input/bindings.ts';
-import { defense } from '../input/defense.ts';
 import { pick, t } from '../i18n/index.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import { Button, HpBar, Tally } from './components.tsx';
@@ -269,17 +268,6 @@ function SelfStats(): JSX.Element {
   );
 }
 
-/** Pastille « Défense » : visible tant que le mode est actif (grisée avec une arme, qui l'ignore). */
-function DefenseBadge(): JSX.Element | null {
-  if (!defense.value) return null;
-  const armed = hud.value.weapon !== 0;
-  return (
-    <div class={`defense-badge${armed ? ' off' : ''}`} role="status">
-      🛡 {t('hud.defense')}
-    </div>
-  );
-}
-
 /** Interface en jeu (en ligne comme en entraînement). */
 export function Hud(p: { solo?: boolean }): JSX.Element {
   const h = hud.value;
@@ -298,7 +286,6 @@ export function Hud(p: { solo?: boolean }): JSX.Element {
         ))}
       </div>
       {!p.solo && <SelfStats />}
-      <DefenseBadge />
       {options.value.showStats && (
         <div class="stats">
           {Math.round(h.rttMs)} ms · {Math.round(h.fps)} FPS

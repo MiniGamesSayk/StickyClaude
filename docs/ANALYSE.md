@@ -53,8 +53,8 @@ Durée cible : 30 à 90 s par manche, 5 à 10 min par partie.
 
 **Combat** :
 
-- **Mains nues** : enchaînement de 3 coups (le 3e projette), coups légers selon la direction (tacle, coup vers le haut, balayages aériens, spike), spécial chargeable au clic droit, mode défense orientable (voir D78).
-- **Parade** : maintenir le bouton bloque 70 % des dégâts de face ; une **parade parfaite** (100 ms après l'appui) annule le coup, renvoie les projectiles lents et étourdit l'attaquant 0,4 s. Temps de recharge de 0,5 s pour éviter le spam.
+- **Mains nues** : enchaînement de 3 coups (le 3e projette), coups légers selon la direction (tacle, coup vers le haut, balayages aériens, spike), spécial chargeable au clic droit (voir D78).
+- **Parade** (D79) : maintenir le bouton lève les bras devant, du côté où regarde le personnage (il ne se retourne pas tant qu'il pare) ; elle encaisse un coup de face (70 % de dégâts en moins) et étourdit l'attaquant 0,4 s ; une **parade parfaite** (100 ms après un vrai appui) annule le coup et renvoie les projectiles lents. Recharge de 0,5 s pour éviter le spam.
 - **Ramasser, lancer, lâcher** une arme. Une arme vide se lance (petits dégâts et projection).
 - **Points de vie** : 100. **Knockback** proportionnel aux dégâts et légèrement plus fort quand on a peu de PV (le mélange avec l'esprit Smash).
 - **Mort** : PV à 0, sortie de l'arène (chute hors de la page, projection hors du cadre), danger du décor. Le corps devient un ragdoll visuel puis il est **raturé** (gribouillé) et s'efface.
@@ -255,7 +255,7 @@ Modèle : **serveur autoritaire + prédiction côté client + interpolation des 
   - Taille typique : 300 à 600 octets, soit **≈ 10 à 18 Ko/s par client**.
   - Optimisation possible plus tard (seulement si les mesures le justifient) : compression delta par rapport au dernier snapshot reçu par le client.
 - **Prédiction locale** : le client simule **son propre stickman** avec la même fonction `step` et ses entrées, puis à chaque snapshot il **revient à l'état du serveur et rejoue** les entrées pas encore confirmées. Les petites erreurs sont lissées visuellement en 100 ms (pas de téléportation sous 2 cellules d'écart).
-- **Interpolation** : les autres joueurs et les objets sont affichés **≈ 100 ms dans le passé** (`INTERP_DELAY`, adaptatif selon la gigue mesurée), entre deux snapshots. Si le snapshot suivant manque, on extrapole sur 100 ms au maximum, puis on fige.
+- **Interpolation** : les autres joueurs et les objets sont affichés **≈ 70 à 100 ms dans le passé** (`INTERP_MIN_MS` = 50, la cible suit l'intervalle des snapshots et la gigue mesurée), entre deux snapshots. Si le snapshot suivant manque, on extrapole sur 100 ms au maximum, puis on fige.
 - **Compensation de latence** : pour les tirs instantanés et la mêlée, le serveur garde un historique de **200 ms** des positions des joueurs et **revient en arrière** au moment où le tireur a vu la scène (temps du tick de l'entrée moins le retard d'interpolation annoncé par le client, plafonné). Les projectiles lents ne sont pas compensés : ils sont simulés sur le serveur et apparaissent tout de suite chez le tireur (effet visuel prédit, puis recalé).
 - **Retour immédiat** : le client joue tout de suite l'animation, le son et l'effet de « hit » prédit ; les dégâts et le KO réels arrivent par le serveur. Si le serveur contredit (le coup n'a pas touché), aucun dégât n'est affiché.
 - **Horloge** : ping/pong toutes les 2 s (RTT, estimation du tick serveur). Le ping s'affiche dans le salon et en option en jeu.

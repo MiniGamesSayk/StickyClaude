@@ -344,6 +344,11 @@ export class AudioEngine implements AudioSink {
   }
 
   /** Raccourci pour l'interface, le décompte et les transitions. */
+  impact(x: number, heavy: boolean): void {
+    if (heavy) this.play('hit_heavy', { x });
+    else this.play('hit', { x, vol: 0.85 });
+  }
+
   cue(name: SfxName, vol = 1): void {
     this.play(name, { vol });
   }

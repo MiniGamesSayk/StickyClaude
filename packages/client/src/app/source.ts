@@ -23,6 +23,8 @@ export interface AudioSink {
   event(e: GameEvent, own: number): void;
   /** Mouvement du joueur local : saut, atterrissage, début de coup… (`SimEvent`). */
   local(type: number, x: number, y: number, arg: number): void;
+  /** Son coup vient de toucher (confirmé à l'écran, avant le serveur). */
+  impact(x: number, heavy: boolean): void;
   /** Pas de course : à appeler à chaque image où le joueur local court. */
   footstep(x: number, speed: number): void;
   /** Effet d'interface, de décompte ou de transition (nom d'un effet du manifeste). */
@@ -36,6 +38,7 @@ export interface AudioSink {
 export const nullAudio: AudioSink = {
   event: () => undefined,
   local: () => undefined,
+  impact: () => undefined,
   footstep: () => undefined,
   cue: () => undefined,
   newRound: () => undefined,

@@ -223,8 +223,8 @@ function keySector(input: number, facing: number): number {
  *
  * Le moveset : clic gauche (`ATTACK`) = coups légers, non chargeables, qui dépendent de la
  * direction tenue et de l'appui au sol ou en l'air ; clic droit (`SPECIAL`) = attaque spéciale,
- * chargeable au sol, ruée ou esquive en l'air ; `BLOCK` = mode défense, une parade orientée dans
- * la direction de visée, impossible avec une arme.
+ * chargeable au sol, ruée ou esquive en l'air ; `BLOCK` = parade maintenue, du côté où regarde le
+ * personnage, impossible avec une arme.
  */
 function stepActions(world: World, p: Player, slot: number, input: number, pressed: number): void {
   const weapon = weaponDef(p.weapon);
@@ -278,7 +278,7 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
     }
   }
 
-  // --- Défense : mode tenu (le client le bascule), orienté, impossible avec une arme ----------
+  // --- Parade : bouton maintenu, bras devant (côté où l'on regarde), impossible avec une arme ---
   const defending = (input & Input.BLOCK) !== 0 && p.weapon === 0;
   if (p.blockTicks > 0) {
     if (defending) {
@@ -296,12 +296,14 @@ function stepActions(world: World, p: Player, slot: number, input: number, press
       p.chargeTicks === 0
     ) {
       if (p.atkPhase !== AtkPhase.NONE) endAttack(p);
-      p.blockTicks = 1;
+      // Seul un nouvel appui ouvre la fenêtre de parade parfaite : une garde qui se relève d'elle-même
+      // (bouton resté tenu pendant la recharge ou pendant un coup) commence après cette fenêtre.
+      p.blockTicks = (pressed & Input.BLOCK) !== 0 ? 1 : COMBAT.perfectParryTicks + 1;
       p.atkBuffer = 0;
     }
   }
   if (p.blockTicks > 0) return;
-  // En mode défense on n'attaque pas, même pendant la recharge d'une parade qui vient d'encaisser.
+  // Parade tenue : on n'attaque pas, même pendant la recharge d'une parade qui vient d'encaisser.
   if (defending) {
     p.atkBuffer = 0;
     return;
@@ -481,9 +483,13 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
   // --- Contrôle -------------------------------------------------------------------------------
   const w = weaponDef(p.weapon);
   let mul = 1;
-  if (p.blockTicks > 0) mul = COMBAT.blockSpeedMul;
-  else if (p.atkPhase !== AtkPhase.NONE) mul = COMBAT.attackSpeedMul;
-  else if (p.chargeTicks > 0) mul = COMBAT.chargeSpeedMul;
+  // Au sol, parer, frapper ou charger ralentit ; en l'air on garde son élan (un coup aérien ne
+  // freine pas la trajectoire).
+  if (p.grounded) {
+    if (p.blockTicks > 0) mul = COMBAT.blockSpeedMul;
+    else if (p.atkPhase !== AtkPhase.NONE) mul = COMBAT.attackSpeedMul;
+    else if (p.chargeTicks > 0) mul = COMBAT.chargeSpeedMul;
+  }
   if (w.kind === WeaponKind.SHIELD) mul *= w.slowMul;
   if (p.glueTicks > 0) mul *= COMBAT.glueSpeedMul;
   p.moveMul = mul;
@@ -681,8 +687,8 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     if (slippery) accel *= PUDDLE_GRIP;
     p.vx = approach(p.vx, target, accel * DT);
     // On se retourne tant que le coup n'est pas parti (départ et récupération) : enchaîner les
-    // attaques ne fige plus la direction.
-    if (dir !== 0 && p.atkPhase !== AtkPhase.ACTIVE) p.facing = dir;
+    // attaques ne fige plus la direction. En parade, on garde son côté : on recule en se protégeant.
+    if (dir !== 0 && p.atkPhase !== AtkPhase.ACTIVE && p.blockTicks === 0) p.facing = dir;
   }
 
   // --- Vertical -------------------------------------------------------------------------------
@@ -692,8 +698,10 @@ export function stepPlayer(world: World, p: Player, slot: number, input: number)
     let maxFall = P.maxFallSpeed;
     let g = P.gravity;
     if (!p.grounded && downHeld && p.vy > 0 && !wallSliding && !p.ctrlLocked) {
-      g *= P.fastFallGravityMul;
+      g *= Math.max(P.fastFallGravityMul, P.fallGravityMul);
       maxFall = P.fastFallSpeed;
+    } else if (!p.grounded && p.vy > 0 && !wallSliding) {
+      g *= P.fallGravityMul;
     }
     p.vy += g * DT;
     if (p.vy > maxFall) p.vy = maxFall;

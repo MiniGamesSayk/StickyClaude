@@ -98,6 +98,34 @@ describe('sauts', () => {
     expect(height).toBeLessThan(expected + 2);
   });
 
+  it('la descente est plus sèche que la montée (gravité renforcée en chute)', () => {
+    const w = worldWithPlayer();
+    const p = w.players[0];
+    let up = 0;
+    let down = 0;
+    run(w, 1, JUMP);
+    for (let i = 0; i < 120 && !p.grounded; i++) {
+      if (p.vy < 0) up++;
+      else down++;
+      run(w, 1, JUMP);
+    }
+    expect(p.grounded).toBe(true);
+    // même hauteur à monter et à descendre : la chute dure ≈ 1/√1,4 de la montée
+    expect(down).toBeLessThan(up);
+    expect(down / up).toBeCloseTo(1 / Math.sqrt(P.fallGravityMul), 0);
+  });
+
+  it('lâcher la direction en l’air arrête vite la dérive', () => {
+    const w = worldWithPlayer();
+    const p = put(w, 30 * CELL, FLOOR_Y - 6 * CELL);
+    p.grounded = false;
+    p.vx = P.runSpeed;
+    run(w, 14, 0);
+    expect(p.grounded).toBe(false);
+    // 190 u/s perdus à 900 u/s² : arrêt en ≈ 13 ticks (il en fallait 33 avant)
+    expect(Math.abs(p.vx)).toBeLessThan(10);
+  });
+
   it('relâcher le saut coupe la montée', () => {
     const w1 = worldWithPlayer();
     const w2 = worldWithPlayer();

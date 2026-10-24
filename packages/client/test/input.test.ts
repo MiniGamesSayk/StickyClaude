@@ -16,7 +16,6 @@ import type { Bindings } from '../src/app/options.ts';
 import { detectLayout, keyLabel } from '../src/input/bindings.ts';
 import { DEFAULT_PAD_BINDINGS } from '../src/app/options.ts';
 import { GamepadInput } from '../src/input/gamepad.ts';
-import { defense, defenseMask, setDefense } from '../src/input/defense.ts';
 import { buildKeymap, KeyboardInput } from '../src/input/keyboard.ts';
 import { bindingWarnings } from '../src/input/warnings.ts';
 import {
@@ -202,18 +201,14 @@ describe('manette : un bouton tenu depuis les menus ne reste pas collé en jeu',
 
   it('un bouton déjà enfoncé après la remise à zéro est ignoré jusqu’au relâchement', () => {
     const g = new GamepadInput();
-    setDefense(false);
     plug(pad([1]));
     g.disarm();
     g.sample();
-    g.sample();
-    expect(defense.value).toBe(false);
+    expect(g.sample() & Input.BLOCK).toBe(0);
     plug(pad([]));
     g.sample();
     plug(pad([1]));
-    g.sample();
-    expect(defense.value).toBe(true);
-    setDefense(false);
+    expect(g.sample() & Input.BLOCK).toBe(Input.BLOCK);
   });
 
   it('une gâchette qui ment (pressée mais à zéro) ne compte pas', () => {
@@ -389,10 +384,7 @@ describe('manette : attaque spéciale et défense', () => {
   const plug = (p: unknown): void => {
     vi.stubGlobal('navigator', { getGamepads: () => [p] });
   };
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    setDefense(false);
-  });
+  afterEach(() => vi.unstubAllGlobals());
 
   it('le clic du stick droit envoie l’attaque spéciale tant qu’il est tenu', () => {
     const g = new GamepadInput();
@@ -405,28 +397,22 @@ describe('manette : attaque spéciale et défense', () => {
     expect(g.sample() & Input.SPECIAL).toBe(0);
   });
 
-  it('B bascule le mode défense à chaque appui, et n’envoie jamais le bit lui-même', () => {
+  it('B pare tant qu’il est tenu', () => {
     const g = new GamepadInput();
     plug(pad([]));
     g.sample();
     plug(pad([1]));
-    expect(g.sample() & Input.BLOCK).toBe(0);
-    expect(defense.value).toBe(true);
-    expect(g.sample() & Input.BLOCK).toBe(0); // tenu : pas de nouvelle bascule
-    expect(defense.value).toBe(true);
+    expect(g.sample() & Input.BLOCK).toBe(Input.BLOCK);
+    expect(g.sample() & Input.BLOCK).toBe(Input.BLOCK);
     plug(pad([]));
-    g.sample();
-    plug(pad([1]));
-    g.sample();
-    expect(defense.value).toBe(false);
+    expect(g.sample() & Input.BLOCK).toBe(0);
   });
 
-  it('un bouton tenu depuis un menu ne bascule rien', () => {
+  it('un bouton tenu depuis un menu ne pare pas', () => {
     const g = new GamepadInput();
     plug(pad([1]));
     g.disarm();
-    g.sample();
-    expect(defense.value).toBe(false);
+    expect(g.sample() & Input.BLOCK).toBe(0);
   });
 });
 
@@ -469,16 +455,14 @@ describe('clavier : une touche relâchée ne reste jamais collée', () => {
   };
   afterEach(() => vi.unstubAllGlobals());
 
-  it('la défense se bascule au clavier et à la molette, sans répétition de touche', () => {
-    setDefense(false);
+  it('la parade se tient au clavier et à la molette, et se lâche au relâchement', () => {
     const { kb, fire, body, canvas } = rig();
     fire('keydown', { code: 'KeyE', target: body });
-    expect(defense.value).toBe(true);
+    expect(kb.sample() & Input.BLOCK).toBe(Input.BLOCK);
     fire('keydown', { code: 'KeyE', repeat: true, target: body });
-    expect(defense.value).toBe(true);
+    expect(kb.sample() & Input.BLOCK).toBe(Input.BLOCK);
     fire('keyup', { code: 'KeyE', target: body });
-    expect(kb.sample() & Input.BLOCK).toBe(0); // le clavier n'envoie pas le bit : c'est le mode
-    expect(defenseMask()).toBe(Input.BLOCK);
+    expect(kb.sample() & Input.BLOCK).toBe(0);
     fire('pointerdown', {
       button: 1,
       pointerType: 'mouse',
@@ -486,17 +470,9 @@ describe('clavier : une touche relâchée ne reste jamais collée', () => {
       clientX: 5,
       clientY: 5,
     });
-    expect(defense.value).toBe(false);
+    expect(kb.sample() & Input.BLOCK).toBe(Input.BLOCK);
     fire('pointerup', { button: 1, pointerType: 'mouse', target: canvas });
-    fire('pointerdown', {
-      button: 1,
-      pointerType: 'mouse',
-      target: canvas,
-      clientX: 5,
-      clientY: 5,
-    });
-    expect(defense.value).toBe(true);
-    setDefense(false);
+    expect(kb.sample() & Input.BLOCK).toBe(0);
   });
 
   it('le clic droit est l’attaque spéciale, tenu comme un bouton', () => {

@@ -342,62 +342,131 @@ describe('dash (Maj) : dans la direction tenue, en diagonale avec deux touches',
   });
 });
 
-describe('mode défense : parade orientée, en l’air aussi, impossible avec une arme', () => {
-  const guard = (aimSector: number | null, attackerX: number, air = false): number => {
+describe('en l’air, frapper ou parer ne freine pas', () => {
+  it('un coup aérien garde la vitesse de course', () => {
+    const w = fightWorld();
+    pl(w, 1).x = 900;
+    const p = pl(w, 0);
+    ticks(w, 30, RIGHT);
+    tick(w, RIGHT | Input.JUMP);
+    ticks(w, 3, RIGHT | Input.JUMP);
+    const before = p.vx;
+    tick(w, RIGHT | ATTACK | Input.JUMP);
+    ticks(w, 6, RIGHT | Input.JUMP);
+    expect(p.grounded).toBe(false);
+    expect(p.atkKind).not.toBe(AttackKind.NONE);
+    expect(p.vx).toBeCloseTo(before, 0);
+  });
+
+  it('au sol, frapper ralentit toujours', () => {
+    const w = fightWorld();
+    pl(w, 1).x = 900;
+    const p = pl(w, 0);
+    ticks(w, 30, RIGHT);
+    tick(w, RIGHT | ATTACK);
+    ticks(w, 8, RIGHT);
+    expect(p.vx).toBeLessThan(190 * COMBAT.attackSpeedMul + 1);
+  });
+});
+
+describe('parade maintenue : de face, en l’air aussi, impossible avec une arme', () => {
+  /** Le joueur 1 (en 330) pare en regardant vers `facing` ; le joueur 0 (en 300) lui donne un jab. */
+  const guard = (facing: number, air = false): number => {
     const w = fightWorld();
     const q = pl(w, 1);
-    pl(w, 0).x = attackerX;
+    pl(w, 0).x = 300;
     q.x = 330;
-    const mask = aimSector === null ? BLOCK : withAim(BLOCK, aimSector);
+    q.facing = facing;
     if (air) airborne(w, 1, 20);
-    ticks(w, 20, 0, mask);
+    ticks(w, 20, 0, BLOCK);
     if (air) airborne(w, 1, 20);
-    tap(w, 12, ATTACK, mask);
+    tap(w, 12, ATTACK, BLOCK);
     return q.hp;
   };
 
-  it('une garde tournée vers l’attaquant l’arrête, tournée ailleurs non', () => {
-    const toward = guard(8, 300); // visée à gauche, attaquant à gauche
-    const away = guard(0, 300); // visée à droite
-    expect(toward).toBeGreaterThan(100 - FIST[0].damage);
-    expect(away).toBe(100 - FIST[0].damage);
+  it('la garde couvre le côté où l’on regarde, pas le dos', () => {
+    expect(guard(-1)).toBeGreaterThan(100 - FIST[0].damage);
+    expect(guard(1)).toBe(100 - FIST[0].damage);
   });
 
-  it('le côté où regarde le personnage ne compte pas, seule la visée', () => {
+  it('la souris ne compte pas : seule l’orientation du personnage', () => {
     const w = fightWorld();
     const q = pl(w, 1);
-    q.facing = 1; // regarde loin de l'attaquant…
-    ticks(w, 20, 0, withAim(BLOCK, 8)); // …mais garde à gauche
     q.x = 330;
     pl(w, 0).x = 300;
-    tap(w, 12, ATTACK, withAim(BLOCK, 8));
+    q.facing = -1;
+    ticks(w, 20, 0, withAim(BLOCK, 0)); // visée à droite, dos à la visée
+    tap(w, 12, ATTACK, withAim(BLOCK, 0));
     expect(q.hp).toBeGreaterThan(100 - FIST[0].damage);
   });
 
+  it('on ne se retourne pas en parant : on recule en se protégeant', () => {
+    const w = fightWorld();
+    const q = pl(w, 1);
+    q.facing = -1;
+    ticks(w, 20, 0, BLOCK | RIGHT);
+    expect(q.facing).toBe(-1);
+    expect(q.vx).toBeGreaterThan(0);
+    q.x = 330;
+    q.vx = 0;
+    pl(w, 0).x = 300;
+    tap(w, 12, ATTACK, BLOCK | RIGHT);
+    expect(q.hp).toBeGreaterThan(100 - FIST[0].damage);
+    // relâchée, la parade rend le retournement
+    tick(w, 0, RIGHT);
+    expect(q.facing).toBe(1);
+  });
+
   it('en l’air aussi', () => {
-    expect(guard(8, 300, true)).toBeGreaterThan(100 - COMBAT.airNeutral.damage - 8);
+    expect(guard(-1, true)).toBeGreaterThan(100 - COMBAT.airNeutral.damage - 8);
     const w = fightWorld();
     airborne(w, 1, 60);
     ticks(w, 2, 0, BLOCK);
     expect(pl(w, 1).blockTicks).toBeGreaterThan(0);
   });
 
-  it('vers le haut : pare un coup venu d’en haut', () => {
-    const run = (sector: number): number => {
-      const w = fightWorld();
-      const q = pl(w, 1);
-      ticks(w, 20, 0, withAim(BLOCK, sector));
-      const a = pl(w, 0);
-      a.x = q.x;
-      a.y = FLOOR - 46;
-      a.grounded = false;
-      a.vy = 0;
-      tick(w, ATTACK | DOWN, withAim(BLOCK, sector));
-      ticks(w, 12, DOWN, withAim(BLOCK, sector));
-      return q.hp;
-    };
-    expect(run(12)).toBeGreaterThan(100 - COMBAT.airDown.damage);
-    expect(run(4)).toBe(100 - COMBAT.airDown.damage); // garde vers le bas : le coup vient du haut
+  it('un coup venu d’au-dessus est paré même dos tourné (aplomb du corps)', () => {
+    const w = fightWorld();
+    const q = pl(w, 1);
+    q.facing = 1;
+    ticks(w, 20, 0, BLOCK);
+    const a = pl(w, 0);
+    a.x = q.x;
+    a.y = FLOOR - 46;
+    a.grounded = false;
+    a.vy = 0;
+    tick(w, ATTACK | DOWN, BLOCK);
+    ticks(w, 12, DOWN, BLOCK);
+    expect(q.hp).toBeGreaterThan(100 - COMBAT.airDown.damage);
+  });
+
+  it('parade parfaite juste après l’appui : aucun dégât', () => {
+    const w = fightWorld();
+    const q = pl(w, 1);
+    pl(w, 0).x = 300;
+    q.x = 330;
+    q.facing = -1;
+    tick(w, ATTACK, BLOCK);
+    ticks(w, 11, 0, BLOCK);
+    expect(q.hp).toBe(100);
+  });
+
+  it('une garde qui se relève seule (bouton resté tenu) n’offre pas de parade parfaite', () => {
+    const w = fightWorld();
+    const q = pl(w, 1);
+    pl(w, 0).x = 300;
+    q.x = 330;
+    q.facing = -1;
+    ticks(w, 20, 0, BLOCK);
+    tap(w, 12, ATTACK, BLOCK);
+    expect(q.blockTicks).toBe(0); // elle a encaissé le coup et recharge
+    let n = 0;
+    while (q.blockTicks === 0 && n++ < 60) tick(w, 0, BLOCK);
+    expect(q.blockTicks).toBeGreaterThan(COMBAT.perfectParryTicks);
+    // relâcher puis rappuyer rouvre la fenêtre
+    tick(w, 0, 0);
+    tick(w, 0, BLOCK);
+    expect(q.blockTicks).toBe(1);
   });
 
   it('avec une arme en main, on ne peut plus parer', () => {
@@ -416,14 +485,14 @@ describe('mode défense : parade orientée, en l’air aussi, impossible avec un
     expect(pl(q, 0).blockTicks).toBe(0);
   });
 
-  it('en mode défense on n’attaque pas', () => {
+  it('en parant on n’attaque pas', () => {
     const w = fightWorld();
     ticks(w, 3, BLOCK);
     ticks(w, 10, BLOCK | ATTACK);
     expect(pl(w, 0).atkKind).toBe(AttackKind.NONE);
     ticks(w, 10, BLOCK | SPECIAL);
     expect(pl(w, 0).chargeTicks).toBe(0);
-    // le mode quitté, on attaque de nouveau
+    // la parade relâchée, on attaque de nouveau
     tick(w, 0);
     tick(w, ATTACK);
     expect(pl(w, 0).atkKind).toBe(AttackKind.FIST1);
